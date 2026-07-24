@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "140087898334",
+    "project_id": "cda-inventory-be82b",
+    "storage_bucket": "cda-inventory-be82b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:140087898334:android:d24233987d2cce184fd24f",
+        "android_client_info": {
+          "package_name": "com.example.cda_inventory"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHYQ2HM_FD_4Rw_sBgrbeMgJZKufYXd-Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

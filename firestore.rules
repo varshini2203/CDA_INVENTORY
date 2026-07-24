@@ -1,0 +1,161 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────
+// CDA Inventory — Firestore Security Rules
+// ─────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ────────────────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return signedIn() && userDoc().role == 'admin';
+    }
+
+    function isApprovedViewer() {
+      return signedIn()
+        && userDoc().accessStatus == 'approved'
+        && userDoc().accessLevel in ['viewer', 'editor'];
+    }
+
+    function canRead() {
+      return isAdmin() || isApprovedViewer();
+    }
+
+    function canEdit() {
+      return isAdmin()
+        || (signedIn()
+            && userDoc().accessStatus == 'approved'
+            && userDoc().accessLevel == 'editor');
+    }
+
+    // ── users/{uid} ───────────────────────────────────────────────────
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ── admin_notifications/{id} ─────────────────────────────────────
+    match /admin_notifications/{id} {
+      allow create: if signedIn();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── removed_users/{uid} ──────────────────────────────────────────
+    match /removed_users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list, write: if isAdmin();
+    }
+
+    // ── activity_logs/{id} ────────────────────────────────────────────
+    match /activity_logs/{id} {
+      allow create: if signedIn();
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── seed_status/{key} ─────────────────────────────────────────────
+    match /seed_status/{key} {
+      allow read, write: if canRead();
+    }
+
+    // ── drones/{droneId} and its history sub-collection ───────────────
+    match /drones/{droneId} {
+      allow read: if canRead();
+      allow write: if canEdit();
+
+      match /history/{entryId} {
+        allow read: if canRead();
+        allow write: if canEdit();
+      }
+    }
+
+    // Collection-GROUP rule — REQUIRED in addition to the nested rule
+    // above. db.collectionGroup('history') is authorized separately
+    // from the nested drones/{id}/history match.
+    match /{path=**}/history/{entryId} {
+      allow read: if canRead();
+    }
+
+    // ── Core business collections ──────────────────────────────────────
+    match /stock_transactions/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /stock_items/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /invoices/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /products/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /inventory/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /branch_inventory/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /consumables/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /purchases/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /purchase_orders/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /purchase_returns/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /payment_outs/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /fixed_assets/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    match /bills/{id} {
+      allow read: if canRead();
+      allow write: if canEdit();
+    }
+
+    // Default deny for anything not explicitly listed above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
