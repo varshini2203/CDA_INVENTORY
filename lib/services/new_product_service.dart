@@ -23,6 +23,7 @@ import 'package:image/image.dart' as img;
 
 import 'package:cda_inventory/models/new_product.dart';
 import 'activity_log_service.dart';
+import 'inventory_sync_service.dart';
 
 class NewProductService {
   NewProductService._(); // static-only, no instances
@@ -141,6 +142,17 @@ class NewProductService {
       body: '${product.productName} was added by ${product.addedBy}.',
       productId: docRef.id,
     );
+
+    // Automatically fan this item out to Inventory, Search Products,
+    // Branch, Stock Management, and Fixed Assets/Consumables (auto
+    // segregated) so it shows up everywhere without manual re-entry.
+    try {
+      await InventorySyncService.syncFromNewProductAdd(created);
+    } catch (_) {
+      // Cross-module sync failures must never block the primary add —
+      // InventorySyncService already isolates + logs each module's own
+      // failure internally.
+    }
 
     return created;
   }

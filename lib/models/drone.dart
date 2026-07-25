@@ -26,6 +26,9 @@ class Drone {
   final DateTime? maintenanceDue;
   final DateTime? lastUpdated;
   final String? branch; // raw value: 'Branch 1' (CDA Admin) or 'Branch 2' (CDA Ops)
+  final String? purpose; // why the drone was taken OUT: Training/Testing/Service/Expo/Workshop/...
+  final DateTime? checkedOutAt; // when status last became 'OUT' — used for the 4-hour overdue reminder
+  final bool reminderAcknowledged; // true once someone has seen/dismissed the overdue reminder for this OUT session
 
   Drone({
     required this.id,
@@ -41,6 +44,9 @@ class Drone {
     this.maintenanceDue,
     this.lastUpdated,
     this.branch,
+    this.purpose,
+    this.checkedOutAt,
+    this.reminderAcknowledged = false,
   });
 
   // ── Firestore → Dart ───────────────────────────────────────────────────────
@@ -72,6 +78,11 @@ class Drone {
           ? (j['last_updated'] as Timestamp).toDate()
           : null,
       branch: j['branch']?.toString(),
+      purpose: j['purpose']?.toString(),
+      checkedOutAt: j['checked_out_at'] is Timestamp
+          ? (j['checked_out_at'] as Timestamp).toDate()
+          : null,
+      reminderAcknowledged: j['reminder_acknowledged'] as bool? ?? false,
     );
   }
 
@@ -92,6 +103,11 @@ class Drone {
         : null,
     'last_updated': FieldValue.serverTimestamp(),
     'branch': branch,
+    'purpose': purpose,
+    'checked_out_at': checkedOutAt != null
+        ? Timestamp.fromDate(checkedOutAt!)
+        : null,
+    'reminder_acknowledged': reminderAcknowledged,
   };
 
   // ── copyWith helper ────────────────────────────────────────────────────────
@@ -110,6 +126,9 @@ class Drone {
     DateTime? maintenanceDue,
     DateTime? lastUpdated,
     String? branch,
+    String? purpose,
+    DateTime? checkedOutAt,
+    bool? reminderAcknowledged,
   }) =>
       Drone(
         id: id ?? this.id,
@@ -125,6 +144,9 @@ class Drone {
         maintenanceDue: maintenanceDue ?? this.maintenanceDue,
         lastUpdated: lastUpdated ?? this.lastUpdated,
         branch: branch ?? this.branch,
+        purpose: purpose ?? this.purpose,
+        checkedOutAt: checkedOutAt ?? this.checkedOutAt,
+        reminderAcknowledged: reminderAcknowledged ?? this.reminderAcknowledged,
       );
 }
 
@@ -139,6 +161,7 @@ class DroneHistory {
   final String pilot;
   final String status; // 'IN' | 'OUT'
   final String? notes;
+  final String? purpose;
   final DateTime? timestamp;
 
   const DroneHistory({
@@ -147,6 +170,7 @@ class DroneHistory {
     required this.pilot,
     required this.status,
     this.notes,
+    this.purpose,
     this.timestamp,
   });
 
@@ -171,6 +195,7 @@ class DroneHistory {
       pilot: j['pilot']?.toString() ?? 'Unknown',
       status: j['status']?.toString() ?? '',
       notes: j['notes']?.toString(),
+      purpose: j['purpose']?.toString(),
       timestamp: (j['timestamp'] as Timestamp?)?.toDate(),
     );
   }
@@ -180,6 +205,7 @@ class DroneHistory {
     'pilot': pilot,
     'status': status,
     'notes': notes,
+    'purpose': purpose,
     'timestamp': FieldValue.serverTimestamp(),
   };
 }

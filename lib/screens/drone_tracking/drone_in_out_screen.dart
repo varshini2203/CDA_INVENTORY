@@ -119,21 +119,28 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
       newStatus,
       performedBy: entry.usedBy,
       actionTime: entry.time,
+      purpose: entry.purpose,
     );
     if (!mounted) return;
     if (result.success) {
+      final purposeSuffix =
+      (newStatus == 'OUT' && entry.purpose != null && entry.purpose!.isNotEmpty)
+          ? ' for ${entry.purpose}'
+          : '';
       _showSnack(
-        '${drone.name} marked $newStatus by ${entry.usedBy}',
+        '${drone.name} marked $newStatus by ${entry.usedBy}$purposeSuffix',
         icon: newStatus == 'IN' ? Icons.flight_land : Icons.flight_takeoff,
         color: newStatus == 'IN' ? kTeal : kAmber,
       );
-      // 1-hour "did you forget to update it back?" reminder for this drone.
-      // Replaces any reminder already pending for it.
+      // 4-hour "did you forget to bring it back?" reminder for this drone.
+      // Replaces any reminder already pending for it. Only fires for OUT —
+      // see DroneReminderService.scheduleReminder.
       DroneReminderService.instance.scheduleReminder(
         droneId: drone.id,
         droneName: drone.name,
         newStatus: newStatus,
         actionTime: entry.time,
+        purpose: entry.purpose,
       );
     } else {
       // Roll back
@@ -1644,7 +1651,8 @@ class _ConfirmDialog extends StatelessWidget {
 class _DroneActionEntry {
   final String usedBy;
   final DateTime time;
-  const _DroneActionEntry({required this.usedBy, required this.time});
+  final String? purpose;
+  const _DroneActionEntry({required this.usedBy, required this.time, this.purpose});
 }
 
 class _DroneActionDialog extends StatefulWidget {
@@ -1665,12 +1673,14 @@ class _DroneActionDialogState extends State<_DroneActionDialog> {
 
   late final TextEditingController _nameCtrl;
   late DateTime _when;
+  String? _purpose;
 
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.defaultName ?? '');
     _when = DateTime.now();
+    _purpose = widget.newStatus == 'OUT' ? kDronePurposes.first : null;
   }
 
   @override
@@ -1707,7 +1717,8 @@ class _DroneActionDialogState extends State<_DroneActionDialog> {
   Widget build(BuildContext context) {
     final isIn = widget.newStatus == 'IN';
     final color = isIn ? kTeal : kAmber;
-    final canConfirm = _nameCtrl.text.trim().isNotEmpty;
+    final canConfirm = _nameCtrl.text.trim().isNotEmpty &&
+        (isIn || (_purpose != null && _purpose!.isNotEmpty));
 
     return AlertDialog(
       backgroundColor: Colors.white,
@@ -1743,6 +1754,28 @@ class _DroneActionDialogState extends State<_DroneActionDialog> {
                     borderRadius: BorderRadius.circular(10)),
               ),
             ),
+            if (!isIn) ...[
+              const SizedBox(height: 16),
+              const Text('Purpose',
+                  style: TextStyle(
+                      color: kNavy, fontWeight: FontWeight.w600, fontSize: 13)),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: _purpose,
+                isExpanded: true,
+                style: const TextStyle(color: kNavy, fontSize: 14),
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.flag_outlined, size: 20),
+                  border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                items: kDronePurposes
+                    .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                    .toList(),
+                onChanged: (v) => setState(() => _purpose = v),
+              ),
+            ],
             const SizedBox(height: 16),
             const Text('Date & time',
                 style: TextStyle(
@@ -1780,7 +1813,9 @@ class _DroneActionDialogState extends State<_DroneActionDialog> {
               ? () => Navigator.pop(
               context,
               _DroneActionEntry(
-                  usedBy: _nameCtrl.text.trim(), time: _when))
+                  usedBy: _nameCtrl.text.trim(),
+                  time: _when,
+                  purpose: isIn ? null : _purpose))
               : null,
           style: ElevatedButton.styleFrom(
             backgroundColor: color,

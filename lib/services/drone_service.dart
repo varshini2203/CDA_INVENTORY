@@ -20,7 +20,9 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/drone.dart';
+import '../constants/gamification_constants.dart';
 import 'activity_log_service.dart';
+import 'staff_reward_service.dart';
 
 // ─── API RESULT WRAPPER (unchanged) ──────────────────────────────────────────
 
@@ -290,6 +292,9 @@ class DroneService {
       String status, {
         String? note,
         int? batteryLevel,
+        // Why the drone is being taken OUT (Training/Testing/Service/Expo/
+        // Workshop/...). Ignored when marking a drone back IN.
+        String? purpose,
         // Who actually performed this IN/OUT action (defaults to the
         // drone's currently assigned pilot_name if not supplied, kept for
         // backward compatibility with older call sites).
@@ -300,16 +305,27 @@ class DroneService {
         DateTime? actionTime,
       }) async {
     try {
+      final upperStatus = status.toUpperCase();
       final ts = actionTime != null
           ? Timestamp.fromDate(actionTime)
           : FieldValue.serverTimestamp();
 
       final updates = <String, dynamic>{
-        'status': status.toUpperCase(),
+        'status': upperStatus,
         'last_updated': ts,
         if (batteryLevel != null) 'battery_level': batteryLevel,
         if (performedBy != null && performedBy.isNotEmpty)
           'pilot_name': performedBy,
+        // 'checked_out_at' anchors the 4-hour overdue-reminder countdown.
+        // It's (re)stamped every time a drone goes OUT, and cleared the
+        // moment it's brought back IN so a finished session never keeps
+        // nagging anyone.
+        if (upperStatus == 'OUT') 'checked_out_at': ts,
+        if (upperStatus == 'IN') 'checked_out_at': null,
+        if (upperStatus == 'OUT' && purpose != null && purpose.isNotEmpty)
+          'purpose': purpose,
+        if (upperStatus == 'IN') 'purpose': null,
+        'reminder_acknowledged': false,
       };
 
       // Fetch current pilot name for the history record
@@ -321,14 +337,17 @@ class DroneService {
 
       // Run status update + history write atomically
       final batch = _db.batch();
+      final historyRef = _history(id).doc();
       batch.update(_drones.doc(id), updates);
-      batch.set(_history(id).doc(), {
+      batch.set(historyRef, {
         'drone_id': id,
         'pilot': pilot,
-        'status': status.toUpperCase(),
+        'status': upperStatus,
         'notes': note,
+        'purpose': upperStatus == 'OUT' ? purpose : null,
         'timestamp': ts,
       });
+
       await batch.commit();
 
       final doc = Drone.fromMap(id, {...currentData, ...updates});
@@ -343,7 +362,70 @@ class DroneService {
           'used_by': pilot,
         },
       );
+      StaffRewardService.recordActivity(
+        action: StaffAction.droneInOut,
+        module: 'Drones',
+        refId: 'drones_${id}_status_${historyRef.id}',
+      );
       return ApiResult.ok(doc);
+    } catch (e) {
+      return ApiResult.err(_firestoreError(e));
+    }
+  }
+
+  // ── OVERDUE / 4-HOUR REMINDER SUPPORT ──────────────────────────────────────
+  // A drone counts as "overdue" once it has been OUT for 4+ hours and hasn't
+  // been marked back IN yet. This is what powers the in-app bell that BOTH
+  // admins and staff can see (unlike the pending-access-request bell, which
+  // stays admin-only).
+
+  static const Duration overdueThreshold = Duration(minutes:  5);
+
+  /// All drones currently OUT, streamed live so the bell badge and the
+  /// reminders list update in real time without a manual refresh.
+  Stream<List<Drone>> outDronesStream() {
+    return _drones
+        .where('status', isEqualTo: 'OUT')
+        .snapshots()
+        .map((snap) => snap.docs
+        .map((doc) => Drone.fromFirestore(
+        doc as DocumentSnapshot<Map<String, dynamic>>))
+        .toList());
+  }
+
+  /// Narrows [outDronesStream] down to only the drones that have been OUT
+  /// for [overdueThreshold] (4 hours) or more. Done client-side since the
+  /// "now - checkedOutAt >= 4h" comparison isn't a static Firestore filter.
+  Stream<List<Drone>> overdueDronesStream() {
+    return outDronesStream().map((drones) {
+      final now = DateTime.now();
+      final overdue = drones.where((d) {
+        final since = d.checkedOutAt ?? d.lastUpdated;
+        if (since == null) return false;
+        return now.difference(since) >= overdueThreshold;
+      }).toList();
+      overdue.sort((a, b) =>
+          (a.checkedOutAt ?? a.lastUpdated ?? now)
+              .compareTo(b.checkedOutAt ?? b.lastUpdated ?? now));
+      return overdue;
+    });
+  }
+
+  /// Live badge count for the drone-reminders bell icon. Only counts
+  /// overdue drones that haven't been acknowledged yet, so tapping
+  /// "Got it" on one clears the badge without hiding it from the list.
+  Stream<int> overdueDronesCountStream() => overdueDronesStream()
+      .map((list) => list.where((d) => !d.reminderAcknowledged).length);
+
+  /// Marks a drone's current overdue reminder as seen/acknowledged without
+  /// changing its IN/OUT status — lets someone dismiss the nag from the
+  /// reminders list while they go fetch the drone, instead of forcing an
+  /// immediate status change.
+  Future<ApiResult<void>> acknowledgeReminder(String id) async {
+    try {
+      await _drones.doc(id).update({'reminder_acknowledged': true});
+      clearCache();
+      return ApiResult.ok(null);
     } catch (e) {
       return ApiResult.err(_firestoreError(e));
     }
@@ -361,6 +443,12 @@ class DroneService {
       });
       final doc = await _drones.doc(id).get();
       clearCache();
+      StaffRewardService.recordActivity(
+        action: StaffAction.droneService,
+        module: 'Drones',
+        // No refId: a drone can legitimately be serviced more than once,
+        // and each completed maintenance is a genuinely new event.
+      );
       return ApiResult.ok(Drone.fromFirestore(
           doc as DocumentSnapshot<Map<String, dynamic>>));
     } catch (e) {

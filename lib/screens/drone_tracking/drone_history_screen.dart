@@ -572,6 +572,20 @@ class _HistoryItem extends StatelessWidget {
                                 fontWeight: FontWeight.w600),
                           ),
                         ]),
+                        if (entry.purpose != null &&
+                            entry.purpose!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Row(children: [
+                            Icon(Icons.flag_outlined,
+                                color: Colors.grey.shade400, size: 13),
+                            const SizedBox(width: 7),
+                            Text('Purpose: ${entry.purpose}',
+                                style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600)),
+                          ]),
+                        ],
                         if (entry.notes != null &&
                             entry.notes!.isNotEmpty) ...[
                           const SizedBox(height: 8),

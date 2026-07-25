@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/purchase.dart';
+import '../constants/gamification_constants.dart';
 import 'activity_log_service.dart';
+import 'staff_reward_service.dart';
 
 class PurchaseService {
   static CollectionReference<Map<String, dynamic>> get _col =>
@@ -67,6 +69,11 @@ class PurchaseService {
           'branch': purchase.branch,
           'purchase_date': purchase.purchaseDate,
         },
+      );
+      StaffRewardService.recordActivity(
+        action: StaffAction.purchaseEntry,
+        module: 'Purchases',
+        refId: 'purchases_${docRef.id}_add',
       );
       return {
         'success': true,

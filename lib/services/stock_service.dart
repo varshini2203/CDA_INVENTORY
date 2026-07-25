@@ -2,7 +2,9 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cda_inventory/models/stock.dart';
+import '../constants/gamification_constants.dart';
 import 'activity_log_service.dart';
+import 'staff_reward_service.dart';
 
 class StockService {
   static const String _module = 'Stock';
@@ -138,6 +140,12 @@ class StockService {
         if (location != null && location.isNotEmpty) 'Location': location,
       },
     );
+
+    StaffRewardService.recordActivity(
+      action: StaffAction.stockUpdate,
+      module: _module,
+      refId: 'stock_${itemId}_create',
+    );
   }
 
   // ── Edit item metadata (category / min stock / sku / unit / location) ──────
@@ -184,6 +192,11 @@ class StockService {
         'Unit': unit ?? beforeData['unit'],
         'Location': location ?? beforeData['location'],
       },
+    );
+
+    StaffRewardService.recordActivity(
+      action: StaffAction.stockUpdate,
+      module: _module,
     );
   }
 
@@ -289,6 +302,12 @@ class StockService {
       );
     }
 
+    StaffRewardService.recordActivity(
+      action: StaffAction.stockUpdate,
+      module: _module,
+      refId: 'stock_${itemId}_in_${txnRef.id}',
+    );
+
     return true;
   }
 
@@ -354,6 +373,12 @@ class StockService {
       after: {'Quantity': newQty},
     );
 
+    StaffRewardService.recordActivity(
+      action: StaffAction.stockUpdate,
+      module: _module,
+      refId: 'stock_${itemId}_out_${txnRef.id}',
+    );
+
     return true;
   }
 
@@ -407,6 +432,12 @@ class StockService {
       itemName: productName,
       before: {'Quantity': current},
       after: {'Quantity': newQuantity, 'Reason': reason},
+    );
+
+    StaffRewardService.recordActivity(
+      action: StaffAction.stockUpdate,
+      module: _module,
+      refId: 'stock_${itemId}_adjust_${txnRef.id}',
     );
   }
 
@@ -491,7 +522,8 @@ class StockService {
     ).toFirestore();
     inTxn['created_at'] = now;
 
-    batch.set(_transactions.doc(), outTxn);
+    final outTxnRef = _transactions.doc();
+    batch.set(outTxnRef, outTxn);
     batch.set(_transactions.doc(), inTxn);
 
     await batch.commit();
@@ -505,6 +537,12 @@ class StockService {
         'Quantity in $fromBranch': fromQty - quantity,
         'Quantity in $toBranch': toQty + quantity,
       },
+    );
+
+    StaffRewardService.recordActivity(
+      action: StaffAction.stockUpdate,
+      module: _module,
+      refId: 'stock_transfer_${outTxnRef.id}',
     );
   }
 

@@ -7,7 +7,9 @@ import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/models/payment_record.dart';
 import 'package:cda_inventory/models/recurring_config.dart';
 import 'package:cda_inventory/models/customer_details.dart';
+import '../constants/gamification_constants.dart';
 import 'activity_log_service.dart';
+import 'staff_reward_service.dart';
 
 class InvoiceService {
   // ── Firestore collection reference ──────────────────────────────────────────
@@ -74,6 +76,11 @@ class InvoiceService {
         'status': invoice.status,
         'due_date': invoice.dueDate,
       },
+    );
+    StaffRewardService.recordActivity(
+      action: StaffAction.invoiceUpload,
+      module: 'Invoices',
+      refId: 'invoices_${docRef.id}_add',
     );
     return invoice.copyWith(id: docRef.id);
   }

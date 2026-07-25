@@ -2,7 +2,9 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/product.dart';
+import '../constants/gamification_constants.dart';
 import 'activity_log_service.dart';
+import 'staff_reward_service.dart';
 
 class ProductService {
   static const String _module = 'Products';
@@ -75,6 +77,12 @@ class ProductService {
       },
     );
 
+    StaffRewardService.recordActivity(
+      action: StaffAction.addProduct,
+      module: _module,
+      refId: 'products_${docRef.id}_add',
+    );
+
     return product.copyWith(id: docRef.id, createdAt: DateTime.now());
   }
 
@@ -118,6 +126,13 @@ class ProductService {
         'Notes': product.notes,
       },
     );
+
+    StaffRewardService.recordActivity(
+      action: StaffAction.editProduct,
+      module: _module,
+      // No refId: each edit is a genuinely new event, not a retry of the
+      // same one — repeat edits should each earn XP.
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -142,6 +157,12 @@ class ProductService {
         'Quantity': data['quantity'],
         'Price': data['price'],
       },
+    );
+
+    StaffRewardService.recordActivity(
+      action: StaffAction.deleteProduct,
+      module: _module,
+      refId: 'products_${id}_delete',
     );
   }
 

@@ -1030,39 +1030,48 @@ class _InventoryDashboardState extends State<InventoryDashboard>
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
       child: Container(
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          color: kNavy,
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 8, offset: const Offset(0, 2)),
+            BoxShadow(color: kNavy.withOpacity(0.25), blurRadius: 16, offset: const Offset(0, 6)),
           ],
         ),
-        child: TextField(
-          controller: _searchController,
-          onChanged: (value) {
-            setState(() {
-              searchQuery = value;
-              _applyFilters();
-            });
-          },
-          decoration: InputDecoration(
-            hintText: "Search by name, location, category…",
-            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-            prefixIcon: const Icon(Icons.search_rounded, color: kNavy),
-            suffixIcon: searchQuery.isNotEmpty
-                ? IconButton(
-              icon: const Icon(Icons.close_rounded, color: Colors.grey),
-              onPressed: () {
-                _searchController.clear();
-                setState(() {
-                  searchQuery = "";
-                  _applyFilters();
-                });
-              },
-            )
-                : null,
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withOpacity(0.25)),
+          ),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) {
+              setState(() {
+                searchQuery = value;
+                _applyFilters();
+              });
+            },
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: "Search by name, location, category…",
+              hintStyle: const TextStyle(color: Colors.white60, fontSize: 14),
+              prefixIcon: const Icon(Icons.search_rounded, color: Colors.white70),
+              suffixIcon: searchQuery.isNotEmpty
+                  ? IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() {
+                    searchQuery = "";
+                    _applyFilters();
+                  });
+                },
+              )
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
           ),
         ),
       ),

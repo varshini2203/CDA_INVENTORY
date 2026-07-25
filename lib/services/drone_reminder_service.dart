@@ -27,6 +27,8 @@
 // iOS needs nothing extra beyond the usual notification permission prompt,
 // which requestPermissions() below triggers on first launch.
 
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -41,7 +43,15 @@ class DroneReminderService {
 
   bool _initialized = false;
 
-  static const Duration reminderDelay = Duration(hours: 1);
+  static const Duration reminderDelay = Duration(minutes: 5);
+
+  // Distinct "long-short-long-short-long" buzz so a drone reminder feels
+  // different in the hand from every other notification in the app —
+  // no mistaking it for a generic alert. Format: [pause, buzz, pause,
+  // buzz, ...] in milliseconds.
+  static final Int64List _droneVibrationPattern = Int64List.fromList(
+    [0, 500, 200, 200, 200, 500, 200, 200, 200, 700],
+  );
 
   /// Call once from main() before runApp(). Safe to call multiple times.
   Future<void> init() async {
@@ -96,12 +106,17 @@ class DroneReminderService {
     required String droneName,
     required String newStatus, // 'IN' or 'OUT'
     required DateTime actionTime,
+    String? purpose,
   }) async {
     if (kIsWeb) return;
     if (!_initialized) await init();
 
     final id = _notificationId(droneId);
     await _plugin.cancel(id);
+
+    // Coming back IN closes the loop — nothing to remind about. Only an
+    // OUT needs a "did you forget to bring it back?" follow-up.
+    if (newStatus.toUpperCase() != 'OUT') return;
 
     final fireAt = tz.TZDateTime.from(
       actionTime.add(reminderDelay),
@@ -111,23 +126,25 @@ class DroneReminderService {
     // entry), don't schedule a reminder that would fire immediately.
     if (fireAt.isBefore(tz.TZDateTime.now(tz.local))) return;
 
-    final actionWord = newStatus.toUpperCase() == 'OUT' ? 'brought back IN' : 'sent back OUT';
+    final purposeText = (purpose != null && purpose.isNotEmpty) ? ' for $purpose' : '';
 
     await _plugin.zonedSchedule(
       id,
-      'Drone status reminder',
-      '"$droneName" was marked $newStatus an hour ago — has it been $actionWord yet? Update it in the fleet screen if so.',
+      'Drone overdue for return',
+      '"$droneName" was taken OUT$purposeText 4 hours ago and hasn\'t been marked IN yet. Please update it in the fleet screen.',
       fireAt,
-      const NotificationDetails(
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          'drone_status_reminders',
+          'drone_status_reminders_v2',
           'Drone status reminders',
           channelDescription:
-          'Reminds you to confirm a drone\'s IN/OUT status an hour after it changes.',
+          'Reminds you when a drone has been OUT for 4+ hours without being marked back IN.',
           importance: Importance.high,
           priority: Priority.high,
+          enableVibration: true,
+          vibrationPattern: _droneVibrationPattern,
         ),
-        iOS: DarwinNotificationDetails(),
+        iOS: const DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: droneId,
