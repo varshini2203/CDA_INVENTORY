@@ -10,8 +10,6 @@
 // Requires `file_picker` in pubspec.yaml — see bulk_import_service.dart
 // for the full list of new dependencies this feature needs.
 
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -53,7 +51,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
 
   // ── FILE PICK + PARSE ────────────────────────────────────────────────
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'xls', 'pdf'],
       withData: true,
@@ -263,11 +261,11 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     // that DateTime.tryParse (ISO-8601 only) doesn't understand.
     final parts = raw.split(RegExp(r'[/\-.]'));
     if (parts.length != 3) return null;
-    final nums = parts.map((p) => int.tryParse(p.trim())).toList();
-    if (nums.any((n) => n == null)) return null;
+    final numbers = parts.map((p) => int.tryParse(p.trim())).toList();
+    if (numbers.any((n) => n == null)) return null;
     // Assume day/month/year, the common non-US spreadsheet convention.
     try {
-      return DateTime(nums[2]!, nums[1]!, nums[0]!);
+      return DateTime(numbers[2]!, numbers[1]!, numbers[0]!);
     } catch (_) {
       return null;
     }
@@ -485,7 +483,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, -2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, -2))],
       ),
       child: SafeArea(
         top: false,
