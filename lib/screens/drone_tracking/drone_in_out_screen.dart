@@ -4,9 +4,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import '../../models/drone.dart';
 import '../../services/drone_service.dart';
+import '../../services/drone_reminder_service.dart';
+import '../../constants/drone_categories.dart';
+import '../../core/access/access_scope.dart';
 import 'add_drone_entry_screen.dart';
 import 'edit_drone_screen.dart';
 import 'drone_history_screen.dart';
@@ -26,6 +31,11 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
   String? _error;
   String _search = '';
   String _filter = 'ALL';
+  // 'ALL' | 'Branch 1' (CDA Admin) | 'Branch 2' (CDA Ops)
+  String _branchFilter = 'ALL';
+  // 'newest' | 'oldest' | 'date'
+  String _sortOption = 'newest';
+  DateTime? _sortDate; // used when _sortOption == 'date'
   final TextEditingController _searchCtrl = TextEditingController();
   late AnimationController _headerAnim;
   late AnimationController _droneAnim;
@@ -84,18 +94,46 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
 
   Future<void> _toggleStatus(Drone drone) async {
     final newStatus = drone.status == 'IN' ? 'OUT' : 'IN';
+    final currentUserName = context.read<CurrentAccess>().access?.name;
+
+    final entry = await showDialog<_DroneActionEntry>(
+      context: context,
+      builder: (_) => _DroneActionDialog(
+        drone: drone,
+        newStatus: newStatus,
+        defaultName: currentUserName,
+      ),
+    );
+    if (entry == null) return; // cancelled
+
     HapticFeedback.lightImpact();
 
     // Optimistic local update
-    setState(() => drone.status = newStatus);
+    setState(() {
+      drone.status = newStatus;
+      drone.pilotName = entry.usedBy;
+    });
 
-    final result = await _service.updateStatus(drone.id, newStatus);
+    final result = await _service.updateStatus(
+      drone.id,
+      newStatus,
+      performedBy: entry.usedBy,
+      actionTime: entry.time,
+    );
     if (!mounted) return;
     if (result.success) {
       _showSnack(
-        '${drone.name} marked $newStatus',
+        '${drone.name} marked $newStatus by ${entry.usedBy}',
         icon: newStatus == 'IN' ? Icons.flight_land : Icons.flight_takeoff,
         color: newStatus == 'IN' ? kTeal : kAmber,
+      );
+      // 1-hour "did you forget to update it back?" reminder for this drone.
+      // Replaces any reminder already pending for it.
+      DroneReminderService.instance.scheduleReminder(
+        droneId: drone.id,
+        droneName: drone.name,
+        newStatus: newStatus,
+        actionTime: entry.time,
       );
     } else {
       // Roll back
@@ -118,6 +156,7 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
     final result = await _service.deleteDrone(drone.id);
     if (!mounted) return;
     if (result.success) {
+      DroneReminderService.instance.cancelReminder(drone.id);
       setState(() => _drones.removeWhere((d) => d.id == drone.id));
       _showSnack('${drone.name} removed', icon: Icons.delete_outline);
     } else {
@@ -184,8 +223,26 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
         d.serialNumber.toLowerCase().contains(_search.toLowerCase()) ||
         (d.pilotName ?? '').toLowerCase().contains(_search.toLowerCase());
     final matchFilter = _filter == 'ALL' || d.status == _filter;
-    return matchSearch && matchFilter;
-  }).toList();
+    final matchBranch = _branchFilter == 'ALL' || d.branch == _branchFilter;
+    final matchDate = _sortOption != 'date' ||
+        _sortDate == null ||
+        (d.lastUpdated != null && _isSameDate(d.lastUpdated!, _sortDate!));
+    return matchSearch && matchFilter && matchBranch && matchDate;
+  }).toList()
+    ..sort((a, b) {
+      final at = a.lastUpdated;
+      final bt = b.lastUpdated;
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1; // undated drones sink to the bottom
+      if (bt == null) return -1;
+      return _sortOption == 'oldest' ? at.compareTo(bt) : bt.compareTo(at);
+    });
+
+  bool _isSameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  int _branchCount(String branch) =>
+      _drones.where((d) => d.branch == branch).length;
 
   int get _inCount => _drones.where((d) => d.status == 'IN').length;
   int get _outCount => _drones.where((d) => d.status == 'OUT').length;
@@ -215,6 +272,10 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
             SliverToBoxAdapter(child: _buildSearchBar()),
           if (!_loading && _error == null && _drones.isNotEmpty)
             SliverToBoxAdapter(child: _buildFilterRow()),
+          if (!_loading && _error == null && _drones.isNotEmpty)
+            SliverToBoxAdapter(child: _buildBranchFilterRow()),
+          if (!_loading && _error == null && _sortOption == 'date' && _sortDate != null)
+            SliverToBoxAdapter(child: _buildDateFilterChip()),
           _buildContent(),
         ],
       ),
@@ -243,48 +304,92 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200, width: 1),
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2)),
-          ],
-        ),
-        child: TextField(
-          controller: _searchCtrl,
-          onChanged: (v) => setState(() => _search = v),
-          style: const TextStyle(color: kNavy, fontSize: 14),
-          cursorColor: kTeal,
-          decoration: InputDecoration(
-            hintText: 'Search by name, model, serial, pilot…',
-            hintStyle:
-            TextStyle(color: Colors.grey.shade400, fontSize: 14),
-            prefixIcon:
-            const Icon(Icons.search, color: kTeal, size: 20),
-            suffixIcon: _search.isNotEmpty
-                ? IconButton(
-              icon: Icon(Icons.close,
-                  color: Colors.grey.shade500, size: 18),
-              onPressed: () {
-                _searchCtrl.clear();
-                setState(() => _search = '');
-              },
-            )
-                : null,
-            filled: false,
-            contentPadding: const EdgeInsets.symmetric(vertical: 15),
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200, width: 1),
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2)),
+                ],
+              ),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (v) => setState(() => _search = v),
+                style: const TextStyle(color: kNavy, fontSize: 14),
+                cursorColor: kTeal,
+                decoration: InputDecoration(
+                  hintText: 'Search by name, model, serial, used by…',
+                  hintStyle:
+                  TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                  prefixIcon:
+                  const Icon(Icons.search, color: kTeal, size: 20),
+                  suffixIcon: _search.isNotEmpty
+                      ? IconButton(
+                    icon: Icon(Icons.close,
+                        color: Colors.grey.shade500, size: 18),
+                    onPressed: () {
+                      _searchCtrl.clear();
+                      setState(() => _search = '');
+                    },
+                  )
+                      : null,
+                  filled: false,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                ),
+              ),
+            ),
           ),
-        ),
+          const SizedBox(width: 10),
+          _SortButton(
+            sortOption: _sortOption,
+            sortDate: _sortDate,
+            onTap: _openSortSheet,
+          ),
+        ],
       ),
     );
+  }
+
+  Future<void> _openSortSheet() async {
+    final result = await showModalBottomSheet<_SortSelection>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SortSheet(
+        current: _sortOption,
+        currentDate: _sortDate,
+      ),
+    );
+    if (result == null) return;
+
+    if (result.option == 'date') {
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: result.date ?? DateTime.now(),
+        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+        lastDate: DateTime.now().add(const Duration(days: 1)),
+      );
+      if (picked == null) return; // cancelled date pick, keep old sort
+      setState(() {
+        _sortOption = 'date';
+        _sortDate = picked;
+      });
+    } else {
+      setState(() {
+        _sortOption = result.option;
+        _sortDate = null;
+      });
+    }
   }
 
   Widget _buildFilterRow() {
@@ -313,6 +418,66 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
               color: kAmber,
               onTap: () => setState(() => _filter = 'OUT')),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBranchFilterRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _FilterChip(
+                label: 'All Branch',
+                count: _drones.length,
+                selected: _branchFilter == 'ALL',
+                color: kPurple,
+                onTap: () => setState(() => _branchFilter = 'ALL')),
+            for (final branch in kBranchOptions) ...[
+              const SizedBox(width: 8),
+              _FilterChip(
+                  label: kBranchLabels[branch] ?? branch,
+                  count: _branchCount(branch),
+                  selected: _branchFilter == branch,
+                  color: kPurple,
+                  onTap: () => setState(() => _branchFilter = branch)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateFilterChip() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _sortOption = 'newest';
+          _sortDate = null;
+        }),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: kTeal.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: kTeal.withOpacity(0.4)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.calendar_today_outlined, size: 13, color: kTeal),
+              const SizedBox(width: 6),
+              Text('Showing ${DateFormat('dd MMM yyyy').format(_sortDate!)}',
+                  style: const TextStyle(
+                      color: kTeal, fontSize: 12, fontWeight: FontWeight.w700)),
+              const SizedBox(width: 6),
+              const Icon(Icons.close_rounded, size: 14, color: kTeal),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -736,6 +901,148 @@ class _FilterChip extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   )),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Sort Button + Sheet ────────────────────────────────────────────────────────
+
+class _SortSelection {
+  final String option; // 'newest' | 'oldest' | 'date'
+  final DateTime? date;
+  const _SortSelection(this.option, [this.date]);
+}
+
+class _SortButton extends StatelessWidget {
+  final String sortOption;
+  final DateTime? sortDate;
+  final VoidCallback onTap;
+  const _SortButton(
+      {required this.sortOption, required this.sortDate, required this.onTap});
+
+  static const Color kNavy = Color(0xFF0A1628);
+  static const Color kTeal = Color(0xFF00D4AA);
+
+  bool get _isActive => sortOption != 'newest';
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        width: 52,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: _isActive ? kTeal.withOpacity(0.5) : Colors.grey.shade200),
+          color: _isActive ? kTeal.withOpacity(0.08) : Colors.white,
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Icon(Icons.sort_rounded,
+            color: _isActive ? kTeal : kNavy.withOpacity(0.6), size: 22),
+      ),
+    );
+  }
+}
+
+class _SortSheet extends StatelessWidget {
+  final String current;
+  final DateTime? currentDate;
+  const _SortSheet({required this.current, required this.currentDate});
+
+  static const Color kNavy = Color(0xFF0A1628);
+  static const Color kTeal = Color(0xFF00D4AA);
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Text('Sort by',
+                  style: TextStyle(
+                      color: kNavy, fontSize: 16, fontWeight: FontWeight.w800)),
+            ),
+            _SortOptionTile(
+              icon: Icons.arrow_downward_rounded,
+              label: 'Newest to oldest',
+              selected: current == 'newest',
+              onTap: () => Navigator.pop(context, const _SortSelection('newest')),
+            ),
+            _SortOptionTile(
+              icon: Icons.arrow_upward_rounded,
+              label: 'Oldest to newest',
+              selected: current == 'oldest',
+              onTap: () => Navigator.pop(context, const _SortSelection('oldest')),
+            ),
+            _SortOptionTile(
+              icon: Icons.calendar_today_outlined,
+              label: current == 'date' && currentDate != null
+                  ? 'Date · ${DateFormat('dd MMM yyyy').format(currentDate!)}'
+                  : 'Pick a date',
+              selected: current == 'date',
+              onTap: () =>
+                  Navigator.pop(context, _SortSelection('date', currentDate)),
+            ),
+            const SizedBox(height: 6),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SortOptionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _SortOptionTile(
+      {required this.icon,
+        required this.label,
+        required this.selected,
+        required this.onTap});
+
+  static const Color kNavy = Color(0xFF0A1628);
+  static const Color kTeal = Color(0xFF00D4AA);
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        child: Row(
+          children: [
+            Icon(icon, size: 19, color: selected ? kTeal : Colors.grey.shade500),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      color: selected ? kTeal : kNavy,
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+            ),
+            if (selected) const Icon(Icons.check_rounded, color: kTeal, size: 18),
           ],
         ),
       ),
@@ -1326,6 +1633,201 @@ class _ConfirmDialog extends StatelessWidget {
           child: Text(confirmLabel),
         ),
       ],
+    );
+  }
+}
+
+// ── IN/OUT Action Dialog (who + when) ─────────────────────────────────────────
+
+/// Result of the "who did this, and when" dialog shown before every
+/// IN/OUT toggle.
+class _DroneActionEntry {
+  final String usedBy;
+  final DateTime time;
+  const _DroneActionEntry({required this.usedBy, required this.time});
+}
+
+class _DroneActionDialog extends StatefulWidget {
+  final Drone drone;
+  final String newStatus; // 'IN' or 'OUT'
+  final String? defaultName;
+  const _DroneActionDialog(
+      {required this.drone, required this.newStatus, this.defaultName});
+
+  @override
+  State<_DroneActionDialog> createState() => _DroneActionDialogState();
+}
+
+class _DroneActionDialogState extends State<_DroneActionDialog> {
+  static const Color kNavy = Color(0xFF0A1628);
+  static const Color kTeal = Color(0xFF00D4AA);
+  static const Color kAmber = Color(0xFFFFB800);
+
+  late final TextEditingController _nameCtrl;
+  late DateTime _when;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.defaultName ?? '');
+    _when = DateTime.now();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _when,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (picked != null) {
+      setState(() => _when = DateTime(
+          picked.year, picked.month, picked.day, _when.hour, _when.minute));
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_when),
+    );
+    if (picked != null) {
+      setState(() => _when = DateTime(_when.year, _when.month, _when.day,
+          picked.hour, picked.minute));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isIn = widget.newStatus == 'IN';
+    final color = isIn ? kTeal : kAmber;
+    final canConfirm = _nameCtrl.text.trim().isNotEmpty;
+
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      title: Row(children: [
+        Icon(isIn ? Icons.flight_land_rounded : Icons.flight_takeoff_rounded,
+            color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text('Mark "${widget.drone.name}" ${widget.newStatus}',
+              style: const TextStyle(color: kNavy, fontWeight: FontWeight.bold)),
+        ),
+      ]),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Used by',
+                style: TextStyle(
+                    color: kNavy, fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _nameCtrl,
+              onChanged: (_) => setState(() {}),
+              autofocus: widget.defaultName == null || widget.defaultName!.isEmpty,
+              style: const TextStyle(color: kNavy, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Name of the person doing this',
+                prefixIcon: const Icon(Icons.person_outline, size: 20),
+                isDense: true,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Date & time',
+                style: TextStyle(
+                    color: kNavy, fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: _PickerField(
+                    icon: Icons.calendar_today_outlined,
+                    label: DateFormat('dd MMM yyyy').format(_when),
+                    onTap: _pickDate,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _PickerField(
+                    icon: Icons.access_time,
+                    label: DateFormat('hh:mm a').format(_when),
+                    onTap: _pickTime,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
+        ),
+        ElevatedButton(
+          onPressed: canConfirm
+              ? () => Navigator.pop(
+              context,
+              _DroneActionEntry(
+                  usedBy: _nameCtrl.text.trim(), time: _when))
+              : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: color,
+            foregroundColor: Colors.white,
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+          ),
+          child: Text('Confirm ${widget.newStatus}'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PickerField extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _PickerField(
+      {required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: Colors.grey.shade600),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(label,
+                  style: const TextStyle(
+                      color: Color(0xFF0A1628),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

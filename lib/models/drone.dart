@@ -18,7 +18,7 @@ class Drone {
   final String model;
   final String serialNumber;
   String status; // 'IN' | 'OUT'
-  final String? pilotName;
+  String? pilotName; // also doubles as "used by" — last person to toggle IN/OUT
   final String? category;
   final int batteryLevel;
   final double flightHours;

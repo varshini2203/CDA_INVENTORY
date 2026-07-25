@@ -23,6 +23,7 @@ import 'providers/language_provider.dart';
 
 import 'core/access/access_scope.dart';
 import 'core/access/access_route_observer.dart';
+import 'services/drone_reminder_service.dart';
 
 // Flutter's default scroll behavior only lets touch/stylus drag a
 // scrollable — a mouse click-and-drag is deliberately excluded, which is
@@ -45,6 +46,10 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Local notifications used for the "did you forget to bring the drone
+  // back?" 1-hour reminder — see lib/services/drone_reminder_service.dart.
+  await DroneReminderService.instance.init();
 
   runApp(const ChennaiDroneInventoryApp());
 }

@@ -290,18 +290,34 @@ class DroneService {
       String status, {
         String? note,
         int? batteryLevel,
+        // Who actually performed this IN/OUT action (defaults to the
+        // drone's currently assigned pilot_name if not supplied, kept for
+        // backward compatibility with older call sites).
+        String? performedBy,
+        // Lets the person registering the entry backdate/forward-date it
+        // instead of always stamping "now". Falls back to serverTimestamp()
+        // when omitted.
+        DateTime? actionTime,
       }) async {
     try {
+      final ts = actionTime != null
+          ? Timestamp.fromDate(actionTime)
+          : FieldValue.serverTimestamp();
+
       final updates = <String, dynamic>{
         'status': status.toUpperCase(),
-        'last_updated': FieldValue.serverTimestamp(),
+        'last_updated': ts,
         if (batteryLevel != null) 'battery_level': batteryLevel,
+        if (performedBy != null && performedBy.isNotEmpty)
+          'pilot_name': performedBy,
       };
 
       // Fetch current pilot name for the history record
       final currentDoc = await _drones.doc(id).get();
       final currentData = currentDoc.data() ?? {};
-      final pilot = currentData['pilot_name']?.toString() ?? 'Unknown';
+      final pilot = (performedBy != null && performedBy.isNotEmpty)
+          ? performedBy
+          : (currentData['pilot_name']?.toString() ?? 'Unknown');
 
       // Run status update + history write atomically
       final batch = _db.batch();
@@ -311,7 +327,7 @@ class DroneService {
         'pilot': pilot,
         'status': status.toUpperCase(),
         'notes': note,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': ts,
       });
       await batch.commit();
 
@@ -321,7 +337,11 @@ class DroneService {
         module: 'Drones',
         itemName: (currentData['name'] as String?) ?? id,
         before: {'status': currentData['status']},
-        after: {'status': status.toUpperCase(), 'note': note},
+        after: {
+          'status': status.toUpperCase(),
+          'note': note,
+          'used_by': pilot,
+        },
       );
       return ApiResult.ok(doc);
     } catch (e) {

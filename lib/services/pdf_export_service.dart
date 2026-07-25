@@ -306,7 +306,7 @@ class PdfExportService {
   static pw.Widget _droneTable(List<DroneReportRow> rows) {
     if (rows.isEmpty) return _emptyNote('No drone activity in this period.');
     return pw.TableHelper.fromTextArray(
-      headers: const ['Drone', 'Model', 'Pilot', 'Status', 'Date / Time'],
+      headers: const ['Drone', 'Model', 'Used By', 'Status', 'Date / Time'],
       data: rows
           .map((r) => [
         r.droneName,

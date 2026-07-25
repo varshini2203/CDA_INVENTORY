@@ -564,8 +564,8 @@ class _HistoryItem extends StatelessWidget {
                           const SizedBox(width: 9),
                           Text(
                             entry.pilot.isEmpty
-                                ? 'Unknown pilot'
-                                : entry.pilot,
+                                ? 'Used by: Unknown'
+                                : 'Used by: ${entry.pilot}',
                             style: const TextStyle(
                                 color: Color(0xFF0A1628),
                                 fontSize: 14,

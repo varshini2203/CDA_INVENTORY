@@ -247,7 +247,7 @@ class _DroneInOutReportScreenState extends State<DroneInOutReportScreen> {
             if (r.droneModel.isNotEmpty)
               Text(r.droneModel, style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
             const SizedBox(height: 3),
-            Text('Pilot: ${r.pilot}', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+            Text('Used by: ${r.pilot}', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
             if (r.timestamp != null)
               Text(DateFormat('dd MMM yyyy, hh:mm a').format(r.timestamp!),
                   style: TextStyle(color: Colors.grey.shade400, fontSize: 10.5)),

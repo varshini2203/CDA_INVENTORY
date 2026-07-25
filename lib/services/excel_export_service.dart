@@ -161,7 +161,7 @@ class ExcelExportService {
     final sheet = excel['Drone In-Out'];
     _writeTitleRow(sheet, 'Drone In / Out Report', month);
     _writeHeaderRow(
-        sheet, 2, ['Drone', 'Model', 'Pilot', 'Status', 'Notes', 'Date / Time']);
+        sheet, 2, ['Drone', 'Model', 'Used By', 'Status', 'Notes', 'Date / Time']);
 
     var r = 3;
     for (final row in rows) {

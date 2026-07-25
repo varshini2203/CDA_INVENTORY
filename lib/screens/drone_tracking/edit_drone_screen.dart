@@ -279,7 +279,7 @@ class _EditDroneScreenState extends State<EditDroneScreen>
                     const SizedBox(height: 12),
                     _buildField(
                         controller: _pilotCtrl,
-                        label: 'Pilot Name (optional)',
+                        label: 'used by (optional)',
                         icon: Icons.person_outline),
                     const SizedBox(height: 14),
                     _buildCategoryDropdown(),
@@ -305,12 +305,12 @@ class _EditDroneScreenState extends State<EditDroneScreen>
                     _buildMaintenancePicker(),
                     const SizedBox(height: 24),
                     _buildSectionHeader(
-                        'Notes', Icons.notes_outlined),
+                        'purpose', Icons.notes_outlined),
                     const SizedBox(height: 12),
                     _buildField(
                         controller: _notesCtrl,
-                        label: 'Notes (optional)',
-                        hint: 'Any additional info…',
+                        label: 'purpose (optional)',
+                        hint: 'aim',
                         icon: Icons.notes,
                         maxLines: 3),
                     const SizedBox(height: 24),
@@ -318,7 +318,7 @@ class _EditDroneScreenState extends State<EditDroneScreen>
                     const SizedBox(height: 28),
                     _buildSubmitButton(),
                     const SizedBox(height: 40),
-                  ],
+                ],
                 ),
               ),
             ),
