@@ -5,12 +5,11 @@
 // register the matching return entry. If the status is changed again for
 // that drone before the hour is up, the pending reminder is cancelled.
 //
-// Requires two packages that are NOT yet in pubspec.yaml — add them and
-// run `flutter pub get`:
+// Requires two packages in pubspec.yaml (already added):
 //
 //   dependencies:
-//     flutter_local_notifications: ^17.2.3
-//     timezone: ^0.9.4
+//     flutter_local_notifications: ^19.4.0
+//     timezone: ^0.10.1
 //
 // Android also needs (AndroidManifest.xml, inside <manifest>):
 //   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
@@ -131,8 +130,6 @@ class DroneReminderService {
         iOS: DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-      UILocalNotificationDateInterpretation.absoluteTime,
       payload: droneId,
     );
   }
