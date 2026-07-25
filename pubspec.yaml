@@ -29,10 +29,11 @@ dependencies:
   local_auth: ^3.0.1
   share_plus: ^13.2.0
   image: ^4.2.0
-  # ── Drone In/Out overdue reminder (on-device, no Blaze plan needed) ──────
-  flutter_local_notifications: ^17.2.3
-  timezone: ^0.9.4
+flutter_local_notifications: ^17.2.3
+timezone: ^0.9.4
 
+file_picker: ^3.0.4
+syncfusion_flutter_pdf: ^33.2.13
 dev_dependencies:
   flutter_test:
     sdk: flutter

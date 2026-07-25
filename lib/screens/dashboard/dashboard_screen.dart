@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cda_inventory/screens/branches/branch_list_screen.dart';
 import 'package:cda_inventory/screens/fixed_products/fixed_product_list_screen.dart';
+import 'package:cda_inventory/screens/new_products/new_product_list_screen.dart';
 import 'package:cda_inventory/screens/consumables/consumable_list_screen.dart';
 import 'package:cda_inventory/screens/drone_tracking/drone_in_out_screen.dart';
 import 'package:cda_inventory/screens/stock_management/stock_dashboard_screen.dart';
@@ -282,6 +283,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Widget? screen;
     switch (title) {
       case 'Fixed Assets':     screen = const FixedProductListScreen(); break;
+      case 'New Products':     screen = const NewProductListScreen();   break;
       case 'Consumables':      screen = const ConsumableListScreen();   break;
       case 'Drone In/Out':     screen = const DroneInOutScreen();       break;
       case 'Stock Management': screen = const StockDashboardScreen();   break;

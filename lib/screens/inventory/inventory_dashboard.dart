@@ -8,6 +8,7 @@ import 'edit_product_screen.dart';
 import 'package:cda_inventory/data/seed_products.dart';
 import 'package:cda_inventory/data/seed_adambakkam_inventory_dashboard.dart';
 import 'package:cda_inventory/services/seed_guard_service.dart';
+import 'package:cda_inventory/screens/bulk_import/bulk_import_screen.dart';
 
 class InventoryDashboard extends StatefulWidget {
   const InventoryDashboard({super.key});
@@ -787,6 +788,22 @@ class _InventoryDashboardState extends State<InventoryDashboard>
             onPressed: _seedAllProducts,
             tooltip: "Seed All Products",
           ),
+        IconButton(
+          icon: const Icon(Icons.upload_file_rounded),
+          tooltip: 'Bulk Import',
+          onPressed: () async {
+            final imported = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                settings: const RouteSettings(name: 'Bulk Import Inventory'),
+                builder: (_) => const BulkImportScreen(
+                  target: BulkImportTarget.inventory,
+                ),
+              ),
+            );
+            if (imported == true && mounted) _loadInventoryOnce();
+          },
+        ),
         IconButton(
           icon: Icon(isGridView ? Icons.list_rounded : Icons.grid_view_rounded),
           onPressed: () => setState(() => isGridView = !isGridView),
