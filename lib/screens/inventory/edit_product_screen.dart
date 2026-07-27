@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';   // 🆕 for date/time formatting
 import '../../models/inventory_model.dart';
 import '../../services/inventory_service.dart';
+import 'product_details_screen.dart';
 
 class EditProductScreen extends StatefulWidget {
   // ── Now accepts an InventoryItem instead of a raw Map ──────────────────────
