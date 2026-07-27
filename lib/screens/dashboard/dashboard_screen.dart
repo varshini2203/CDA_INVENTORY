@@ -18,6 +18,7 @@ import 'package:cda_inventory/screens/stock_management/stock_out_screen.dart';
 import 'package:cda_inventory/screens/stock_management/stock_history_screen.dart';
 import 'package:cda_inventory/screens/profile/profile_screen.dart';
 import 'package:cda_inventory/screens/reports/reports_dashboard_screen.dart';
+import 'package:cda_inventory/screens/inventory/inventory_analytics_screen.dart';
 import 'package:cda_inventory/screens/bills/bills_screen.dart';
 import 'package:cda_inventory/screens/gamification/gamification_dashboard.dart';
 import 'package:cda_inventory/services/auth_service.dart';
@@ -228,6 +229,17 @@ const _modules = [
     'image': 'assets/images/report.png',
   },
   {
+    'title': 'Inventory Analytics',
+    'icon': Icons.query_stats_rounded,
+    'emoji': '📊',
+    'desc': 'Stock insights & health',
+    'tag': 'MGMT',
+    'color': _blueLight,
+    'gradFrom': Color(0xFF0D2348),
+    'gradTo': Color(0xFF0A1428),
+    'image': 'assets/images/inventory_analytics.png',
+  },
+  {
     'title': 'Staff Rewards',
     'icon': Icons.emoji_events_rounded,
     'emoji': '🏆',
@@ -236,7 +248,7 @@ const _modules = [
     'color': _gold,
     'gradFrom': Color(0xFF2A2308),
     'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/staff_rewards.jpg',
+    'image': 'assets/images/staff_rewards.png',
   },
 ];
 
@@ -271,6 +283,7 @@ const _drawerItems = [
   {'icon': Icons.outbox_rounded,                  'label': 'Stock Out',        'key': 'Stock Out'},
   {'icon': Icons.history_rounded,                 'label': 'Stock History',    'key': 'Stock History'},
   {'icon': Icons.insert_chart_rounded,             'label': 'Reports',          'key': 'Reports'},
+  {'icon': Icons.query_stats_rounded,               'label': 'Inventory Analytics', 'key': 'Inventory Analytics'},
   {'icon': Icons.emoji_events_rounded,             'label': 'Staff Rewards',    'key': 'Staff Rewards'},
 ];
 
@@ -318,6 +331,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'Stock Out':        screen = const StockOutScreen();         break;
       case 'Stock History':    screen = const StockHistoryScreen();     break;
       case 'Reports':          screen = const ReportsDashboardScreen(); break;
+      case 'Inventory Analytics': screen = const InventoryAnalyticsScreen(); break;
       case 'Staff Rewards':    screen = const GamificationDashboard();  break;
       case 'Inventory':
         Navigator.pushNamed(context, '/inventory');

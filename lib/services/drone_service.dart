@@ -48,6 +48,17 @@ class DroneService {
   CollectionReference<Map<String, dynamic>> _history(String droneId) =>
       _drones.doc(droneId).collection('history');
 
+  // ── BRANCH OPTIONS ───────────────────────────────────────────────────────
+  // Used by BranchDropdown (lib/widgets/drone_entry_form_fields.dart).
+  // 'branchAll' is a sentinel meaning "no branch filter / not scoped to a
+  // branch" — it is never itself written to a drone document's `branch`
+  // field, only used as the dropdown's "All Branch" option value.
+  static const String branchAll = 'ALL';
+  static const List<String> branches = <String>['CDA Admin', 'CDA Ops'];
+
+  // ── OVERDUE-DRONE REMINDER THRESHOLD ─────────────────────────────────────
+  static const Duration overdueThreshold = Duration(hours: 4);
+
   // ── IN-MEMORY CACHE (full drone list, ordered by last_updated) ──────────
   // Every screen that lists drones needs the same "all drones, most recently
   // updated first" data — the status/category filters and search were
@@ -148,6 +159,63 @@ class DroneService {
         .map((doc) => Drone.fromFirestore(
         doc as DocumentSnapshot<Map<String, dynamic>>))
         .toList());
+  }
+
+  // ── OVERDUE DRONES (Drone Reminders screen + bell/flyover) ─────────────────
+  // A drone is "overdue" when it is currently OUT, has been for 4+ hours
+  // (measured from checked_out_at, falling back to last_updated for older
+  // records written before that field existed), and nobody has tapped
+  // "Got it" for this OUT session yet (reminder_acknowledged == false).
+  //
+  // Note: like the rest of this file, this only re-evaluates when the
+  // underlying Firestore query re-emits (i.e. on a write). It does not tick
+  // every second/minute on its own — that's fine for the badge/list contents
+  // (which only change on a status/ack write), the on-screen duration text
+  // is recomputed per rebuild by the UI itself.
+  Stream<List<Drone>> overdueDronesStream() {
+    return _drones
+        .where('status', isEqualTo: 'OUT')
+        .snapshots()
+        .map((snap) {
+      final now = DateTime.now();
+      final list = snap.docs
+          .map((doc) => Drone.fromFirestore(
+          doc as DocumentSnapshot<Map<String, dynamic>>))
+          .where((d) {
+        if (d.reminderAcknowledged) return false;
+        final since = d.checkedOutAt ?? d.lastUpdated;
+        if (since == null) return false;
+        return now.difference(since) >= overdueThreshold;
+      }).toList();
+
+      // Longest-overdue first.
+      list.sort((a, b) {
+        final at = a.checkedOutAt ?? a.lastUpdated ?? now;
+        final bt = b.checkedOutAt ?? b.lastUpdated ?? now;
+        return at.compareTo(bt);
+      });
+      return list;
+    });
+  }
+
+  /// Convenience projection of [overdueDronesStream] for badge counts (the
+  /// AppBar bell + full-screen flyover on the dashboard).
+  Stream<int> overdueDronesCountStream() =>
+      overdueDronesStream().map((list) => list.length);
+
+  /// Dismisses the overdue reminder for a single drone (the "Got it" button
+  /// on the Drone Reminders screen) without requiring the drone to actually
+  /// be marked IN. It re-arms automatically the next time this drone is
+  /// marked OUT again, since updateStatus() resets this flag to false on
+  /// every fresh OUT.
+  Future<ApiResult<bool>> acknowledgeReminder(String droneId) async {
+    try {
+      await _drones.doc(droneId).update({'reminder_acknowledged': true});
+      clearCache();
+      return ApiResult.ok(true);
+    } catch (e) {
+      return ApiResult.err(_firestoreError(e));
+    }
   }
 
   // ── ADD DRONE ──────────────────────────────────────────────────────────────
@@ -284,6 +352,16 @@ class DroneService {
   // ── UPDATE STATUS ──────────────────────────────────────────────────────────
   // Also writes a history entry into the sub-collection. This is the
   // dedicated toggle-button path and was already correct.
+  //
+  // Additionally responsible for the bookkeeping the overdue-reminder
+  // system depends on:
+  //   - Marking OUT: stamps checked_out_at with this action's timestamp,
+  //     stores `purpose`, and resets reminder_acknowledged to false so a
+  //     fresh 4-hour countdown (and reminder eligibility) starts for this
+  //     OUT session.
+  //   - Marking IN: clears checked_out_at/purpose. overdueDronesStream()
+  //     only queries status == 'OUT' anyway, so this is just hygiene for
+  //     the next time the drone goes OUT.
 
   Future<ApiResult<Drone>> updateStatus(
       String id,
@@ -298,18 +376,31 @@ class DroneService {
         // instead of always stamping "now". Falls back to serverTimestamp()
         // when omitted.
         DateTime? actionTime,
+        // Why the drone is being taken OUT (Training/Testing/Service/...).
+        // Ignored when marking IN.
+        String? purpose,
       }) async {
     try {
       final ts = actionTime != null
           ? Timestamp.fromDate(actionTime)
           : FieldValue.serverTimestamp();
+      final upperStatus = status.toUpperCase();
+      final isOut = upperStatus == 'OUT';
 
       final updates = <String, dynamic>{
-        'status': status.toUpperCase(),
+        'status': upperStatus,
         'last_updated': ts,
         if (batteryLevel != null) 'battery_level': batteryLevel,
         if (performedBy != null && performedBy.isNotEmpty)
           'pilot_name': performedBy,
+        if (isOut) ...{
+          'purpose': purpose,
+          'checked_out_at': ts,
+          'reminder_acknowledged': false,
+        } else ...{
+          'purpose': null,
+          'checked_out_at': null,
+        },
       };
 
       // Fetch current pilot name for the history record
@@ -325,8 +416,9 @@ class DroneService {
       batch.set(_history(id).doc(), {
         'drone_id': id,
         'pilot': pilot,
-        'status': status.toUpperCase(),
+        'status': upperStatus,
         'notes': note,
+        'purpose': isOut ? purpose : null,
         'timestamp': ts,
       });
       await batch.commit();
@@ -338,9 +430,10 @@ class DroneService {
         itemName: (currentData['name'] as String?) ?? id,
         before: {'status': currentData['status']},
         after: {
-          'status': status.toUpperCase(),
+          'status': upperStatus,
           'note': note,
           'used_by': pilot,
+          if (isOut) 'purpose': purpose,
         },
       );
       return ApiResult.ok(doc);
