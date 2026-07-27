@@ -9,6 +9,7 @@
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cda_inventory/models/inventory_model.dart';
 import 'package:cda_inventory/services/inventory_service.dart';
 
@@ -34,6 +35,42 @@ const List<Color> _categoryPalette = [
   Color(0xFF00B8D9), Color(0xFFFF8A3D), Color(0xFF6C8CFF),
 ];
 
+// One row of lib/screens/inventory/inventory_analytics_screen.dart's
+// 'inventory_daily_snapshots' Firestore collection — one doc per calendar
+// day, written the first time the analytics screen loads that day.
+class _DailySnapshot {
+  final String date; // 'yyyy-MM-dd'
+  final int lowStockCount;
+  final int outOfStockCount;
+  final int totalQuantity;
+  final int totalProducts;
+
+  _DailySnapshot({
+    required this.date,
+    required this.lowStockCount,
+    required this.outOfStockCount,
+    required this.totalQuantity,
+    required this.totalProducts,
+  });
+
+  factory _DailySnapshot.fromMap(Map<String, dynamic> m) => _DailySnapshot(
+    date: m['date']?.toString() ?? '',
+    lowStockCount: (m['lowStockCount'] as num?)?.toInt() ?? 0,
+    outOfStockCount: (m['outOfStockCount'] as num?)?.toInt() ?? 0,
+    totalQuantity: (m['totalQuantity'] as num?)?.toInt() ?? 0,
+    totalProducts: (m['totalProducts'] as num?)?.toInt() ?? 0,
+  );
+
+  /// Short 'D Mon' label for chart axes, parsed from the yyyy-MM-dd key.
+  String get shortLabel {
+    final parts = date.split('-');
+    if (parts.length != 3) return date;
+    const months = ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final m = int.tryParse(parts[1]) ?? 0;
+    return '${int.tryParse(parts[2]) ?? ''} ${m >= 1 && m <= 12 ? months[m] : ''}';
+  }
+}
+
 class InventoryAnalyticsScreen extends StatefulWidget {
   const InventoryAnalyticsScreen({super.key});
 
@@ -45,6 +82,7 @@ class _InventoryAnalyticsScreenState extends State<InventoryAnalyticsScreen> {
   bool _isLoading = true;
   String? _error;
   List<InventoryItem> _items = [];
+  List<_DailySnapshot> _lowStockHistory = [];
 
   @override
   void initState() {
@@ -52,12 +90,59 @@ class _InventoryAnalyticsScreenState extends State<InventoryAnalyticsScreen> {
     _load();
   }
 
+  static String _dateKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  // Writes today's low/out-of-stock counts to a small daily-snapshot
+  // collection (idempotent — same doc id if called again today), then
+  // reads back up to the last 30 days. This is how the "Low stock
+  // history" trend gets real data over time instead of invented numbers:
+  // there's no way to know last month's low-stock count since the app
+  // never recorded it, so the chart genuinely starts from today and
+  // fills in day by day.
+  Future<List<_DailySnapshot>> _saveAndLoadLowStockHistory(_Analytics a) async {
+    final col = FirebaseFirestore.instance.collection('inventory_daily_snapshots');
+    final todayKey = _dateKey(DateTime.now());
+
+    await col.doc(todayKey).set({
+      'date': todayKey,
+      'lowStockCount': a.lowStockCount,
+      'outOfStockCount': a.outOfStockCount,
+      'totalQuantity': a.totalQuantity,
+      'totalProducts': a.totalProducts,
+      'savedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    final cutoffKey = _dateKey(DateTime.now().subtract(const Duration(days: 29)));
+    final snap = await col
+        .where('date', isGreaterThanOrEqualTo: cutoffKey)
+        .get();
+
+    final list = snap.docs.map((d) => _DailySnapshot.fromMap(d.data())).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    return list;
+  }
+
   Future<void> _load({bool forceRefresh = false}) async {
     setState(() { _isLoading = true; _error = null; });
     try {
       final items = await InventoryService().getInventory(forceRefresh: forceRefresh);
+      final analytics = _Analytics.from(items);
+
+      List<_DailySnapshot> history = [];
+      try {
+        history = await _saveAndLoadLowStockHistory(analytics);
+      } catch (_) {
+        // Snapshot tracking is a nice-to-have — the rest of the screen
+        // should still render even if this write/read fails.
+      }
+
       if (!mounted) return;
-      setState(() { _items = items; _isLoading = false; });
+      setState(() {
+        _items = items;
+        _lowStockHistory = history;
+        _isLoading = false;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() { _error = 'Failed to load inventory: $e'; _isLoading = false; });
@@ -90,7 +175,7 @@ class _InventoryAnalyticsScreenState extends State<InventoryAnalyticsScreen> {
         color: _blueLight,
         backgroundColor: _surfaceHigh,
         onRefresh: () => _load(forceRefresh: true),
-        child: _AnalyticsBody(items: _items),
+        child: _AnalyticsBody(items: _items, lowStockHistory: _lowStockHistory),
       ),
     );
   }
@@ -252,7 +337,8 @@ class _Analytics {
    ════════════════════════════════════════════════════════════════════════ */
 class _AnalyticsBody extends StatelessWidget {
   final List<InventoryItem> items;
-  const _AnalyticsBody({required this.items});
+  final List<_DailySnapshot> lowStockHistory;
+  const _AnalyticsBody({required this.items, required this.lowStockHistory});
 
   @override
   Widget build(BuildContext context) {
@@ -275,25 +361,26 @@ class _AnalyticsBody extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
-        // ── KPI GRID ──────────────────────────────────────────────────────
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 2.1, // width ÷ height of each KPI box — raise this number to make boxes shorter, lower it to make them taller
-          children: [
-            _KpiCard(label: 'Total products', value: '${a.totalProducts}', icon: Icons.inventory_2_rounded, color: _green),
-            _KpiCard(label: 'Total quantity', value: '${a.totalQuantity}', icon: Icons.widgets_rounded, color: const Color(0xFF9C6BFF)),
-            _KpiCard(label: 'Categories', value: '${a.categoryCount}', icon: Icons.category_rounded, color: _gold),
-            _KpiCard(label: 'Branches', value: '${a.branchCount}', icon: Icons.business_rounded, color: _blueLight),
-            _KpiCard(label: 'Low stock', value: '${a.lowStockCount}', icon: Icons.warning_amber_rounded, color: _gold),
-            _KpiCard(label: 'Out of stock', value: '${a.outOfStockCount}', icon: Icons.remove_shopping_cart_rounded, color: _red),
-            _KpiCard(label: 'Added this week', value: '${a.addedThisWeek}', icon: Icons.fiber_new_rounded, color: _green),
-            _KpiCard(label: 'Health score', value: '${a.healthScore}', icon: Icons.favorite_rounded, color: _blueLight),
-          ],
-        ),
+        // ── KPI ROW — compact cards, same box style as the Inventory screen ─
+        Row(children: [
+          _KpiCard(label: 'Products', value: '${a.totalProducts}', icon: Icons.category_rounded, color: _green),
+          const SizedBox(width: 8),
+          _KpiCard(label: 'Quantity', value: '${a.totalQuantity}', icon: Icons.layers_rounded, color: const Color(0xFF9C6BFF)),
+          const SizedBox(width: 8),
+          _KpiCard(label: 'Categories', value: '${a.categoryCount}', icon: Icons.grid_view_rounded, color: _gold),
+          const SizedBox(width: 8),
+          _KpiCard(label: 'Branches', value: '${a.branchCount}', icon: Icons.business_rounded, color: _blueLight),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          _KpiCard(label: 'Low stock', value: '${a.lowStockCount}', icon: Icons.warning_amber_rounded, color: a.lowStockCount > 0 ? _gold : _textMuted),
+          const SizedBox(width: 8),
+          _KpiCard(label: 'Empty', value: '${a.outOfStockCount}', icon: Icons.remove_circle_outline_rounded, color: a.outOfStockCount > 0 ? _red : _textMuted),
+          const SizedBox(width: 8),
+          _KpiCard(label: 'New (7d)', value: '${a.addedThisWeek}', icon: Icons.fiber_new_rounded, color: _green),
+          const SizedBox(width: 8),
+          _KpiCard(label: 'Health', value: '${a.healthScore}', icon: Icons.favorite_rounded, color: _blueLight),
+        ]),
         const SizedBox(height: 18),
 
         // ── HEALTH GAUGE ──────────────────────────────────────────────────
@@ -312,6 +399,16 @@ class _AnalyticsBody extends StatelessWidget {
             data: a.last7DaysAdded,
             color: _blueLight,
           ),
+        ),
+        const SizedBox(height: 14),
+
+        // ── LOW STOCK HISTORY (real daily snapshots, builds up over time) ───
+        _SectionCard(
+          title: 'Low stock history',
+          subtitle: lowStockHistory.length < 2
+              ? 'Products under threshold — tracking starts today'
+              : 'Products under threshold, last ${lowStockHistory.length} days',
+          child: _LowStockHistoryChart(history: lowStockHistory, currentCount: a.lowStockCount),
         ),
         const SizedBox(height: 14),
 
@@ -441,27 +538,44 @@ class _KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.45), width: 1.2),
-        boxShadow: [
-          BoxShadow(color: color.withOpacity(0.10), blurRadius: 14, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(height: 10),
-          Text(value, style: TextStyle(color: color, fontSize: 19, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 1),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _textSub, fontSize: 11)),
-        ],
+    // Same box proportions as the compact stat cards on the Inventory
+    // screen (_statCard in inventory_dashboard.dart) — tight padding,
+    // left accent bar, icon above a bold value and small label.
+    //
+    // NOTE: a BoxDecoration can't combine borderRadius with a Border that
+    // has different widths/colors per side (that's what was throwing
+    // "borderRadius can only be given for uniform borders" and silently
+    // leaving these boxes blank). So the rounded outline is a plain
+    // uniform Border.all, and the colored accent is a separate 3px bar
+    // drawn on top instead of being part of the border itself.
+    return Expanded(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _surface,
+            border: Border.all(color: _border),
+          ),
+          child: Stack(
+            children: [
+              Positioned(left: 0, top: 0, bottom: 0, child: Container(width: 3, color: color)),
+              Padding(
+                padding: const EdgeInsets.only(top: 10, right: 10, bottom: 10, left: 13),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: color, size: 18),
+                    const SizedBox(height: 4),
+                    Text(value, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: color)),
+                    Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 9, color: _textMuted)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -638,6 +752,165 @@ class _TrendBarChart extends StatelessWidget {
       ),
     );
   }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   LOW STOCK HISTORY — red-gradient area chart over real daily snapshots
+   (see _saveAndLoadLowStockHistory). Renders a friendly placeholder until
+   at least 2 days of real data exist, since there's no way to know past
+   counts the app never recorded.
+   ──────────────────────────────────────────────────────────────────────── */
+class _LowStockHistoryChart extends StatelessWidget {
+  final List<_DailySnapshot> history;
+  final int currentCount;
+  const _LowStockHistoryChart({required this.history, required this.currentCount});
+
+  @override
+  Widget build(BuildContext context) {
+    if (history.length < 2) {
+      return SizedBox(
+        height: 150,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('$currentCount',
+                  style: const TextStyle(color: _red, fontSize: 28, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              const Text('low stock today', style: TextStyle(color: _textMuted, fontSize: 11.5)),
+              const SizedBox(height: 10),
+              const Text('Come back tomorrow to see the trend build up',
+                  style: TextStyle(color: _textMuted, fontSize: 11), textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final values = history.map((h) => h.lowStockCount).toList();
+    final highest = values.reduce(math.max);
+    final lowest = values.reduce(math.min);
+    final avg = values.reduce((a, b) => a + b) / values.length;
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 170,
+          child: CustomPaint(
+            size: const Size(double.infinity, 170),
+            painter: _AreaChartPainter(values: values.map((v) => v.toDouble()).toList(), color: _red),
+          ),
+        ),
+        Row(
+          children: [
+            Expanded(child: Text(history.first.shortLabel, style: const TextStyle(color: _textMuted, fontSize: 10))),
+            Expanded(child: Text(history.last.shortLabel, textAlign: TextAlign.right, style: const TextStyle(color: _textMuted, fontSize: 10))),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _MiniStat(label: 'Highest', value: '$highest', color: _red),
+            _MiniStat(label: 'Average', value: avg.toStringAsFixed(1), color: _gold),
+            _MiniStat(label: 'Lowest', value: '$lowest', color: _green),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _MiniStat({required this.label, required this.value, required this.color});
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(color: _textMuted, fontSize: 10.5)),
+          const SizedBox(height: 2),
+          Text(value, style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Generic gradient-filled line chart used by the low-stock history card.
+/// Straight-segment polyline (not bezier-smoothed) but visually reads the
+/// same way as the smooth area chart it's modelled on: line + soft fill
+/// fading to transparent, with light horizontal gridlines.
+class _AreaChartPainter extends CustomPainter {
+  final List<double> values;
+  final Color color;
+  _AreaChartPainter({required this.values, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) return;
+    final maxV = values.reduce(math.max);
+    final minV = values.reduce(math.min);
+    final range = (maxV - minV) == 0 ? 1 : (maxV - minV);
+    const topPad = 10.0, bottomPad = 6.0;
+    final chartH = size.height - topPad - bottomPad;
+    final stepX = values.length > 1 ? size.width / (values.length - 1) : size.width;
+
+    // gridlines
+    final gridPaint = Paint()..color = _border..strokeWidth = 1;
+    for (int i = 0; i <= 3; i++) {
+      final y = topPad + chartH * (i / 3);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    Offset pointAt(int i) {
+      final x = stepX * i;
+      final norm = (values[i] - minV) / range;
+      final y = topPad + chartH * (1 - norm);
+      return Offset(x, y);
+    }
+
+    final linePath = Path()..moveTo(pointAt(0).dx, pointAt(0).dy);
+    for (int i = 1; i < values.length; i++) {
+      linePath.lineTo(pointAt(i).dx, pointAt(i).dy);
+    }
+
+    final fillPath = Path()
+      ..addPath(linePath, Offset.zero)
+      ..lineTo(pointAt(values.length - 1).dx, size.height)
+      ..lineTo(pointAt(0).dx, size.height)
+      ..close();
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [color.withOpacity(0.32), color.withOpacity(0.0)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawPath(fillPath, fillPaint);
+
+    final linePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(linePath, linePaint);
+
+    // highlight highest / lowest points
+    for (int i = 0; i < values.length; i++) {
+      if (values[i] == maxV || values[i] == minV) {
+        final p = pointAt(i);
+        canvas.drawCircle(p, 3.2, Paint()..color = color);
+        canvas.drawCircle(p, 3.2, Paint()..color = _surface..style = PaintingStyle.stroke..strokeWidth = 1.4);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AreaChartPainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.color != color;
 }
 
 /* ────────────────────────────────────────────────────────────────────────
