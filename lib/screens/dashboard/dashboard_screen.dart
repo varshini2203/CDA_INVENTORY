@@ -7,6 +7,7 @@ import 'package:cda_inventory/screens/fixed_products/fixed_product_list_screen.d
 import 'package:cda_inventory/screens/new_products/new_product_list_screen.dart';
 import 'package:cda_inventory/screens/consumables/consumable_list_screen.dart';
 import 'package:cda_inventory/screens/drone_tracking/drone_in_out_screen.dart';
+import 'package:cda_inventory/screens/drone_service/drone_service_dashboard_screen.dart';
 import 'package:cda_inventory/screens/stock_management/stock_dashboard_screen.dart';
 import 'package:cda_inventory/screens/purchases/purchases_menu_screen.dart';
 import 'package:cda_inventory/screens/invoices/invoice_list_screen.dart';
@@ -286,6 +287,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'New Products':     screen = const NewProductListScreen();   break;
       case 'Consumables':      screen = const ConsumableListScreen();   break;
       case 'Drone In/Out':     screen = const DroneInOutScreen();       break;
+      case 'Drone Services':   screen = const DroneServiceDashboardScreen(); break;
       case 'Stock Management': screen = const StockDashboardScreen();   break;
       case 'Branch Inventory': screen = const BranchListScreen();       break;
       case 'Purchases':        screen = const PurchasesMenuScreen();    break;

@@ -75,10 +75,16 @@ class DroneService {
 
   // ── GET ALL DRONES ─────────────────────────────────────────────────────────
 
+  // Branch values used across the app — keep this as the single source of
+  // truth so the UI dropdown and the filter logic below never drift apart.
+  static const String branchAll = 'ALL';
+  static const List<String> branches = ['CDA Admin', 'CDA Ops'];
+
   Future<ApiResult<List<Drone>>> getDrones({
     String? search,
     String? status,
     String? category,
+    String? branch,
     String? sort,
     bool forceRefresh = false,
   }) async {
@@ -95,6 +101,11 @@ class DroneService {
       }
       if (category != null && category.isNotEmpty) {
         list = list.where((d) => d.category == category).toList();
+      }
+      // "All Branch" / null / empty → no filtering; otherwise narrow to
+      // the single branch (e.g. 'CDA Admin' or 'CDA Ops').
+      if (branch != null && branch.isNotEmpty && branch != branchAll) {
+        list = list.where((d) => d.branch == branch).toList();
       }
 
       // Client-side search (Firestore doesn't support full-text natively)
@@ -138,10 +149,13 @@ class DroneService {
 
   // ── REAL-TIME STREAM (bonus — use in StreamBuilder if desired) ─────────────
 
-  Stream<List<Drone>> dronesStream({String? status}) {
+  Stream<List<Drone>> dronesStream({String? status, String? branch}) {
     Query<Map<String, dynamic>> query = _drones;
     if (status != null && status != 'ALL') {
       query = query.where('status', isEqualTo: status);
+    }
+    if (branch != null && branch.isNotEmpty && branch != branchAll) {
+      query = query.where('branch', isEqualTo: branch);
     }
     query = query.orderBy('last_updated', descending: true);
     return query.snapshots().map((snap) => snap.docs
@@ -150,6 +164,7 @@ class DroneService {
         .toList());
   }
 
+
   // ── ADD DRONE ──────────────────────────────────────────────────────────────
   // Writes the drone document AND an initial history entry reflecting the
   // status the drone was registered with. Without this, a drone added with
@@ -157,22 +172,26 @@ class DroneService {
   // in the monthly Reports page, since that report only reads the `history`
   // sub-collection, not the drone document's `status` field.
 
-  Future<ApiResult<Drone>> addDrone(Drone drone) async {
+  Future<ApiResult<Drone>> addDrone(Drone drone, {String? purpose}) async {
     try {
+      final status = drone.status.toUpperCase();
       final data = drone.toFirestore();
       // Ensure last_updated is set on creation too
       data['created_at'] = FieldValue.serverTimestamp();
       data['last_updated'] = FieldValue.serverTimestamp();
+      // Mirrors updateStatus(): only carry a purpose on the drone doc
+      // while it's actually OUT.
+      data['current_purpose'] = status == 'OUT' ? (purpose ?? '') : null;
 
       final ref = await _drones.add(data);
 
       // Log the initial status as a history entry so it's counted in reports.
-      final status = drone.status.toUpperCase();
       if (status.isNotEmpty) {
         await _history(ref.id).add({
           'drone_id': ref.id,
           'pilot': drone.pilotName ?? 'Unknown',
           'status': status,
+          'purpose': purpose ?? 'Initial registration',
           'notes': 'Initial registration',
           'timestamp': FieldValue.serverTimestamp(),
         });
@@ -294,6 +313,12 @@ class DroneService {
         // drone's currently assigned pilot_name if not supplied, kept for
         // backward compatibility with older call sites).
         String? performedBy,
+        // Why the drone is going OUT (e.g. "Survey - Client site",
+        // "Training flight"). Required in spirit for OUT events; stored on
+        // both the history record and, while the drone is OUT, on the
+        // drone document itself as `current_purpose` so list/dashboard
+        // screens can show it without reading history.
+        String? purpose,
         // Lets the person registering the entry backdate/forward-date it
         // instead of always stamping "now". Falls back to serverTimestamp()
         // when omitted.
@@ -303,13 +328,18 @@ class DroneService {
       final ts = actionTime != null
           ? Timestamp.fromDate(actionTime)
           : FieldValue.serverTimestamp();
+      final upperStatus = status.toUpperCase();
 
       final updates = <String, dynamic>{
-        'status': status.toUpperCase(),
+        'status': upperStatus,
         'last_updated': ts,
         if (batteryLevel != null) 'battery_level': batteryLevel,
         if (performedBy != null && performedBy.isNotEmpty)
           'pilot_name': performedBy,
+        // Keep the reason visible on the drone doc only while it's OUT;
+        // clear it the moment the drone comes back IN so a stale purpose
+        // doesn't linger and get mistaken for the drone's current status.
+        'current_purpose': upperStatus == 'OUT' ? (purpose ?? '') : null,
       };
 
       // Fetch current pilot name for the history record
@@ -325,7 +355,8 @@ class DroneService {
       batch.set(_history(id).doc(), {
         'drone_id': id,
         'pilot': pilot,
-        'status': status.toUpperCase(),
+        'status': upperStatus,
+        'purpose': purpose,
         'notes': note,
         'timestamp': ts,
       });
@@ -338,7 +369,8 @@ class DroneService {
         itemName: (currentData['name'] as String?) ?? id,
         before: {'status': currentData['status']},
         after: {
-          'status': status.toUpperCase(),
+          'status': upperStatus,
+          'purpose': purpose,
           'note': note,
           'used_by': pilot,
         },
@@ -383,6 +415,53 @@ class DroneService {
     } catch (e) {
       return ApiResult.err(_firestoreError(e));
     }
+  }
+
+  // ── OVERDUE DRONES (OUT > 2 hours, not returned) ────────────────────────────
+  // No Cloud Function scheduling here — the project stays on the Firebase
+  // Spark plan, so this is computed client-side from `last_updated` instead
+  // of a server-side scheduled trigger. Any screen that's open (Dashboard,
+  // Drone In/Out list) can poll getOverdueDrones() or, better, subscribe to
+  // overdueDronesStream() and fire a local notification the moment a drone
+  // crosses the threshold. If server-side push reminders (needed even when
+  // no one has the app open) become a requirement later, that's the point
+  // to move to a scheduled Cloud Function on Blaze — this method's signature
+  // wouldn't need to change for the UI calling it.
+
+  Future<ApiResult<List<Drone>>> getOverdueDrones({
+    Duration threshold = const Duration(hours: 2),
+    String? branch,
+  }) async {
+    try {
+      final drones = await _fetchAllDrones();
+      final cutoff = DateTime.now().subtract(threshold);
+      final overdue = drones
+          .where((d) =>
+      d.status == 'OUT' &&
+          d.lastUpdated != null &&
+          d.lastUpdated!.isBefore(cutoff) &&
+          (branch == null || branch.isEmpty || branch == branchAll || d.branch == branch))
+          .toList();
+      return ApiResult.ok(overdue);
+    } catch (e) {
+      return ApiResult.err(_firestoreError(e));
+    }
+  }
+
+  // Live version for a StreamBuilder — re-evaluates whenever any drone's
+  // status/last_updated changes. Note this only catches the threshold being
+  // crossed while the stream has an active listener (e.g. app open on the
+  // Dashboard); it does not wake the app in the background.
+  Stream<List<Drone>> overdueDronesStream({
+    Duration threshold = const Duration(hours: 2),
+    String? branch,
+  }) {
+    return dronesStream(status: 'OUT', branch: branch).map((list) {
+      final cutoff = DateTime.now().subtract(threshold);
+      return list
+          .where((d) => d.lastUpdated != null && d.lastUpdated!.isBefore(cutoff))
+          .toList();
+    });
   }
 
   // ── SERVER STATS ───────────────────────────────────────────────────────────
