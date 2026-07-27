@@ -2,6 +2,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/inventory_model.dart';
+import 'inventory_sync_service.dart';
 
 class InventoryService {
   // ── Singleton ──────────────────────────────────────────────────────────────
@@ -40,6 +41,11 @@ class InventoryService {
   }
 
   // ── ADD ────────────────────────────────────────────────────────────────────
+  // [skipDownstreamSync]: set true only when this call is itself part of a
+  // sync cascade (e.g. InventorySyncService.syncFromNewProductAdd pushing a
+  // New Product into Inventory) so we don't trigger a second, duplicate
+  // round of Search Products / Branch / Stock / Fixed-Asset-or-Consumable
+  // writes on top of the one the caller is already doing.
   Future<InventoryItem> addProduct({
     required String name,
     required String category,
@@ -48,6 +54,7 @@ class InventoryService {
     String description = '',
     int branch = 0,
     String? addedBy,
+    bool skipDownstreamSync = false,
   }) async {
     final item = InventoryItem(
       id: '',
@@ -62,7 +69,7 @@ class InventoryService {
 
     final docRef = await _col.add(item.toCreateMap());
     clearCache();
-    return InventoryItem(
+    final created = InventoryItem(
       id: docRef.id,
       name: item.name,
       category: item.category,
@@ -74,6 +81,21 @@ class InventoryService {
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
+
+    // Automatically fan this item out to every other module (Search
+    // Products, Branch, Stock Management, Fixed Assets/Consumables) so
+    // anything added here shows up everywhere without manual re-entry.
+    if (!skipDownstreamSync) {
+      try {
+        await InventorySyncService.syncFromInventoryAdd(created);
+      } catch (_) {
+        // Cross-module sync failures must never block the primary add —
+        // InventorySyncService already isolates + logs each module's
+        // own failure internally.
+      }
+    }
+
+    return created;
   }
 
   // ── UPDATE ─────────────────────────────────────────────────────────────────

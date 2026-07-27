@@ -10,12 +10,15 @@ const Map<String, String> kBranchLabels = {
   'Branch 2': 'CDA Ops',
 };
 
-// Fixed options for "Purpose" when a drone is taken OUT or brought back IN.
+// Fixed options for "Purpose" when a drone is taken OUT.
 const List<String> kDronePurposes = [
   'Training',
+  'Testing',
+  'Service',
+  'Expo',
+  'Workshop',
   'Survey',
   'Delivery',
-  'Testing',
   'Maintenance',
   'Other',
 ];

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,7 +19,12 @@ import 'package:cda_inventory/screens/stock_management/stock_history_screen.dart
 import 'package:cda_inventory/screens/profile/profile_screen.dart';
 import 'package:cda_inventory/screens/reports/reports_dashboard_screen.dart';
 import 'package:cda_inventory/screens/bills/bills_screen.dart';
+import 'package:cda_inventory/screens/gamification/gamification_dashboard.dart';
 import 'package:cda_inventory/services/auth_service.dart';
+import 'package:cda_inventory/services/gamification_service.dart';
+import 'package:cda_inventory/models/gamification_models.dart';
+import 'package:cda_inventory/services/drone_service.dart';
+import 'package:cda_inventory/screens/drone_tracking/drone_reminders_screen.dart';
 import 'package:cda_inventory/services/access_control_service.dart';
 import 'package:cda_inventory/models/app_access_models.dart';
 import 'package:cda_inventory/core/access/access_scope.dart';
@@ -46,6 +52,7 @@ const _white       = Color(0xFFF0F6FF);
 
 const _green       = Color(0xFF00D68F);
 const _red         = Color(0xFFE8374A);
+const _gold        = Color(0xFFF2B705);
 
 const _textPrimary = Color(0xFFF0F6FF);
 const _textSub     = Color(0xFFA0B8D0);
@@ -220,6 +227,17 @@ const _modules = [
     'gradTo': Color(0xFF0A1428),
     'image': 'assets/images/report.png',
   },
+  {
+    'title': 'Staff Rewards',
+    'icon': Icons.emoji_events_rounded,
+    'emoji': '🏆',
+    'desc': 'Points, badges & missions',
+    'tag': 'REWARDS',
+    'color': _gold,
+    'gradFrom': Color(0xFF2A2308),
+    'gradTo': Color(0xFF0A1428),
+    'image': 'assets/images/staff_rewards.jpg',
+  },
 ];
 
 const _drawerItems = [
@@ -253,6 +271,7 @@ const _drawerItems = [
   {'icon': Icons.outbox_rounded,                  'label': 'Stock Out',        'key': 'Stock Out'},
   {'icon': Icons.history_rounded,                 'label': 'Stock History',    'key': 'Stock History'},
   {'icon': Icons.insert_chart_rounded,             'label': 'Reports',          'key': 'Reports'},
+  {'icon': Icons.emoji_events_rounded,             'label': 'Staff Rewards',    'key': 'Staff Rewards'},
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -299,12 +318,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'Stock Out':        screen = const StockOutScreen();         break;
       case 'Stock History':    screen = const StockHistoryScreen();     break;
       case 'Reports':          screen = const ReportsDashboardScreen(); break;
+      case 'Staff Rewards':    screen = const GamificationDashboard();  break;
       case 'Inventory':
         Navigator.pushNamed(context, '/inventory');
         return;
     }
     if (screen != null) {
-      Navigator.push(context, MaterialPageRoute(settings: RouteSettings(name: title), builder: (_) => screen!));
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          settings: RouteSettings(name: title),
+          builder: (_) => screen!,
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -356,6 +382,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
           ),
+          // Triggers a full-screen drone flyover (via Overlay, so it draws
+          // above the AppBar too) whenever a fresh overdue drone appears.
+          const _DroneFlyoverLayer(),
         ],
       ),
       bottomNavigationBar: _CDABottomNav(
@@ -537,6 +566,10 @@ class _CDAAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ],
               ),
             ),
+            const SizedBox(width: 8),
+            const _StreakBadge(),
+            const SizedBox(width: 8),
+            _DroneReminderBell(),
             if (isAdmin) ...[
               const SizedBox(width: 8),
               _NotificationBell(),
@@ -549,9 +582,432 @@ class _CDAAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// DRONE REMINDER BELL — visible to admin AND staff. Badge = drones OUT 4+
+// hours without being marked back IN. Separate from _NotificationBell, which
+// stays admin-only (pending access requests).
+// ═══════════════════════════════════════════════════════════════════════════════
+// Shared between _DroneReminderBell (the landing target) and
+// _DroneFlyoverLayer (the thing flying toward it) so the flyover can find
+// the icon's exact on-screen position via RenderBox, regardless of which
+// subtree each widget lives in.
+final GlobalKey _droneBellIconKey = GlobalKey();
+
+class _DroneReminderBell extends StatefulWidget {
+  @override
+  State<_DroneReminderBell> createState() => _DroneReminderBellState();
+}
+
+class _DroneReminderBellState extends State<_DroneReminderBell>
+    with SingleTickerProviderStateMixin {
+  final DroneService _service = DroneService();
+  late final AnimationController _ctrl;
+  // Highest count we've already "seen" (i.e. the user opened the reminders
+  // screen for it). Animation stays off once count <= _seenCount and comes
+  // right back on the moment a new overdue drone pushes the count higher.
+  int _seenCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _markSeenAndOpen(int count) {
+    setState(() => _seenCount = count);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'Drone Reminders'),
+        builder: (_) => const DroneRemindersScreen(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<int>(
+      stream: _service.overdueDronesCountStream(),
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+        final unseen = count > 0 && count > _seenCount;
+        return GestureDetector(
+          onTap: () => _markSeenAndOpen(count),
+          child: Tooltip(
+            message: 'Drone reminders ($count)',
+            child: AnimatedBuilder(
+              animation: _ctrl,
+              builder: (context, child) {
+                final t = _ctrl.value;
+                // Deliberately NOT a rotation (that's the bell's move) —
+                // this reads as a runway "rev up and launch": a fast
+                // side-to-side shake first, then the icon hops upward
+                // like it's taking off, with a colour pulse throughout.
+                const shakeWindow = 0.3;
+                const hopWindow = 0.55;
+
+                double shakeX = 0;
+                if (unseen && t <= shakeWindow) {
+                  final localT = t / shakeWindow;
+                  final decay = 1 - localT;
+                  shakeX = math.sin(localT * math.pi * 10) * 3.5 * decay;
+                }
+
+                double hop = 0;
+                if (unseen && t > shakeWindow && t <= hopWindow) {
+                  final localT = (t - shakeWindow) / (hopWindow - shakeWindow);
+                  hop = -math.sin(localT * math.pi) * 7;
+                }
+
+                final pulse = (math.sin(t * 2 * math.pi) + 1) / 2; // 0..1
+                final glowColor = Color.lerp(_gold, _red, pulse)!;
+                final badgeScale =
+                unseen ? 1.0 + 0.18 * math.sin(t * 2 * math.pi * 2).abs() : 1.0;
+
+                return Transform.translate(
+                  offset: Offset(shakeX, hop),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        key: _droneBellIconKey,
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(
+                          color: _gold.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: unseen
+                                  ? glowColor.withOpacity(0.7)
+                                  : _gold.withOpacity(0.4),
+                              width: 1),
+                          boxShadow: unseen
+                              ? [
+                            BoxShadow(
+                                color: glowColor.withOpacity(0.35 + 0.25 * pulse),
+                                blurRadius: 14,
+                                spreadRadius: 1),
+                          ]
+                              : null,
+                        ),
+                        child: Icon(Icons.flight_takeoff_rounded,
+                            color: unseen
+                                ? glowColor
+                                : (count > 0 ? _gold : _blueLight),
+                            size: 18),
+                      ),
+                      if (count > 0)
+                        Positioned(
+                          right: -3,
+                          top: -3,
+                          child: Transform.scale(
+                            scale: badgeScale,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: _red,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: _bgDeep, width: 1.5),
+                              ),
+                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                              child: Text(
+                                count > 9 ? '9+' : '$count',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DRONE FLYOVER — when a fresh overdue drone appears, a small drone icon
+// launches from within the dashboard, sweeps across the whole screen on a
+// curved flight path, and settles down into the flight icon in the top
+// bar (shrinking + fading as it "lands"). Rendered via Overlay so it
+// draws above the AppBar as well as the body, matching how the target
+// icon actually sits above everything.
+// ═══════════════════════════════════════════════════════════════════════════════
+class _DroneFlyoverLayer extends StatefulWidget {
+  const _DroneFlyoverLayer();
+
+  @override
+  State<_DroneFlyoverLayer> createState() => _DroneFlyoverLayerState();
+}
+
+class _DroneFlyoverLayerState extends State<_DroneFlyoverLayer>
+    with SingleTickerProviderStateMixin {
+  final DroneService _service = DroneService();
+  late final AnimationController _ctrl;
+  StreamSubscription<int>? _sub;
+  OverlayEntry? _entry;
+  int _lastTriggeredCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    );
+    // Deferred to after first frame so Overlay.of(context) has a mounted
+    // ancestor to attach to.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _sub = _service.overdueDronesCountStream().listen(_onCount);
+    });
+  }
+
+  void _onCount(int count) {
+    if (count > 0 && count > _lastTriggeredCount) {
+      _lastTriggeredCount = count;
+      _playFlyover();
+    } else if (count == 0) {
+      _lastTriggeredCount = 0;
+    }
+  }
+
+  void _playFlyover() {
+    if (!mounted) return;
+    _entry?.remove();
+    _entry = OverlayEntry(
+      builder: (_) => _FlyingDrone(controller: _ctrl),
+    );
+    Overlay.of(context).insert(_entry!);
+    _ctrl.forward(from: 0).whenComplete(() {
+      _entry?.remove();
+      _entry = null;
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _entry?.remove();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  // Renders nothing itself — purely a controller for the OverlayEntry.
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+}
+
+class _FlyingDrone extends StatelessWidget {
+  final AnimationController controller;
+  const _FlyingDrone({required this.controller});
+
+  Offset? _iconGlobalCenter() {
+    final iconBox = _droneBellIconKey.currentContext?.findRenderObject() as RenderBox?;
+    if (iconBox == null || !iconBox.attached) return null;
+    return iconBox.localToGlobal(Offset(iconBox.size.width / 2, iconBox.size.height / 2));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    // Launch point: low-and-left in the dashboard body, so the flight is
+    // long enough to clearly read as "crossing the whole screen".
+    final start = Offset(screenSize.width * 0.18, screenSize.height * 0.68);
+
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final end = _iconGlobalCenter();
+        if (end == null) return const SizedBox.shrink();
+
+        final t = Curves.easeInOutCubic.transform(controller.value);
+
+        // Straight-line interpolation toward the icon, plus a sine "swoop"
+        // bump so the path arcs across the screen instead of a flat
+        // diagonal line — reads much more like an actual flight.
+        final dx = start.dx + (end.dx - start.dx) * t;
+        final straightY = start.dy + (end.dy - start.dy) * t;
+        final arc = -math.sin(t * math.pi) * 120;
+        final dy = straightY + arc;
+
+        // Nose-tilt in the direction of travel.
+        final angle = math.atan2(
+          (end.dy - start.dy) + arc * 0.015,
+          (end.dx - start.dx).abs() < 1 ? 1 : (end.dx - start.dx),
+        ) * 0.3;
+
+        // Final 28% of the flight: shrink + fade into the icon ("settle").
+        final landT = ((t - 0.72) / 0.28).clamp(0.0, 1.0);
+        final scale = (1.0 - landT * 0.65).clamp(0.0, 1.0);
+        final opacity = (1.0 - Curves.easeIn.transform(landT)).clamp(0.0, 1.0);
+
+        // A quick little settle-bounce right as it lands.
+        final bounce = landT > 0.85 ? (1 - landT) * 0.4 : 0.0;
+
+        return Positioned(
+          left: dx - 24,
+          top: dy - 24,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: opacity,
+              child: Transform.rotate(
+                angle: angle,
+                child: Transform.scale(
+                  scale: scale + bounce,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _gold.withOpacity(0.16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _gold.withOpacity(0.5),
+                          blurRadius: 20,
+                          spreadRadius: 3,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.flight_takeoff_rounded,
+                        color: _gold, size: 28),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STREAK BADGE — flame icon with current day-streak count, opens rewards screen
+// ═══════════════════════════════════════════════════════════════════════════════
+class _StreakBadge extends StatelessWidget {
+  const _StreakBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<GamificationProfile>(
+      stream: GamificationService.watchProfile(),
+      builder: (context, snapshot) {
+        final streak = snapshot.data?.currentStreak ?? 0;
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              settings: const RouteSettings(name: 'Gamification Dashboard'),
+              builder: (_) => const GamificationDashboard(),
+            ),
+          ),
+          child: Tooltip(
+            message: 'Current streak: $streak day${streak == 1 ? '' : 's'}',
+            child: Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              decoration: BoxDecoration(
+                color: _gold.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _gold.withOpacity(0.45), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.local_fire_department_rounded,
+                      color: streak > 0 ? _gold : _textMuted, size: 18),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$streak',
+                    style: const TextStyle(
+                      color: _gold,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN NOTIFICATION BELL — live badge count of pending access requests
 // ═══════════════════════════════════════════════════════════════════════════════
-class _NotificationBell extends StatelessWidget {
+class _NotificationBell extends StatefulWidget {
+  @override
+  State<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<_NotificationBell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  // Highest count already "seen" (i.e. admin opened Pending Requests for
+  // it). Ringing stops the moment that happens and only resumes once a
+  // fresh pending request pushes the count above what was last seen.
+  int _seenCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  // "Ring-ring… pause" pattern: a couple of quick shakes at the start of
+  // each cycle that decay out, then a rest — reads as a live alert without
+  // jittering nonstop and becoming annoying.
+  double _ringAngle(double t) {
+    const ringWindow = 0.35;
+    if (t > ringWindow) return 0;
+    final localT = t / ringWindow;
+    final decay = 1 - localT;
+    return math.sin(localT * math.pi * 6) * 0.30 * decay;
+  }
+
+  double _ringScale(double t) {
+    const ringWindow = 0.35;
+    if (t > ringWindow) return 1.0;
+    final localT = t / ringWindow;
+    return 1.0 + (math.sin(localT * math.pi) * 0.12);
+  }
+
+  void _markSeenAndOpen(int count) {
+    setState(() => _seenCount = count);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'Admin Notifications'),
+        builder: (_) => const AdminNotificationsScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<int>(
@@ -561,45 +1017,73 @@ class _NotificationBell extends StatelessWidget {
       stream: AccessControlService.streamPendingCount(),
       builder: (context, snapshot) {
         final count = snapshot.data ?? 0;
+        final unseen = count > 0 && count > _seenCount;
         return GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(settings: const RouteSettings(name: 'Admin Notifications'), builder: (_) => const AdminNotificationsScreen()),
-          ),
+          onTap: () => _markSeenAndOpen(count),
           child: Tooltip(
             message: 'Notifications ($count)',
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: _blue.withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _blue.withOpacity(0.4), width: 1),
-                  ),
-                  child: const Icon(Icons.notifications_rounded, color: _blueLight, size: 18),
-                ),
-                if (count > 0)
-                  Positioned(
-                    right: -3,
-                    top: -3,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: _red,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: _bgDeep, width: 1.5),
-                      ),
-                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                      child: Text(
-                        count > 9 ? '9+' : '$count',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800),
-                      ),
+            child: AnimatedBuilder(
+              animation: _ctrl,
+              builder: (context, child) {
+                final t = _ctrl.value;
+                final angle = unseen ? _ringAngle(t) : 0.0;
+                final scale = unseen ? _ringScale(t) : 1.0;
+                final glow = unseen ? (0.25 + 0.35 * ((math.sin(t * 2 * math.pi) + 1) / 2)) : 0.0;
+                return Transform.rotate(
+                  angle: angle,
+                  alignment: Alignment.topCenter,
+                  child: Transform.scale(
+                    scale: scale,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            color: _blue.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: unseen ? _red.withOpacity(0.6) : _blue.withOpacity(0.4),
+                                width: 1),
+                            boxShadow: unseen
+                                ? [
+                              BoxShadow(
+                                  color: _red.withOpacity(glow),
+                                  blurRadius: 14,
+                                  spreadRadius: 1),
+                            ]
+                                : null,
+                          ),
+                          child: Icon(Icons.notifications_rounded,
+                              color: unseen ? _red : _blueLight, size: 18),
+                        ),
+                        if (count > 0)
+                          Positioned(
+                            right: -3,
+                            top: -3,
+                            child: Transform.scale(
+                              scale: unseen ? scale : 1.0,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: _red,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: _bgDeep, width: 1.5),
+                                ),
+                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                child: Text(
+                                  count > 9 ? '9+' : '$count',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-              ],
+                );
+              },
             ),
           ),
         );
