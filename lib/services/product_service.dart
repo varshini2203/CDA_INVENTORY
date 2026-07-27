@@ -61,6 +61,9 @@ class ProductService {
       quantity: (data['quantity'] as num).toInt(),
       price: (data['price'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
+      row: data['row'] as String?,
+      rack: data['rack'] as String?,
+      tray: data['tray'] as String?,
     );
 
     final docRef = await _col.add(product.toCreateMap());
@@ -74,6 +77,9 @@ class ProductService {
         'Quantity': product.quantity,
         'Price': product.price,
         if ((product.notes ?? '').isNotEmpty) 'Notes': product.notes,
+        if ((product.row ?? '').isNotEmpty) 'Row': product.row,
+        if ((product.rack ?? '').isNotEmpty) 'Rack': product.rack,
+        if ((product.tray ?? '').isNotEmpty) 'Tray': product.tray,
       },
     );
 
@@ -103,6 +109,9 @@ class ProductService {
       quantity: (data['quantity'] as num).toInt(),
       price: (data['price'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
+      row: data['row'] as String?,
+      rack: data['rack'] as String?,
+      tray: data['tray'] as String?,
     );
 
     await _col.doc(id).update(product.toMap());
@@ -117,6 +126,9 @@ class ProductService {
         'Quantity': beforeData['quantity'],
         'Price': beforeData['price'],
         'Notes': beforeData['notes'],
+        'Row': beforeData['row'],
+        'Rack': beforeData['rack'],
+        'Tray': beforeData['tray'],
       },
       after: {
         'Name': product.name,
@@ -124,6 +136,9 @@ class ProductService {
         'Quantity': product.quantity,
         'Price': product.price,
         'Notes': product.notes,
+        'Row': product.row,
+        'Rack': product.rack,
+        'Tray': product.tray,
       },
     );
 
@@ -188,6 +203,24 @@ class ProductService {
         .map((s) => s.docs.map(Product.fromDoc).toList());
   }
 
+  /// Exact-match lookup by shelf row (server-side).
+  static Future<List<Product>> getByRow(String row) async {
+    final snapshot = await _col.where('row', isEqualTo: row).get();
+    return snapshot.docs.map(Product.fromDoc).toList();
+  }
+
+  /// Exact-match lookup by rack (server-side).
+  static Future<List<Product>> getByRack(String rack) async {
+    final snapshot = await _col.where('rack', isEqualTo: rack).get();
+    return snapshot.docs.map(Product.fromDoc).toList();
+  }
+
+  /// Exact-match lookup by tray (server-side).
+  static Future<List<Product>> getByTray(String tray) async {
+    final snapshot = await _col.where('tray', isEqualTo: tray).get();
+    return snapshot.docs.map(Product.fromDoc).toList();
+  }
+
   /// Items at or below a stock threshold.
   static Future<List<Product>> getLowStock({int threshold = 2}) async {
     final snapshot = await _col
@@ -222,6 +255,9 @@ class ProductService {
             quantity: (p['quantity'] as num).toInt(),
             price: (p['price'] as num?)?.toDouble() ?? 0.0,
             notes: p['notes'] as String?,
+            row: p['row'] as String?,
+            rack: p['rack'] as String?,
+            tray: p['tray'] as String?,
           );
           batch.set(_col.doc(), product.toCreateMap());
           success++;

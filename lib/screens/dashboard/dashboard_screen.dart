@@ -236,7 +236,7 @@ const _modules = [
     'color': _gold,
     'gradFrom': Color(0xFF2A2308),
     'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/staff_rewards.jpg',
+    'image': 'assets/images/staff_rewards.png',
   },
 ];
 

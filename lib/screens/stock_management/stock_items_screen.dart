@@ -8,6 +8,7 @@ import 'stock_item_detail_screen.dart';
 import 'stock_adjust_screen.dart';
 import 'stock_transfer_screen.dart';
 import 'add_stock_item_screen.dart';
+import 'package:cda_inventory/screens/bulk_import/bulk_import_screen.dart';
 
 class StockItemsScreen extends StatefulWidget {
   const StockItemsScreen({super.key});
@@ -101,6 +102,17 @@ class _StockItemsScreenState extends State<StockItemsScreen> {
   void _navigateToAddItem() async {
     final result = await Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'Add Stock Item'), builder: (_) => const AddStockItemScreen()));
     if (result == true) _load();
+  }
+
+  void _navigateToBulkImport() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'Bulk Import Stock'),
+        builder: (_) => const BulkImportScreen(target: BulkImportTarget.stockManagement),
+      ),
+    );
+    if (result == true) _load(forceRefresh: true);
   }
 
   void _navigateToDetail(StockItem item) async {
@@ -246,6 +258,11 @@ class _StockItemsScreenState extends State<StockItemsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.upload_file_rounded),
+            tooltip: 'Bulk Import',
+            onPressed: _navigateToBulkImport,
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.ios_share_rounded),
             tooltip: 'Export',

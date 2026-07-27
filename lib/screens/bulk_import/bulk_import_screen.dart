@@ -1,11 +1,23 @@
 // lib/screens/bulk_import/bulk_import_screen.dart
 //
-// Shared bulk-import flow for both the New Products and Inventory
-// modules. Flow: pick a .xlsx or .pdf file → parse it into rows
-// (BulkImportService) → show every row in an editable preview so nothing
-// bad gets written silently → commit the selected rows one at a time via
-// the normal NewProductService / InventoryService add calls (so activity
-// logging, caching, etc. all behave exactly like a manual add).
+// Shared bulk-import flow for the New Products, Inventory, and Stock
+// Management modules. Flow: pick a .xlsx or .pdf file → parse it →
+// commit every row straight to Firestore via the normal
+// NewProductService / InventoryService / StockService add calls (so
+// activity logging, caching, etc. all behave exactly like a manual add).
+// There is no manual review/edit screen — the file is imported the
+// moment it's picked. Only each target's one required field (name /
+// product name) is enforced, and it's enforced per row, not for the
+// whole file: a row missing it is silently skipped (and counted) while
+// every other row still imports. Every other column is optional and
+// falls back to a safe default, so a file that's missing minor fields
+// never blocks anything.
+//
+// Inventory and New Products already fan out to every other module (see
+// InventorySyncService); Stock Management rows get the same treatment via
+// InventorySyncService.syncFromStockAdd, so an item added from any of the
+// three pages shows up in Search Products / Fixed Assets / Consumables
+// too, without re-entering it.
 //
 // Requires `file_picker` in pubspec.yaml — see bulk_import_service.dart
 // for the full list of new dependencies this feature needs.
@@ -18,6 +30,8 @@ import 'package:cda_inventory/services/bulk_import_service.dart';
 export 'package:cda_inventory/services/bulk_import_service.dart' show BulkImportTarget;
 import 'package:cda_inventory/services/new_product_service.dart';
 import 'package:cda_inventory/services/inventory_service.dart';
+import 'package:cda_inventory/services/stock_service.dart';
+import 'package:cda_inventory/services/inventory_sync_service.dart';
 
 class BulkImportScreen extends StatefulWidget {
   final BulkImportTarget target;
@@ -32,25 +46,25 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
   static const _navy = Color(0xFF0A1628);
   static const _accent = Color(0xFF7B5EA7);
 
-  String? _fileName;
-  List<Map<String, String>> _rows = []; // internal-field-keyed
-  List<bool> _selected = [];
-  List<String> _warnings = [];
-  List<String> _unrecognizedColumns = [];
-  bool _isParsing = false;
-  bool _isImporting = false;
+  bool _isWorking = false; // parsing OR importing — same full-screen state
+  String _statusLabel = '';
   String _defaultBranch = 'CDA Admin';
 
-  String get _title => widget.target == BulkImportTarget.newProducts
-      ? 'Bulk Import — New Products'
-      : 'Bulk Import — Inventory';
-
-  List<String> get _fieldsInOrder => BulkImportService.fieldOrder[widget.target]!;
+  String get _title {
+    switch (widget.target) {
+      case BulkImportTarget.newProducts:
+        return 'Bulk Import — New Products';
+      case BulkImportTarget.inventory:
+        return 'Bulk Import — Inventory';
+      case BulkImportTarget.stockManagement:
+        return 'Bulk Import — Stock Management';
+    }
+  }
 
   String get _requiredField => BulkImportService.requiredField[widget.target]!;
 
-  // ── FILE PICK + PARSE ────────────────────────────────────────────────
-  Future<void> _pickFile() async {
+  // ── FILE PICK → PARSE → IMPORT, all in one go ───────────────────────
+  Future<void> _pickAndImport() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'xls', 'pdf'],
@@ -66,81 +80,56 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     }
 
     setState(() {
-      _isParsing = true;
-      _fileName = picked.name;
-      _rows = [];
-      _selected = [];
-      _warnings = [];
-      _unrecognizedColumns = [];
+      _isWorking = true;
+      _statusLabel = 'Reading ${picked.name}…';
     });
 
+    BulkImportResult parsed;
+    List<Map<String, String>> rows;
+    List<String> unrecognized;
     try {
-      final parsed = BulkImportService.parse(bytes, picked.name);
+      parsed = BulkImportService.parse(bytes, picked.name);
       final mapped = BulkImportService.toFieldRows(parsed, widget.target);
-
-      setState(() {
-        _rows = mapped.rows;
-        _selected = List.filled(mapped.rows.length, true);
-        _warnings = parsed.warnings;
-        _unrecognizedColumns = mapped.unrecognized;
-        _isParsing = false;
-      });
-
-      if (_rows.isEmpty && _warnings.isEmpty) {
-        _warnings = ['No data rows were found in this file.'];
-      }
+      rows = mapped.rows;
+      unrecognized = mapped.unrecognized;
     } catch (e) {
-      setState(() => _isParsing = false);
+      setState(() => _isWorking = false);
       _showSnack('Failed to parse "${picked.name}": $e');
-    }
-  }
-
-  void _showSnack(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  void _removeRow(int i) {
-    setState(() {
-      _rows.removeAt(i);
-      _selected.removeAt(i);
-    });
-  }
-
-  // ── COMMIT ────────────────────────────────────────────────────────────
-  Future<void> _import() async {
-    final toImport = <int>[
-      for (var i = 0; i < _rows.length; i++)
-        if (_selected[i]) i,
-    ];
-
-    if (toImport.isEmpty) {
-      _showSnack('Select at least one row to import.');
       return;
     }
 
-    // Validate the required field up front so we don't partially import.
-    final missing = toImport
-        .where((i) => (_rows[i][_requiredField] ?? '').trim().isEmpty)
-        .toList();
-    if (missing.isNotEmpty) {
-      _showSnack(
-          '${missing.length} row(s) are missing "${BulkImportService.fieldLabels[_requiredField]}" — fill it in or deselect those rows.');
+    if (rows.isEmpty) {
+      setState(() => _isWorking = false);
+      await _showResultDialog(
+        fileName: picked.name,
+        totalRows: 0,
+        success: 0,
+        skippedMissingName: 0,
+        failures: const [],
+        warnings: parsed.warnings,
+        unrecognized: unrecognized,
+      );
       return;
     }
 
-    setState(() => _isImporting = true);
+    setState(() => _statusLabel = 'Importing ${rows.length} row(s)…');
 
     var success = 0;
+    var skippedMissingName = 0;
     final failures = <String>[];
 
-    for (final i in toImport) {
-      final row = _rows[i];
+    for (final row in rows) {
+      if ((row[_requiredField] ?? '').trim().isEmpty) {
+        skippedMissingName++;
+        continue;
+      }
       try {
         if (widget.target == BulkImportTarget.newProducts) {
           await NewProductService.addNewProduct(_toNewProduct(row));
-        } else {
+        } else if (widget.target == BulkImportTarget.inventory) {
           await _addInventoryItem(row);
+        } else {
+          await _addStockItem(row);
         }
         success++;
       } catch (e) {
@@ -149,23 +138,101 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     }
 
     if (!mounted) return;
-    setState(() => _isImporting = false);
+    setState(() => _isWorking = false);
+
+    await _showResultDialog(
+      fileName: picked.name,
+      totalRows: rows.length,
+      success: success,
+      skippedMissingName: skippedMissingName,
+      failures: failures,
+      warnings: parsed.warnings,
+      unrecognized: unrecognized,
+    );
+
+    if (success > 0 && mounted) {
+      Navigator.pop(context, true);
+    }
+  }
+
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  // ── RESULT DIALOG ────────────────────────────────────────────────────
+  // Everything the old preview screen used to show up front (parse
+  // warnings, ignored columns) now shows here instead, alongside the
+  // actual outcome — since there's no review step to show it on before
+  // the write happens.
+  Future<void> _showResultDialog({
+    required String fileName,
+    required int totalRows,
+    required int success,
+    required int skippedMissingName,
+    required List<String> failures,
+    required List<String> warnings,
+    required List<String> unrecognized,
+  }) async {
+    if (!mounted) return;
+    final requiredLabel = BulkImportService.fieldLabels[_requiredField] ?? _requiredField;
 
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(success > 0 ? 'Import complete' : 'Import failed'),
+        title: Text(success > 0 ? 'Import complete' : 'Nothing imported'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$success of ${toImport.length} row(s) imported successfully.'),
+              Text(fileName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              const SizedBox(height: 8),
+              if (totalRows == 0)
+                const Text('No data rows were found in this file.')
+              else
+                Text('$success of $totalRows row(s) imported.'),
+              if (skippedMissingName > 0) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '$skippedMissingName row(s) skipped — no "$requiredLabel" value could be found for them.',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ],
+              // Every row was skipped for the same reason — that's almost
+              // always a header mismatch (e.g. a sheet laid out with
+              // category names as column headers instead of one product
+              // per row), not 300 genuinely blank rows. Call it out
+              // directly instead of leaving that to guesswork.
+              if (totalRows > 0 && success == 0 && skippedMissingName == totalRows) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'None of the rows had a recognizable "$requiredLabel" column. '
+                      'This usually means the file\'s headers are category names '
+                      '(e.g. ONFIELD, RPTO, TOOL KITS…) rather than one product per '
+                      'row — check the ignored columns below and make sure there\'s '
+                      'a plain "Name" / "Product Name" column with one product per row.',
+                  style: TextStyle(fontSize: 12.5, color: Colors.amber.shade900),
+                ),
+              ],
               if (failures.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 const Text('Failed:', style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 4),
                 ...failures.map((f) => Text('• $f', style: const TextStyle(fontSize: 13))),
+              ],
+              if (warnings.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('Warnings:', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                ...warnings.map((w) => Text('• $w', style: const TextStyle(fontSize: 12.5))),
+              ],
+              if (unrecognized.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Ignored unrecognized column(s): ${unrecognized.join(', ')}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                ),
               ],
             ],
           ),
@@ -178,12 +245,9 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
         ],
       ),
     );
-
-    if (success > 0 && mounted) {
-      Navigator.pop(context, true);
-    }
   }
 
+  // ── ROW → MODEL MAPPERS ──────────────────────────────────────────────
   NewProduct _toNewProduct(Map<String, String> row) {
     DateTime purchaseDate;
     final rawDate = row['purchaseDate'];
@@ -240,6 +304,42 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     );
   }
 
+  Future<void> _addStockItem(Map<String, String> row) async {
+    final name = row['name'] ?? '';
+    final branch = _normalizeNewProductBranch(row['branch']) ?? _defaultBranch;
+    final quantity = int.tryParse(row['quantity'] ?? '') ?? 1;
+    final rawCategory = (row['category'] ?? '').trim().toLowerCase();
+    // Any value other than a recognizable "fixed asset" reading defaults
+    // to consumable — matches Add Stock Item's own two-choice picker, so
+    // a blank/unrecognized cell never blocks the import.
+    final category = (rawCategory.contains('fixed') || rawCategory.contains('asset'))
+        ? 'fixed_asset'
+        : 'consumable';
+
+    await StockService.addStockIn(
+      productName: name,
+      quantity: quantity,
+      receivedBy: 'Bulk Import',
+      branch: branch,
+      date: DateTime.now().toIso8601String(),
+      remarks: 'Bulk import',
+      category: category,
+    );
+
+    // Fan out to Search Products / Branch module / Fixed Assets or
+    // Consumables — same cross-module propagation a manual Inventory or
+    // New Products add already gets, so this item shows up everywhere
+    // without having to be entered twice.
+    await InventorySyncService.syncFromStockAdd(
+      name: name,
+      category: category,
+      quantity: quantity,
+      branchLabel: branch,
+      location: row['location'] ?? '',
+      addedBy: 'Bulk Import',
+    );
+  }
+
   String? _normalizeNewProductBranch(String? raw) {
     if (raw == null || raw.trim().isEmpty) return null;
     final norm = raw.trim().toLowerCase();
@@ -281,7 +381,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
         foregroundColor: Colors.white,
         title: Text(_title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
       ),
-      body: _fileName == null ? _buildPicker() : _buildPreview(),
+      body: _buildPicker(),
     );
   }
 
@@ -292,80 +392,37 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.upload_file_rounded, size: 56, color: _accent),
+            Icon(
+              _isWorking ? Icons.cloud_upload_rounded : Icons.upload_file_rounded,
+              size: 56,
+              color: _accent,
+            ),
             const SizedBox(height: 16),
-            const Text(
-              'Upload an Excel (.xlsx) or PDF file to add products in bulk.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
             Text(
-              'Excel works best — put one product per row with a header row '
-                  'like Name, Category, Quantity, Branch. PDF tables are read '
-                  'heuristically and need careful review before saving.',
+              _isWorking
+                  ? _statusLabel
+                  : 'Upload an Excel (.xlsx) or PDF file — products are added '
+                  'the moment the file finishes reading, no review step.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 24),
-            _isParsing
-                ? const CircularProgressIndicator()
-                : FilledButton.icon(
-              onPressed: _pickFile,
-              icon: const Icon(Icons.folder_open_rounded),
-              label: const Text('Choose file'),
-              style: FilledButton.styleFrom(
-                backgroundColor: _navy,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPreview() {
-    final selectedCount = _selected.where((s) => s).length;
-
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _fileName!,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: _isParsing ? null : _pickFile,
-                    icon: const Icon(Icons.swap_horiz_rounded, size: 18),
-                    label: const Text('Change file'),
-                  ),
-                ],
-              ),
-              if (_warnings.isNotEmpty) _buildBanner(_warnings, Colors.amber.shade50, Colors.amber.shade800, Icons.warning_amber_rounded),
-              if (_unrecognizedColumns.isNotEmpty)
-                _buildBanner(
-                  ['Ignored unrecognized column(s): ${_unrecognizedColumns.join(', ')}'],
-                  Colors.grey.shade100,
-                  Colors.grey.shade700,
-                  Icons.info_outline_rounded,
-                ),
+            if (!_isWorking) ...[
               const SizedBox(height: 8),
+              Text(
+                'Put one product per row with a header row like Name, '
+                    'Category, Quantity, Branch. Only "${BulkImportService.fieldLabels[_requiredField] ?? _requiredField}" '
+                    'is required — a row missing everything else still imports '
+                    'with safe defaults; a row missing that one field is skipped '
+                    'and reported, not blocked.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 20),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('${_rows.length} row(s) found · $selectedCount selected',
-                      style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-                  const Spacer(),
                   const Text('Default branch:', style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   DropdownButton<String>(
                     value: _defaultBranch,
                     isDense: true,
@@ -377,133 +434,24 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              for (var i = 0; i < _rows.length; i++) _buildRowCard(i),
+              Text(
+                'Used only for rows whose Branch cell is blank or unrecognized.',
+                style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
+              ),
             ],
-          ),
-        ),
-        _buildBottomBar(selectedCount),
-      ],
-    );
-  }
-
-  Widget _buildBanner(List<String> lines, Color bg, Color fg, IconData icon) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: fg, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: lines
-                  .map((l) => Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(l, style: TextStyle(color: fg, fontSize: 12.5)),
-              ))
-                  .toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRowCard(int i) {
-    final row = _rows[i];
-    final missingRequired = (row[_requiredField] ?? '').trim().isEmpty;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: missingRequired ? Colors.red.shade200 : Colors.transparent),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Checkbox(
-                  value: _selected[i],
-                  onChanged: (v) => setState(() => _selected[i] = v ?? false),
-                ),
-                Expanded(
-                  child: Text('Row ${i + 1}',
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                ),
-                if (missingRequired)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Text('Missing ${BulkImportService.fieldLabels[_requiredField]}',
-                        style: const TextStyle(color: Colors.red, fontSize: 11)),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                  tooltip: 'Remove row',
-                  onPressed: () => _removeRow(i),
-                ),
-              ],
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final field in _fieldsInOrder)
-                  SizedBox(
-                    width: 220,
-                    child: TextFormField(
-                      key: ValueKey('row-$i-$field'),
-                      initialValue: row[field] ?? '',
-                      decoration: InputDecoration(
-                        labelText: BulkImportService.fieldLabels[field] ?? field,
-                        isDense: true,
-                        border: const OutlineInputBorder(),
-                      ),
-                      style: const TextStyle(fontSize: 13),
-                      onChanged: (v) => row[field] = v,
-                    ),
-                  ),
-              ],
+            const SizedBox(height: 24),
+            _isWorking
+                ? const CircularProgressIndicator()
+                : FilledButton.icon(
+              onPressed: _pickAndImport,
+              icon: const Icon(Icons.folder_open_rounded),
+              label: const Text('Choose file & import'),
+              style: FilledButton.styleFrom(
+                backgroundColor: _navy,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomBar(int selectedCount) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, -2))],
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: _isImporting || _rows.isEmpty ? null : _import,
-            icon: _isImporting
-                ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-            )
-                : const Icon(Icons.cloud_upload_rounded),
-            label: Text(_isImporting ? 'Importing…' : 'Import $selectedCount product(s)'),
-            style: FilledButton.styleFrom(
-              backgroundColor: _navy,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-          ),
         ),
       ),
     );

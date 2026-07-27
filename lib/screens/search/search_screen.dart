@@ -1,85 +1,34 @@
-// lib/screens/search_screen.dart
+// lib/screens/search/search_screen.dart
+//
+// Search Products screen — browses the shared `products` Firestore
+// collection with three ways to slice it, matching how items are actually
+// found on the shelf rather than just by name:
+//
+//   • By Category — the column headers from each source sheet (Tools,
+//     Charging Station, Row 2, Service Rack, Admin Room, etc.)
+//   • By Row      — Row 1 .. Row 5 (Branch 1 shelving)
+//   • By Tray     — every distinct Tray/Draw/Table-Draw marker seen in the
+//     data (Tray 1..16, Draw 1, Draw 2, Table 2 - Draw 1, ...)
+//
+// Chip lists for all three modes are computed FROM the loaded data (not
+// hardcoded), so newly added branches/rooms/rows show up automatically
+// without another code change here.
+//
+// Auto-seed is guarded exactly like every other module in this app
+// (SeedGuardService, keyed 'products'): fires at most once per install,
+// only when the collection is empty, and never retries silently. Manual
+// re-seed lives behind an explicit confirmation dialog in the app bar menu.
 
 import 'package:flutter/material.dart';
+
 import 'package:cda_inventory/models/product.dart';
 import 'package:cda_inventory/services/product_service.dart';
 import 'package:cda_inventory/services/seed_guard_service.dart';
 import 'package:cda_inventory/data/seed_search_products.dart';
-import 'package:cda_inventory/data/seed_adambakkam_products.dart';
+import 'package:cda_inventory/data/seed_branch1_products.dart';
 
-// ─────────────────────────────────────────────
-//  CATEGORIES
-// ─────────────────────────────────────────────
-const List<String> kCategories = [
-  'All',
-  'On Field',
-  'RPTO',
-  'Stationary',
-  'Electronics & Electrical',
-  'Manager Room',
-  'Housekeeping Supplies',
-  'Instructor Room',
-  'Lab Room',
-  'Tool Kits',
-  'Charging Station',
-  'Navin Kit',
-  'FPV Drones',
-  'Remote Controller',
-  'Additional Drone Spare',
-  '3D Printer',
-  'Corridor Things',
-  'Rest Room Things',
-  'Service & Delivery In',
-  'Gojan In Products',
-];
+enum _FilterMode { all, category, row, tray }
 
-const Map<String, IconData> kCategoryIcons = {
-  'On Field': Icons.landscape_rounded,
-  'RPTO': Icons.flight_takeoff_rounded,
-  'Stationary': Icons.edit_rounded,
-  'Electronics & Electrical': Icons.electric_bolt_rounded,
-  'Manager Room': Icons.meeting_room_rounded,
-  'Housekeeping Supplies': Icons.cleaning_services_rounded,
-  'Instructor Room': Icons.school_rounded,
-  'Lab Room': Icons.science_rounded,
-  'Tool Kits': Icons.build_rounded,
-  'Charging Station': Icons.battery_charging_full_rounded,
-  'Navin Kit': Icons.cases_rounded,
-  'FPV Drones': Icons.videocam_rounded,
-  'Remote Controller': Icons.settings_remote_rounded,
-  'Additional Drone Spare': Icons.handyman_rounded,
-  '3D Printer': Icons.print_rounded,
-  'Corridor Things': Icons.door_sliding_rounded,
-  'Rest Room Things': Icons.bathroom_rounded,
-  'Service & Delivery In': Icons.local_shipping_rounded,
-  'Gojan In Products': Icons.inventory_rounded,
-};
-
-const Map<String, Color> kCategoryColors = {
-  'On Field': Color(0xFF059669),
-  'RPTO': Color(0xFF2563EB),
-  'Stationary': Color(0xFF7C3AED),
-  'Electronics & Electrical': Color(0xFFD97706),
-  'Manager Room': Color(0xFF0E7490),
-  'Housekeeping Supplies': Color(0xFF65A30D),
-  'Instructor Room': Color(0xFF9333EA),
-  'Lab Room': Color(0xFF0891B2),
-  'Tool Kits': Color(0xFF92400E),
-  'Charging Station': Color(0xFFDC2626),
-  'Navin Kit': Color(0xFF0F766E),
-  'FPV Drones': Color(0xFF7C3AED),
-  'Remote Controller': Color(0xFF1D4ED8),
-  'Additional Drone Spare': Color(0xFF374151),
-  '3D Printer': Color(0xFF6D28D9),
-  'Corridor Things': Color(0xFF047857),
-  'Rest Room Things': Color(0xFF0369A1),
-  'Service & Delivery In': Color(0xFFB45309),
-  'Gojan In Products': Color(0xFF4338CA),
-};
-
-// ─────────────────────────────────────────────
-//  SCREEN
-// ─────────────────────────────────────────────
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
@@ -88,995 +37,1236 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  static const Color _darkNavy = Color(0xFF0A1628);
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _lightBg = Color(0xFFF0F4F8);
+  // ── Design tokens (matches Search Products' established look: off-white
+  //    page, white cards, dark navy app bar, solid-black selected chip —
+  //    see activity_feed_screen.dart's notes on matching this screen). ──
+  static const Color kNavy = Color(0xFF0A1628);
+  static const Color kSurface = Color(0xFFF5F7FA);
+  static const Color kChipSelected = Color(0xFF111318);
+  static const Color kChipFill = Color(0xFFF0F1F3);
+  static const Color kBorder = Color(0xFFE3E6EA);
+  static const Color kTextSecondary = Color(0xFF6B7280);
+  static const Color kGreen = Color(0xFF00B894);
+  static const Color kAmber = Color(0xFFFFB800);
+  static const Color kRed = Color(0xFFE5484D);
+  static const Color kBlue = Color(0xFF1565C0);
 
-  // ── Firestore: single one-shot read, reused for the auto-seed check
-  //    (was: a live watchProducts() listener + a duplicate full-collection
-  //    get() for the auto-seed check — 2x full reads on every screen open) ──
-  List<Product> _allItems = [];
+  // ── Data state ────────────────────────────────────────────────────────
+  List<Product> _all = [];
+  List<Product> _filtered = [];
   bool _isLoading = true;
-  String? _streamError;
-
-  // ── Seeding state ─────────────────────────────────────────────────────────
   bool _isSeeding = false;
+  String? _error;
 
-  // ── Local filter state ─────────────────────────────────────────────────────
-  String _search = '';
-  String _selectedCategory = 'All';
-  final TextEditingController _searchCtrl = TextEditingController();
+  // ── Filter state ──────────────────────────────────────────────────────
+  _FilterMode _mode = _FilterMode.all;
+  String? _selectedValue; // selected category / row / tray, null = none
+  String _query = '';
+  final TextEditingController _searchController = TextEditingController();
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────────
+  // In-memory guard so a re-seed check never fires more than once per
+  // app session even if this screen is opened repeatedly (mirrors the
+  // pattern in InventoryDashboard's _branchMigrationDoneCache).
+  static bool _seedCheckedThisSession = false;
+
   @override
   void initState() {
     super.initState();
-    _loadProductsOnce();
-  }
-
-  // ── Single one-shot read. Called from initState, pull-to-refresh, and
-  //    after any add/edit/delete/seed — never on every keystroke. ──────────
-  Future<void> _loadProductsOnce() async {
-    setState(() {
-      _isLoading = true;
-      _streamError = null;
-    });
-    try {
-      final items = await ProductService.getProducts();
-      if (!mounted) return;
-      setState(() {
-        _allItems = items;
-        _isLoading = false;
-      });
-      // Reuse the list we just read instead of a second full-collection
-      // read just to check "is it empty".
-      if (items.isEmpty) {
-        // Guard: only ever auto-seed 'products' ONE time, ever — not
-        // once per empty-check. Without this, deleting all products to
-        // test the empty-state UI and reopening this screen would
-        // silently rewrite ~1,600 documents on every single visit.
-        final alreadySeeded = await SeedGuardService.hasSeeded('products');
-        if (!alreadySeeded) {
-          await ProductService.seedProducts(SeedSearchProducts.allItems);
-          await ProductService.seedProducts(SeedAdambakkamProducts.allItems);
-          await SeedGuardService.markSeeded('products');
-          if (mounted) await _loadProductsOnce();
-        }
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _streamError = e.toString();
-        _isLoading = false;
-      });
-    }
+    _load();
   }
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  // ── Derived filtered list ─────────────────────────────────────────────────
-  List<Product> get _filtered {
-    return _allItems.where((item) {
-      final matchesSearch =
-      item.name.toLowerCase().contains(_search.toLowerCase());
-      final matchesCategory =
-          _selectedCategory == 'All' || item.category == _selectedCategory;
-      return matchesSearch && matchesCategory;
-    }).toList();
+  // ── Firestore fetch ───────────────────────────────────────────────────
+  // forceRefresh: false on initState (reuse ProductService's shared
+  // cache if another screen already warmed it up this session). Pull-to-
+  // refresh and the manual Refresh button always pass true.
+  Future<void> _load({bool forceRefresh = false}) async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final products = await ProductService.getProducts(forceRefresh: forceRefresh);
+      if (!mounted) return;
+      setState(() {
+        _all = products;
+        _isLoading = false;
+      });
+      _applyFilters();
+      await _autoSeedIfNeeded(products);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
-  Color _catColor(String cat) => kCategoryColors[cat] ?? _accentBlue;
-  IconData _catIcon(String cat) =>
-      kCategoryIcons[cat] ?? Icons.inventory_rounded;
-
-  // ── SEED ALL PRODUCTS ────────────────────────────────────────────────────
-  Future<void> _seedAllProducts() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.cloud_upload_rounded, color: _accentBlue),
-            SizedBox(width: 8),
-            Text("Seed All Products"),
-          ],
-        ),
-        content: Text(
-          'This will add all ${SeedSearchProducts.allItems.length} pre-defined '
-              'products to Firestore.\n\nThis is typically a one-time setup action. '
-              'Continue?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton.icon(
-            style:
-            ElevatedButton.styleFrom(backgroundColor: _accentBlue),
-            onPressed: () => Navigator.pop(context, true),
-            icon: const Icon(Icons.upload_rounded,
-                color: Colors.white, size: 16),
-            label: const Text("Seed Now",
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    setState(() => _isSeeding = true);
-
+  // ── Guarded auto-seed ─────────────────────────────────────────────────
+  // Only runs once per install (SeedGuardService key 'products'), and
+  // only when the collection is genuinely empty. Seeds the general
+  // catalogue (On Field / RPTO / etc.) plus the rebuilt Branch 1
+  // (Adambakkam) inventory — the one with correct Row/Rack/Tray grouping
+  // — so Search Products has real Row/Tray chips out of the box.
+  Future<void> _autoSeedIfNeeded(List<Product> existing) async {
+    if (existing.isNotEmpty) return;
+    if (_seedCheckedThisSession) return;
     try {
-      final result =
+      final alreadySeeded = await SeedGuardService.hasSeeded('products');
+      if (alreadySeeded) {
+        _seedCheckedThisSession = true;
+        return;
+      }
+      await _runSeed();
+      await SeedGuardService.markSeeded('products');
+      _seedCheckedThisSession = true;
+    } catch (_) {
+      // Best-effort — a failed auto-seed just means the screen shows
+      // empty state; the manual "Seed Data" action can retry.
+    }
+  }
+
+  Future<void> _runSeed() async {
+    setState(() => _isSeeding = true);
+    try {
       await ProductService.seedProducts(SeedSearchProducts.allItems);
-      await SeedGuardService.markSeeded('products');
-      if (!mounted) return;
-      _showSnack(
-        "Seeded: ${result['success']} added, ${result['failed']} skipped",
-        Colors.green.shade700,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      _showSnack("Seeding failed: $e", Colors.red.shade700);
+      await ProductService.seedProducts(SeedBranch1Products.allItems);
+      if (mounted) await _load(forceRefresh: true);
+    } finally {
+      if (mounted) setState(() => _isSeeding = false);
     }
-
-    if (mounted) setState(() => _isSeeding = false);
-    await _loadProductsOnce(); // one fresh read after the write
   }
 
-  // ── SEED ADAMBAKKAM (Branch 1) PRODUCTS ─────────────────────────────────
-  Future<void> _seedAdambakkamProducts() async {
+  Future<void> _confirmManualSeed() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.cloud_upload_rounded, color: _accentBlue),
-            SizedBox(width: 8),
-            Text("Seed Adambakkam Products"),
-          ],
-        ),
-        content: Text(
-          'This will add all ${SeedAdambakkamProducts.allItems.length} products '
-              'from the Adambakkam (Branch 1) inventory spreadsheet to Firestore.\n\n'
-              'This is safe to run once — it will not touch or duplicate any '
-              'existing products. Continue?',
+      builder: (ctx) => AlertDialog(
+        title: const Text('Re-seed Search Products?'),
+        content: const Text(
+          'This adds the full catalogue (On Field, RPTO, etc.) and the '
+              'Branch 1 (Adambakkam) inventory — including Row/Rack/Tray '
+              'locations — to the products collection. Existing items are '
+              'left untouched; this only ever adds new documents.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton.icon(
-            style:
-            ElevatedButton.styleFrom(backgroundColor: _accentBlue),
-            onPressed: () => Navigator.pop(context, true),
-            icon: const Icon(Icons.upload_rounded,
-                color: Colors.white, size: 16),
-            label: const Text("Seed Now",
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    setState(() => _isSeeding = true);
-
-    try {
-      final result = await ProductService.seedProducts(
-          SeedAdambakkamProducts.allItems);
-      await SeedGuardService.markSeeded('products');
-      if (!mounted) return;
-      _showSnack(
-        "Adambakkam seeded: ${result['success']} added, ${result['failed']} skipped",
-        Colors.green.shade700,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      _showSnack("Seeding failed: $e", Colors.red.shade700);
-    }
-
-    if (mounted) setState(() => _isSeeding = false);
-    await _loadProductsOnce(); // one fresh read after the write
-  }
-
-  // ── ADD ───────────────────────────────────────────────────────────────────
-  void _showAddDialog() => _showItemDialog(null);
-
-  // ── EDIT ──────────────────────────────────────────────────────────────────
-  void _showEditDialog(Product item) => _showItemDialog(item);
-
-  // ── DELETE ────────────────────────────────────────────────────────────────
-  void _deleteItem(Product item) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Item',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        content: RichText(
-          text: TextSpan(
-            style: const TextStyle(
-                color: Color(0xFF374151), fontSize: 14, height: 1.5),
-            children: [
-              const TextSpan(text: 'Are you sure you want to remove '),
-              TextSpan(
-                text: item.name,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const TextSpan(text: ' from inventory?'),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: kNavy),
+            child: const Text('Seed'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await _runSeed();
+  }
+
+  // ── Derived chip lists (computed from loaded data, not hardcoded) ────
+  List<String> get _categories {
+    final set = <String>{for (final p in _all) if (p.category.trim().isNotEmpty) p.category.trim()};
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  List<String> get _rows {
+    final set = <String>{for (final p in _all) if ((p.row ?? '').trim().isNotEmpty) p.row!.trim()};
+    final list = set.toList()..sort(_naturalCompare);
+    return list;
+  }
+
+  List<String> get _trays {
+    final set = <String>{for (final p in _all) if ((p.tray ?? '').trim().isNotEmpty) p.tray!.trim()};
+    final list = set.toList()..sort(_naturalCompare);
+    return list;
+  }
+
+  /// Sorts "Row 2" before "Row 10", "Tray 2" before "Tray 16", etc. by
+  /// comparing any trailing number numerically instead of as text.
+  int _naturalCompare(String a, String b) {
+    final numA = RegExp(r'(\d+)$').firstMatch(a);
+    final numB = RegExp(r'(\d+)$').firstMatch(b);
+    if (numA != null && numB != null) {
+      final prefixA = a.substring(0, numA.start);
+      final prefixB = b.substring(0, numB.start);
+      if (prefixA == prefixB) {
+        return int.parse(numA.group(1)!).compareTo(int.parse(numB.group(1)!));
+      }
+    }
+    return a.compareTo(b);
+  }
+
+  // ── Apply filters locally (mode + selected value + free-text query) ──
+  void _applyFilters() {
+    setState(() {
+      _filtered = _all.where((p) {
+        final matchesMode = switch (_mode) {
+          _FilterMode.all => true,
+          _FilterMode.category => _selectedValue == null || p.category.trim() == _selectedValue,
+          _FilterMode.row => _selectedValue == null || (p.row ?? '').trim() == _selectedValue,
+          _FilterMode.tray => _selectedValue == null || (p.tray ?? '').trim() == _selectedValue,
+        };
+        if (!matchesMode) return false;
+        if (_query.trim().isEmpty) return true;
+        final q = _query.trim().toLowerCase();
+        return p.name.toLowerCase().contains(q) ||
+            p.category.toLowerCase().contains(q) ||
+            (p.row ?? '').toLowerCase().contains(q) ||
+            (p.rack ?? '').toLowerCase().contains(q) ||
+            (p.tray ?? '').toLowerCase().contains(q) ||
+            (p.notes ?? '').toLowerCase().contains(q);
+      }).toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+    });
+  }
+
+  void _selectMode(_FilterMode mode) {
+    setState(() {
+      _mode = mode;
+      _selectedValue = null;
+    });
+    _applyFilters();
+  }
+
+  void _selectValue(String? value) {
+    setState(() => _selectedValue = value);
+    _applyFilters();
+  }
+
+  void _onSearchChanged(String value) {
+    _query = value;
+    _applyFilters();
+  }
+
+  // ── Location text — the raw row/rack/tray values already read like
+  //    "Row 2", "Fourth Row", "Tray 4", "Draw 1" on their own, so this
+  //    just joins whichever are present rather than adding another
+  //    "Row "/"Tray " prefix on top (that would print "Row Row 2"). ────
+  String _locationText(Product p) {
+    final parts = <String>[
+      if ((p.row ?? '').trim().isNotEmpty) p.row!.trim(),
+      if ((p.rack ?? '').trim().isNotEmpty) p.rack!.trim(),
+      if ((p.tray ?? '').trim().isNotEmpty) p.tray!.trim(),
+    ];
+    return parts.join(' · ');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  BUILD
+  // ═══════════════════════════════════════════════════════════════════
+  @override
+  Widget build(BuildContext context) {
+    // Forced light theme for this whole screen. The app's ambient theme
+    // defaults to dark (see ThemeProvider), and every card/surface here is
+    // hardcoded white — any Text/Icon that didn't set an explicit color
+    // (product names, stat values, quantity numbers, search hint) was
+    // inheriting the dark theme's default WHITE text color and rendering
+    // invisible on these white cards. Same root cause already documented
+    // in item_form_sheet.dart, just needed applying here too since this
+    // bug affects the whole screen body, not only the bottom sheets.
+    return Theme(
+      data: ThemeData.light().copyWith(
+        scaffoldBackgroundColor: kSurface,
+        textTheme: ThemeData.light().textTheme.apply(
+          bodyColor: const Color(0xFF111318),
+          displayColor: const Color(0xFF111318),
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFF111318)),
+      ),
+      child: Scaffold(
+        backgroundColor: kSurface,
+        appBar: _buildAppBar(),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? _buildError()
+            : RefreshIndicator(
+          onRefresh: () => _load(forceRefresh: true),
+          child: _buildBody(),
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: kNavy,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Add Product'),
+          onPressed: _openAddSheet,
+        ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      title: const Text('Search Products'),
+      backgroundColor: kNavy,
+      foregroundColor: Colors.white,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh_rounded),
+          tooltip: 'Refresh',
+          onPressed: _isSeeding ? null : () => _load(forceRefresh: true),
+        ),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert_rounded),
+          onSelected: (v) {
+            if (v == 'seed') _confirmManualSeed();
+          },
+          itemBuilder: (ctx) => const [
+            PopupMenuItem(
+              value: 'seed',
+              child: Row(
+                children: [
+                  Icon(Icons.cloud_upload_outlined, size: 18),
+                  SizedBox(width: 10),
+                  Text('Seed Data'),
+                ],
+              ),
             ),
-            onPressed: () async {
-              Navigator.pop(context);
-              try {
-                // id is now a String Firestore doc ID
-                await ProductService.deleteProduct(item.id);
-                await _loadProductsOnce(); // one fresh read after the write
-                _showSnack('${item.name} removed', Colors.red.shade600);
-              } catch (e) {
-                _showSnack('Delete failed: $e', Colors.red.shade700);
-              }
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_rounded, size: 56, color: Colors.red.shade300),
+            const SizedBox(height: 16),
+            const Text('Failed to load products',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 8),
+            Text(_error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () => _load(forceRefresh: true),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(backgroundColor: kNavy, foregroundColor: Colors.white),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isSeeding) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Seeding product catalogue…', style: TextStyle(color: kTextSecondary)),
+          ],
+        ),
+      );
+    }
+
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(child: _buildStatsStrip()),
+        SliverToBoxAdapter(child: _buildSearchBar()),
+        SliverToBoxAdapter(child: _buildModeSelector()),
+        SliverToBoxAdapter(child: _buildValueChips()),
+        SliverToBoxAdapter(child: _buildResultCountBadge()),
+        _all.isEmpty
+            ? SliverFillRemaining(hasScrollBody: false, child: _buildEmptyCollection())
+            : _filtered.isEmpty
+            ? SliverFillRemaining(hasScrollBody: false, child: _buildNoResults())
+            : _buildProductList(),
+        const SliverToBoxAdapter(child: SizedBox(height: 96)),
+      ],
+    );
+  }
+
+  // ── Stats strip ───────────────────────────────────────────────────────
+  Widget _buildStatsStrip() {
+    final total = _all.length;
+    final lowStock = _all.where((p) => p.isLowStock).length;
+    final outOfStock = _all.where((p) => p.isOutOfStock).length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Row(
+        children: [
+          Expanded(child: _statCard('Total', '$total', Icons.inventory_2_outlined, kBlue)),
+          const SizedBox(width: 10),
+          Expanded(child: _statCard('Low Stock', '$lowStock', Icons.warning_amber_rounded, kAmber)),
+          const SizedBox(width: 10),
+          Expanded(child: _statCard('Out of Stock', '$outOfStock', Icons.remove_circle_outline, kRed)),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCard(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 8),
+          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(label, style: const TextStyle(fontSize: 11, color: kTextSecondary)),
+        ],
+      ),
+    );
+  }
+
+  // ── Search bar ───────────────────────────────────────────────────────
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+      child: TextField(
+        controller: _searchController,
+        onChanged: _onSearchChanged,
+        decoration: InputDecoration(
+          hintText: 'Search by name, category, row, rack, or tray…',
+          hintStyle: const TextStyle(fontSize: 13.5),
+          prefixIcon: const Icon(Icons.search_rounded, size: 20),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18),
+            onPressed: () {
+              _searchController.clear();
+              _onSearchChanged('');
             },
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: kBorder),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: kBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: kNavy, width: 1.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Mode selector: All / Category / Row / Tray ─────────────────────────
+  Widget _buildModeSelector() {
+    Widget modeChip(String label, IconData icon, _FilterMode mode) {
+      final selected = _mode == mode;
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: ChoiceChip(
+          avatar: Icon(icon, size: 15, color: selected ? Colors.white : kTextSecondary),
+          label: Text(label),
+          labelStyle: TextStyle(
+            color: selected ? Colors.white : kTextSecondary,
+            fontSize: 12.5,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+          selected: selected,
+          onSelected: (_) => _selectMode(mode),
+          selectedColor: kChipSelected,
+          backgroundColor: kChipFill,
+          showCheckmark: false,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: selected ? kChipSelected : kBorder),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            modeChip('All', Icons.apps_rounded, _FilterMode.all),
+            modeChip('By Category', Icons.category_outlined, _FilterMode.category),
+            modeChip('By Row', Icons.view_week_outlined, _FilterMode.row),
+            modeChip('By Tray', Icons.inbox_outlined, _FilterMode.tray),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Value chips for the active mode (Category / Row / Tray lists) ────
+  Widget _buildValueChips() {
+    if (_mode == _FilterMode.all) return const SizedBox.shrink();
+
+    final values = switch (_mode) {
+      _FilterMode.category => _categories,
+      _FilterMode.row => _rows,
+      _FilterMode.tray => _trays,
+      _FilterMode.all => <String>[],
+    };
+
+    if (values.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+        child: Text(
+          _mode == _FilterMode.row
+              ? 'No items have a Row assigned yet.'
+              : _mode == _FilterMode.tray
+              ? 'No items have a Tray assigned yet.'
+              : 'No categories yet.',
+          style: const TextStyle(color: kTextSecondary, fontSize: 12.5),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _valueChip('All', null, _countFor(null)),
+          ...values.map((v) => _valueChip(v, v, _countFor(v))),
+        ],
+      ),
+    );
+  }
+
+  int _countFor(String? value) {
+    if (value == null) return _all.length;
+    return switch (_mode) {
+      _FilterMode.category => _all.where((p) => p.category.trim() == value).length,
+      _FilterMode.row => _all.where((p) => (p.row ?? '').trim() == value).length,
+      _FilterMode.tray => _all.where((p) => (p.tray ?? '').trim() == value).length,
+      _FilterMode.all => _all.length,
+    };
+  }
+
+  Widget _valueChip(String label, String? value, int count) {
+    final selected = _selectedValue == value;
+    return ChoiceChip(
+      label: Text('$label · $count'),
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : kTextSecondary,
+        fontSize: 12,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      ),
+      selected: selected,
+      onSelected: (_) => _selectValue(value),
+      selectedColor: kChipSelected,
+      backgroundColor: kChipFill,
+      showCheckmark: false,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: selected ? kChipSelected : kBorder),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  // ── Result count badge ───────────────────────────────────────────────
+  Widget _buildResultCountBadge() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: kBlue.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: kBlue.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 14, color: kBlue),
+                const SizedBox(width: 6),
+                Text(
+                  '${_filtered.length} of ${_all.length} products',
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: kBlue, fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Product list ─────────────────────────────────────────────────────
+  Widget _buildProductList() {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+            (context, index) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: _ProductCard(
+            product: _filtered[index],
+            locationText: _locationText(_filtered[index]),
+            onTap: () => _openDetailSheet(_filtered[index]),
+          ),
+        ),
+        childCount: _filtered.length,
+      ),
+    );
+  }
+
+  Widget _buildEmptyCollection() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.inventory_2_outlined, size: 56, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text('No products yet', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 8),
+            const Text(
+              'Seed the catalogue to get started, or add your first product.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: kTextSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _confirmManualSeed,
+              icon: const Icon(Icons.cloud_upload_outlined),
+              label: const Text('Seed Data'),
+              style: ElevatedButton.styleFrom(backgroundColor: kNavy, foregroundColor: Colors.white),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoResults() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
+            const Text('No matching products', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            const Text(
+              'Try a different search term or clear the filter.',
+              style: TextStyle(color: kTextSecondary, fontSize: 12.5),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () {
+                _searchController.clear();
+                _query = '';
+                _selectMode(_FilterMode.all);
+              },
+              icon: const Icon(Icons.clear_rounded, size: 18),
+              label: const Text('Clear filters'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Add / Edit / Delete ──────────────────────────────────────────────
+  void _openAddSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ProductFormSheet(
+        categories: _categories,
+        onSaved: () => _load(forceRefresh: true),
+      ),
+    );
+  }
+
+  void _openEditSheet(Product product) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ProductFormSheet(
+        categories: _categories,
+        existing: product,
+        onSaved: () => _load(forceRefresh: true),
+      ),
+    );
+  }
+
+  void _openDetailSheet(Product product) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ProductDetailSheet(
+        product: product,
+        locationText: _locationText(product),
+        onEdit: () {
+          Navigator.pop(ctx);
+          _openEditSheet(product);
+        },
+        onDelete: () async {
+          Navigator.pop(ctx);
+          await _confirmDelete(product);
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(Product product) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete product?'),
+        content: Text('"${product.name}" will be permanently removed.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: kRed),
             child: const Text('Delete'),
           ),
         ],
       ),
     );
+    if (confirmed != true) return;
+    try {
+      await ProductService.deleteProduct(product.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('"${product.name}" deleted')),
+        );
+      }
+      await _load(forceRefresh: true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Delete failed: $e')),
+        );
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PRODUCT CARD
+// ═══════════════════════════════════════════════════════════════════════
+class _ProductCard extends StatelessWidget {
+  final Product product;
+  final String locationText;
+  final VoidCallback onTap;
+
+  const _ProductCard({
+    required this.product,
+    required this.locationText,
+    required this.onTap,
+  });
+
+  Color get _stockColor {
+    if (product.isOutOfStock) return const Color(0xFFE5484D);
+    if (product.isLowStock) return const Color(0xFFFFB800);
+    return const Color(0xFF00B894);
   }
 
-  // ── ADD / EDIT BOTTOM SHEET ───────────────────────────────────────────────
-  void _showItemDialog(Product? existing) {
-    final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final qtyCtrl = TextEditingController(
-        text: existing?.quantity.toString() ?? '1');
-
-    final notesCtrl = TextEditingController(text: existing?.notes ?? '');
-    // Guard against legacy/unknown category strings stored in Firestore
-    // (e.g. old seed data saved "TOOLS" before the list was renamed to
-    // "Tool Kits"). If the stored value isn't one of the current
-    // kCategories, DropdownButtonFormField's `value` won't match any
-    // `item`, which throws an assertion instead of just showing the field
-    // — so fall back to a valid default in that case.
-    String selectedCat = (existing != null && kCategories.contains(existing.category))
-        ? existing.category
-        : kCategories[1];
-    final formKey = GlobalKey<FormState>();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setModalState) {
-          return Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              MediaQuery.of(ctx).viewInsets.bottom + 20,
-            ),
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE3E6EA)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 4,
+                height: 44,
+                decoration: BoxDecoration(color: _stockColor, borderRadius: BorderRadius.circular(4)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Handle bar
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
                     Text(
-                      existing == null ? 'Add New Item' : 'Edit Item',
-                      style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A)),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Name
-                    _label('Item Name *'),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: nameCtrl,
-                      style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
-                      decoration: _inputDec('e.g. DJI Mini 4 Pro'),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Name is required'
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Category
-                    _label('Category *'),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      value: selectedCat,
-                      decoration: _inputDec(null),
-                      isExpanded: true,
-                      style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
-                      items: kCategories
-                          .where((c) => c != 'All')
-                          .map((c) => DropdownMenuItem(
-                        value: c,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: _catColor(c),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(c,
-                                style: const TextStyle(
-                                    fontSize: 14, color: Color(0xFF0F172A))),
-                          ],
-                        ),
-                      ))
-                          .toList(),
-                      onChanged: (v) {
-                        if (v != null) {
-                          setModalState(() => selectedCat = v);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Quantity
-                    _label('Quantity *'),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: qtyCtrl,
-                      style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
-                      decoration: _inputDec('e.g. 10'),
-                      keyboardType: TextInputType.number,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Quantity is required';
-                        }
-                        final n = int.tryParse(v.trim());
-                        if (n == null || n < 0) {
-                          return 'Enter a valid number';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Notes
-                    _label('Notes (optional)'),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: notesCtrl,
-                      style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
-                      decoration: _inputDec('Any additional info'),
+                      product.name,
                       maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
                     ),
-                    const SizedBox(height: 24),
-
-                    // Action buttons
-                    Row(
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                  BorderRadius.circular(12)),
-                            ),
-                            child: const Text('Cancel'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _darkNavy,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                  BorderRadius.circular(12)),
-                            ),
-                            onPressed: () async {
-                              if (!formKey.currentState!.validate()) {
-                                return;
-                              }
-
-                              final data = {
-                                'name': nameCtrl.text.trim(),
-                                'category': selectedCat,
-                                'quantity':
-                                int.parse(qtyCtrl.text.trim()),
-
-                                'notes': notesCtrl.text.trim().isEmpty
-                                    ? null
-                                    : notesCtrl.text.trim(),
-                              };
-
-                              Navigator.pop(ctx);
-
-                              try {
-                                if (existing == null) {
-                                  // ADD — Firestore assigns String id
-                                  await ProductService.addProduct(data);
-                                  _showSnack(
-                                      '${data['name']} added',
-                                      _accentBlue);
-                                } else {
-                                  // UPDATE — pass existing String doc id
-                                  await ProductService.updateProduct(
-                                      existing.id, data);
-                                  _showSnack(
-                                      '${data['name']} updated',
-                                      _accentBlue);
-                                }
-                                // Stream auto-refreshes the list
-                                await _loadProductsOnce(); // one fresh read after the write
-                              } catch (e) {
-                                _showSnack(
-                                    'Error: $e', Colors.red.shade700);
-                              }
-                            },
-                            child: Text(existing == null
-                                ? 'Add Item'
-                                : 'Save Changes'),
-                          ),
-                        ),
+                        _pill(product.category, const Color(0xFF1565C0)),
+                        if (locationText.isNotEmpty)
+                          _pill(locationText, const Color(0xFF6C63FF), icon: Icons.place_outlined),
                       ],
                     ),
                   ],
                 ),
               ),
-            ),
-          );
-        });
-      },
-    );
-  }
-
-  void _showSnack(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-  }
-
-  Widget _label(String text) => Text(
-    text,
-    style: const TextStyle(
-        fontWeight: FontWeight.w600,
-        fontSize: 13,
-        color: Color(0xFF374151)),
-  );
-
-  InputDecoration _inputDec(String? hint) => InputDecoration(
-    hintText: hint,
-    hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-    filled: true,
-    fillColor: const Color(0xFFF8FAFC),
-    contentPadding:
-    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: _accentBlue, width: 1.5),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Colors.red),
-    ),
-  );
-
-  // ── BUILD ─────────────────────────────────────────────────────────────────
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: _lightBg,
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_streamError != null) {
-      return Scaffold(
-        backgroundColor: _lightBg,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.cloud_off_rounded,
-                  size: 56, color: Colors.red.shade300),
-              const SizedBox(height: 16),
-              const Text("Firestore connection error",
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 16)),
-              const SizedBox(height: 8),
-              Text(_streamError!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF94A3B8))),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${product.quantity}',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  ),
+                  Text(
+                    product.stockLabel,
+                    style: TextStyle(fontSize: 10.5, color: _stockColor, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
-      );
-    }
-
-    final filtered = _filtered;
-
-    return Scaffold(
-      backgroundColor: _lightBg,
-      appBar: AppBar(
-        backgroundColor: _darkNavy,
-        foregroundColor: Colors.white,
-        title: const Text(
-          'Search Products',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-        ),
-        actions: [
-          // ── Seed button — always visible, also acts as a one-time
-          //    "load all spreadsheet items" action ────────────────────────
-          IconButton(
-            icon: _isSeeding
-                ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
-              ),
-            )
-                : const Icon(Icons.cloud_upload_rounded),
-            tooltip: 'Seed All Products',
-            onPressed: _isSeeding ? null : _seedAllProducts,
-          ),
-          IconButton(
-            icon: const Icon(Icons.location_city_rounded),
-            tooltip: 'Seed Adambakkam (Branch 1) Products',
-            onPressed: _isSeeding ? null : _seedAdambakkamProducts,
-          ),
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded),
-            tooltip: 'Add Item',
-            onPressed: _showAddDialog,
-          ),
-        ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddDialog,
-        backgroundColor: _darkNavy,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Item',
-            style: TextStyle(fontWeight: FontWeight.w600)),
+    );
+  }
+
+  Widget _pill(String text, Color color, {IconData? icon}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
       ),
-      body: Column(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Search + Category Bar ────────────────────────────────────────
-          Container(
-            color: _darkNavy,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _searchCtrl,
-                  style: const TextStyle(color: Colors.white),
-                  onChanged: (v) => setState(() => _search = v),
-                  decoration: InputDecoration(
-                    hintText: 'Search any product...',
-                    hintStyle: const TextStyle(color: Colors.white54),
-                    prefixIcon: const Icon(Icons.search_rounded,
-                        color: Colors.white70),
-                    suffixIcon: _search.isNotEmpty
-                        ? IconButton(
-                      icon: const Icon(Icons.close_rounded,
-                          color: Colors.white70),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() => _search = '');
-                      },
-                    )
-                        : null,
-                    filled: true,
-                    fillColor: Colors.white12,
-                    contentPadding:
-                    const EdgeInsets.symmetric(vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                // Category chips
-                SizedBox(
-                  height: 36,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: kCategories.length,
-                    separatorBuilder: (_, __) =>
-                    const SizedBox(width: 8),
-                    itemBuilder: (_, i) {
-                      final cat = kCategories[i];
-                      final selected = _selectedCategory == cat;
-                      return GestureDetector(
-                        onTap: () =>
-                            setState(() => _selectedCategory = cat),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? Colors.white
-                                : Colors.white12,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: selected
-                                  ? Colors.white
-                                  : Colors.white24,
-                            ),
-                          ),
-                          child: Text(
-                            cat,
-                            style: TextStyle(
-                              color: selected
-                                  ? _darkNavy
-                                  : Colors.white,
-                              fontSize: 12,
-                              fontWeight: selected
-                                  ? FontWeight.w700
-                                  : FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Results summary ──────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Row(
-              children: [
-                Text(
-                  '${filtered.length} item${filtered.length == 1 ? '' : 's'}',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
-                      fontSize: 14),
-                ),
-                if (_selectedCategory != 'All') ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _catColor(_selectedCategory)
-                          .withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      _selectedCategory,
-                      style: TextStyle(
-                          color: _catColor(_selectedCategory),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-                const Spacer(),
-                Text(
-                  'Total: ${_allItems.length}',
-                  style: const TextStyle(
-                      color: Color(0xFF64748B), fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Product list ─────────────────────────────────────────────────
-          Expanded(
-            child: filtered.isEmpty
-                ? _emptyState()
-                : ListView.separated(
-              padding:
-              const EdgeInsets.fromLTRB(16, 4, 16, 100),
-              itemCount: filtered.length,
-              separatorBuilder: (_, __) =>
-              const SizedBox(height: 8),
-              itemBuilder: (_, i) => _itemCard(filtered[i]),
-            ),
+          if (icon != null) ...[
+            Icon(icon, size: 11, color: color),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            text,
+            style: TextStyle(fontSize: 10.5, color: color, fontWeight: FontWeight.w600),
           ),
         ],
       ),
     );
   }
+}
 
-  // ── ITEM CARD ─────────────────────────────────────────────────────────────
-  Widget _itemCard(Product item) {
-    final color = _catColor(item.category);
-    final icon = _catIcon(item.category);
+// ═══════════════════════════════════════════════════════════════════════
+//  DETAIL SHEET
+// ═══════════════════════════════════════════════════════════════════════
+class _ProductDetailSheet extends StatelessWidget {
+  final Product product;
+  final String locationText;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+  const _ProductDetailSheet({
+    required this.product,
+    required this.locationText,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: ThemeData.light(),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
+                ),
+              ),
+              Text(product.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0A1628))),
+              const SizedBox(height: 12),
+              _row('Category', product.category),
+              _row('Quantity', '${product.quantity}  (${product.stockLabel})'),
+              if (product.price > 0) _row('Price', '₹${product.price.toStringAsFixed(2)}'),
+              if (locationText.isNotEmpty) _row('Location', locationText),
+              if ((product.notes ?? '').trim().isNotEmpty) _row('Notes', product.notes!.trim()),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Delete'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFE5484D),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 84,
+            child: Text(label, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12.5)),
+          ),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF0A1628)))),
         ],
       ),
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            // Left color accent
-            Container(
-              width: 5,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(14),
-                  bottomLeft: Radius.circular(14),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 22),
-              ),
-            ),
-            // Content
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(0, 12, 8, 12),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ADD / EDIT FORM SHEET
+// ═══════════════════════════════════════════════════════════════════════
+class _ProductFormSheet extends StatefulWidget {
+  final List<String> categories;
+  final Product? existing; // null = add mode
+  final VoidCallback onSaved;
+
+  const _ProductFormSheet({
+    required this.categories,
+    this.existing,
+    required this.onSaved,
+  });
+
+  @override
+  State<_ProductFormSheet> createState() => _ProductFormSheetState();
+}
+
+class _ProductFormSheetState extends State<_ProductFormSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameController;
+  late TextEditingController _categoryController;
+  late TextEditingController _qtyController;
+  late TextEditingController _priceController;
+  late TextEditingController _rowController;
+  late TextEditingController _rackController;
+  late TextEditingController _trayController;
+  late TextEditingController _notesController;
+  bool _saving = false;
+  String? _error;
+
+  bool get _isEdit => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.existing;
+    _nameController = TextEditingController(text: p?.name ?? '');
+    _categoryController = TextEditingController(text: p?.category ?? '');
+    _qtyController = TextEditingController(text: (p?.quantity ?? 1).toString());
+    _priceController = TextEditingController(text: (p?.price ?? 0.0) == 0.0 ? '' : p!.price.toString());
+    _rowController = TextEditingController(text: p?.row ?? '');
+    _rackController = TextEditingController(text: p?.rack ?? '');
+    _trayController = TextEditingController(text: p?.tray ?? '');
+    _notesController = TextEditingController(text: p?.notes ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _categoryController.dispose();
+    _qtyController.dispose();
+    _priceController.dispose();
+    _rowController.dispose();
+    _rackController.dispose();
+    _trayController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    final data = <String, dynamic>{
+      'name': _nameController.text.trim(),
+      'category': _categoryController.text.trim(),
+      'quantity': int.tryParse(_qtyController.text.trim()) ?? 0,
+      'price': double.tryParse(_priceController.text.trim()) ?? 0.0,
+      'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      'row': _rowController.text.trim().isEmpty ? null : _rowController.text.trim(),
+      'rack': _rackController.text.trim().isEmpty ? null : _rackController.text.trim(),
+      'tray': _trayController.text.trim().isEmpty ? null : _trayController.text.trim(),
+    };
+
+    try {
+      if (_isEdit) {
+        await ProductService.updateProduct(widget.existing!.id, data);
+      } else {
+        await ProductService.addProduct(data);
+      }
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onSaved();
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _saving = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.of(context).viewInsets;
+
+    // Forced light theme for this subtree — the ambient app theme may be
+    // dark (see ThemeProvider), and this sheet's background is hardcoded
+    // white, so labels/borders need to stay dark regardless of app theme
+    // (same fix already applied in item_form_sheet.dart).
+    return Theme(
+      data: ThemeData.light().copyWith(
+        inputDecorationTheme: const InputDecorationTheme(
+          labelStyle: TextStyle(color: Colors.black87),
+          hintStyle: TextStyle(color: Colors.black45),
+          floatingLabelStyle: TextStyle(color: Colors.black87),
+          border: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF0A1628), width: 2)),
+        ),
+      ),
+      child: AnimatedPadding(
+        padding: viewInsets,
+        duration: const Duration(milliseconds: 150),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              child: Form(
+                key: _formKey,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration:
+                        BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
                     Text(
-                      item.name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: Color(0xFF0F172A)),
+                      _isEdit ? 'Edit Product' : 'Add Product',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0A1628)),
                     ),
-                    const SizedBox(height: 3),
-                    // Category badge only — price badge removed.
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        item.category,
-                        style: TextStyle(
-                            color: color,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600),
-                      ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(labelText: 'Product name', border: OutlineInputBorder()),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null,
                     ),
-                    if (item.notes != null &&
-                        item.notes!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        item.notes!,
-                        style: const TextStyle(
-                            color: Color(0xFF94A3B8), fontSize: 11),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    const SizedBox(height: 12),
+                    Autocomplete<String>(
+                      initialValue: TextEditingValue(text: _categoryController.text),
+                      optionsBuilder: (v) {
+                        if (v.text.isEmpty) return widget.categories;
+                        return widget.categories
+                            .where((c) => c.toLowerCase().contains(v.text.toLowerCase()));
+                      },
+                      onSelected: (v) => _categoryController.text = v,
+                      fieldViewBuilder: (ctx, controller, focusNode, onSubmit) {
+                        // Keep our own controller in sync with Autocomplete's
+                        // internal one so free-typed (new) categories save too.
+                        controller.text = _categoryController.text;
+                        controller.addListener(() => _categoryController.text = controller.text);
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            labelText: 'Category',
+                            hintText: 'Pick existing or type a new one',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Category is required' : null,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _qtyController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Quantity', border: OutlineInputBorder()),
+                            validator: (v) {
+                              final n = int.tryParse(v?.trim() ?? '');
+                              if (n == null || n < 0) return 'Invalid';
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _priceController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Price (optional)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Physical location (optional)',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: Colors.black54)),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _rowController,
+                            decoration:
+                            const InputDecoration(labelText: 'Row', hintText: 'e.g. Row 2', border: OutlineInputBorder()),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _rackController,
+                            decoration: const InputDecoration(
+                                labelText: 'Rack', hintText: 'e.g. Shelf 1', border: OutlineInputBorder()),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _trayController,
+                      decoration: const InputDecoration(
+                          labelText: 'Tray', hintText: 'e.g. Tray 4, Draw 1', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _notesController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(labelText: 'Notes (optional)', border: OutlineInputBorder()),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
                     ],
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _saving ? null : _save,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0A1628),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _saving
+                            ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                            : Text(_isEdit ? 'Save Changes' : 'Add Product'),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-            // Qty badge + action buttons
-            Padding(
-              padding: const EdgeInsets.fromLTRB(0, 12, 12, 12),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: item.isOutOfStock
-                          ? Colors.red.shade50
-                          : item.isLowStock
-                          ? Colors.orange.shade50
-                          : Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: item.isOutOfStock
-                            ? Colors.red.shade200
-                            : item.isLowStock
-                            ? Colors.orange.shade200
-                            : Colors.green.shade200,
-                      ),
-                    ),
-                    child: Text(
-                      item.quantity.toString(),
-                      style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                          color: item.isOutOfStock
-                              ? Colors.red.shade700
-                              : item.isLowStock
-                              ? Colors.orange.shade700
-                              : Colors.green.shade700),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => _showEditDialog(item),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: _accentBlue.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                          child: const Icon(Icons.edit_rounded,
-                              color: _accentBlue, size: 16),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () => _deleteItem(item),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                          child: Icon(Icons.delete_outline_rounded,
-                              color: Colors.red.shade600, size: 16),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _emptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.search_off_rounded,
-              size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          Text(
-            _search.isNotEmpty
-                ? 'No results for "$_search"'
-                : 'No items in this category',
-            style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF64748B),
-                fontSize: 15),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Try a different search or category,\nor add a new item.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ElevatedButton.icon(
-                onPressed: _showAddDialog,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Add Item'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _darkNavy,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-              if (_allItems.isEmpty) ...[
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: _isSeeding ? null : _seedAllProducts,
-                  icon: const Icon(Icons.cloud_upload_rounded, size: 18),
-                  label: const Text('Seed All'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _accentBlue,
-                    side: const BorderSide(color: _accentBlue),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
       ),
     );
   }

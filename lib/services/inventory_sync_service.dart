@@ -56,8 +56,15 @@ class InventorySyncService {
     'COMPLETE DRONE / KIT',
   };
 
-  static bool isFixedAsset(String category) =>
-      _fixedAssetCategories.contains(category.trim().toUpperCase());
+  static bool isFixedAsset(String category) {
+    final norm = category.trim().toUpperCase();
+    // Stock Management already speaks in these two literal buckets —
+    // trust them directly instead of running them through the
+    // Inventory/New Products category list, which they'd never match.
+    if (norm == 'FIXED_ASSET') return true;
+    if (norm == 'CONSUMABLE') return false;
+    return _fixedAssetCategories.contains(norm);
+  }
 
   // ── Branch module category-key inference ────────────────────────────
   static String _branchCategoryKey(String category) {
@@ -91,6 +98,7 @@ class InventorySyncService {
     String location = '',
     String description = '',
     String? addedBy,
+    bool includeStock = true,
   }) async {
     // 1) Search Products module
     try {
@@ -123,19 +131,23 @@ class InventorySyncService {
       debugPrint('InventorySyncService: Branch module sync failed: $e');
     }
 
-    // 3) Stock Management module
-    try {
-      await StockService.addStockIn(
-        productName: name,
-        quantity: quantity,
-        receivedBy: addedBy?.isNotEmpty == true ? addedBy! : 'System Sync',
-        branch: branchLabel,
-        date: DateTime.now().toIso8601String(),
-        remarks: 'Auto-synced from ${description.isEmpty ? 'module add' : description}',
-        category: isFixedAsset(category) ? 'fixed_asset' : 'consumable',
-      );
-    } catch (e) {
-      debugPrint('InventorySyncService: Stock Management sync failed: $e');
+    // 3) Stock Management module — skipped when the caller is Stock
+    //    Management itself (it already wrote this item directly; running
+    //    it again here would double the quantity).
+    if (includeStock) {
+      try {
+        await StockService.addStockIn(
+          productName: name,
+          quantity: quantity,
+          receivedBy: addedBy?.isNotEmpty == true ? addedBy! : 'System Sync',
+          branch: branchLabel,
+          date: DateTime.now().toIso8601String(),
+          remarks: 'Auto-synced from ${description.isEmpty ? 'module add' : description}',
+          category: isFixedAsset(category) ? 'fixed_asset' : 'consumable',
+        );
+      } catch (e) {
+        debugPrint('InventorySyncService: Stock Management sync failed: $e');
+      }
     }
 
     // 4) Fixed Assets OR Consumables (auto-segregated)
@@ -208,6 +220,34 @@ class InventorySyncService {
       location: product.storageLocation,
       description: product.description,
       addedBy: product.addedBy,
+    );
+  }
+
+  // ── Entry point: called after a Stock Management add ────────────────
+  // (StockService.addStockIn / bulk import). The stock item itself has
+  // already been written by the caller, so this only fans out to Search
+  // Products, the Branch module, and Fixed Assets OR Consumables —
+  // `category` is expected to be the literal 'consumable' / 'fixed_asset'
+  // bucket Stock Management already uses, which isFixedAsset() now
+  // understands directly.
+  static Future<void> syncFromStockAdd({
+    required String name,
+    required String category,
+    required int quantity,
+    required String branchLabel,
+    String location = '',
+    String description = '',
+    String? addedBy,
+  }) async {
+    await _pushDownstream(
+      name: name,
+      category: category,
+      quantity: quantity,
+      branchLabel: branchLabel,
+      location: location,
+      description: description,
+      addedBy: addedBy,
+      includeStock: false,
     );
   }
 }

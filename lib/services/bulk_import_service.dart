@@ -26,7 +26,7 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart' as xls;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
-enum BulkImportTarget { newProducts, inventory }
+enum BulkImportTarget { newProducts, inventory, stockManagement }
 
 class BulkImportResult {
   final List<String> headers; // raw header text, as found in the file
@@ -107,12 +107,23 @@ class BulkImportService {
       'branch': ['branch'],
       'addedBy': ['added by'],
     },
+    BulkImportTarget.stockManagement: {
+      'name': ['name', 'item name', 'product name'],
+      'category': ['category', 'type'],
+      'quantity': ['quantity', 'qty', 'stock quantity', 'stock qty'],
+      'branch': ['branch'],
+      'minStock': ['min stock', 'minimum stock', 'minimum stock level'],
+      'unit': ['unit', 'uom'],
+      'sku': ['sku', 'code', 'product code'],
+      'location': ['location', 'storage location'],
+    },
   };
 
   /// The one field each target absolutely cannot be saved without.
   static const Map<BulkImportTarget, String> requiredField = {
     BulkImportTarget.newProducts: 'productName',
     BulkImportTarget.inventory: 'name',
+    BulkImportTarget.stockManagement: 'name',
   };
 
   /// Human-readable labels for the internal field keys above, used when
@@ -145,6 +156,8 @@ class BulkImportService {
     'remarks': 'Remarks',
     'name': 'Name',
     'location': 'Location',
+    'minStock': 'Minimum Stock',
+    'sku': 'SKU / Code',
   };
 
   /// The order fields should appear in on the preview card.
@@ -184,6 +197,16 @@ class BulkImportService {
       'branch',
       'addedBy',
       'description',
+    ],
+    BulkImportTarget.stockManagement: [
+      'name',
+      'category',
+      'quantity',
+      'branch',
+      'minStock',
+      'unit',
+      'sku',
+      'location',
     ],
   };
 

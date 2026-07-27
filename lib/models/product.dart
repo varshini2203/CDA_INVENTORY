@@ -9,6 +9,12 @@ class Product {
   final int quantity;
   final double price;
   final String? notes;
+  // ── Physical storage location (rack room layout) ──────────────────────
+  // Free-text so any existing labeling scheme (e.g. "R1", "Rack-3",
+  // "Tray B") keeps working without a migration.
+  final String? row;
+  final String? rack;
+  final String? tray;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -19,6 +25,9 @@ class Product {
     required this.quantity,
     required this.price,
     this.notes,
+    this.row,
+    this.rack,
+    this.tray,
     this.createdAt,
     this.updatedAt,
   });
@@ -33,6 +42,9 @@ class Product {
       quantity: (data['quantity'] as num?)?.toInt() ?? 0,
       price: (data['price'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
+      row: data['row'] as String?,
+      rack: data['rack'] as String?,
+      tray: data['tray'] as String?,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );
@@ -46,6 +58,9 @@ class Product {
       'quantity': quantity,
       'price': price,
       'notes': notes ?? '',
+      'row': row ?? '',
+      'rack': rack ?? '',
+      'tray': tray ?? '',
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }
@@ -66,6 +81,9 @@ class Product {
     int? quantity,
     double? price,
     String? notes,
+    String? row,
+    String? rack,
+    String? tray,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -76,10 +94,30 @@ class Product {
       quantity: quantity ?? this.quantity,
       price: price ?? this.price,
       notes: notes ?? this.notes,
+      row: row ?? this.row,
+      rack: rack ?? this.rack,
+      tray: tray ?? this.tray,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  // ── Location helper ───────────────────────────────────────────────────────
+  /// Human-readable combined location, e.g. "Row 2 · Rack 3 · Tray B".
+  /// Skips any part that hasn't been set instead of showing empty labels.
+  String get locationLabel {
+    final parts = <String>[
+      if ((row ?? '').trim().isNotEmpty) 'Row ${row!.trim()}',
+      if ((rack ?? '').trim().isNotEmpty) 'Rack ${rack!.trim()}',
+      if ((tray ?? '').trim().isNotEmpty) 'Tray ${tray!.trim()}',
+    ];
+    return parts.join(' · ');
+  }
+
+  bool get hasLocation =>
+      (row ?? '').trim().isNotEmpty ||
+          (rack ?? '').trim().isNotEmpty ||
+          (tray ?? '').trim().isNotEmpty;
 
   // ── Stock helpers ─────────────────────────────────────────────────────────
   bool get isOutOfStock => quantity == 0;

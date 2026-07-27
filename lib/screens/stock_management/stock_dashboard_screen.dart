@@ -6,6 +6,7 @@ import 'stock_in_screen.dart';
 import 'stock_out_screen.dart';
 import 'stock_history_screen.dart';
 import 'stock_items_screen.dart';
+import 'package:cda_inventory/screens/bulk_import/bulk_import_screen.dart';
 
 class StockDashboardScreen extends StatefulWidget {
   const StockDashboardScreen({super.key});
@@ -478,6 +479,22 @@ class _StockDashboardScreenState extends State<StockDashboardScreen>
                           builder: (_) => const StockItemsScreen())),
                 )),
               ]),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: _actionTile(
+                  label: 'Bulk Import',
+                  sub: 'Add 50–100+ products at once from an Excel or PDF file',
+                  icon: Icons.upload_file_rounded,
+                  color: kNavy,
+                  onTap: () async {
+                    await Navigator.push(context,
+                        MaterialPageRoute(settings: const RouteSettings(name: 'Bulk Import Stock'),
+                            builder: (_) => const BulkImportScreen(target: BulkImportTarget.stockManagement)));
+                    _loadDashboard();
+                  },
+                ),
+              ),
 
               const SizedBox(height: 28),
 
