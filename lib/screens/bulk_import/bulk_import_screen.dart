@@ -1,37 +1,56 @@
 // lib/screens/bulk_import/bulk_import_screen.dart
 //
-// Shared bulk-import flow for the New Products, Inventory, and Stock
-// Management modules. Flow: pick a .xlsx or .pdf file → parse it →
-// commit every row straight to Firestore via the normal
-// NewProductService / InventoryService / StockService add calls (so
-// activity logging, caching, etc. all behave exactly like a manual add).
-// There is no manual review/edit screen — the file is imported the
-// moment it's picked. Only each target's one required field (name /
-// product name) is enforced, and it's enforced per row, not for the
-// whole file: a row missing it is silently skipped (and counted) while
-// every other row still imports. Every other column is optional and
-// falls back to a safe default, so a file that's missing minor fields
-// never blocks anything.
+// Shared bulk-import entry screen for New Products, Inventory, and Stock
+// Management. Public API is unchanged from before this change
+// (`BulkImportScreen({required BulkImportTarget target})`,
+// `BulkImportTarget` enum with the same 3 values) so all 4 existing call
+// sites keep compiling and behaving as before, with no changes on their
+// end.
 //
-// Inventory and New Products already fan out to every other module (see
-// InventorySyncService); Stock Management rows get the same treatment via
-// InventorySyncService.syncFromStockAdd, so an item added from any of the
-// three pages shows up in Search Products / Fixed Assets / Consumables
-// too, without re-entering it.
+// Flow for Inventory / New Products (the modules migrated onto the new
+// Dynamic Bulk Import Engine — see services/bulk_import/):
+//   pick a .xlsx or .csv file
+//     -> DynamicImportParser.parse()            (dynamic header/alias
+//                                                 matching, per-module
+//                                                 config, no fixed
+//                                                 template, only required
+//                                                 fields validated)
+//     -> BulkImportPreviewScreen                (editable-status preview,
+//                                                 duplicate detection +
+//                                                 Skip/Update/Increase
+//                                                 Quantity/Replace choice)
+//     -> DynamicBulkImportEngine.commit()        (batched Firestore
+//                                                 writes, cross-module
+//                                                 sync reused via
+//                                                 InventorySyncService,
+//                                                 one ActivityLogService
+//                                                 summary line)
 //
-// Requires `file_picker` in pubspec.yaml — see bulk_import_service.dart
-// for the full list of new dependencies this feature needs.
+// Flow for Stock Management (kept on its existing behavior — see the
+// note above `stockManagementImportConfig` in module_import_configs.dart
+// for why): pick a file -> parse with the same dynamic parser -> import
+// immediately row-by-row through the existing `StockService.addStockIn`
+// + `InventorySyncService.syncFromStockAdd`, exactly like before. This is
+// a natural candidate to migrate onto the full engine in a follow-up.
+//
+// PDF import has been removed — only Excel (.xlsx) and CSV (.csv) files
+// are accepted, for every target.
+
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cda_inventory/models/new_product.dart';
-import 'package:cda_inventory/services/bulk_import_service.dart';
-export 'package:cda_inventory/services/bulk_import_service.dart' show BulkImportTarget;
-import 'package:cda_inventory/services/new_product_service.dart';
-import 'package:cda_inventory/services/inventory_service.dart';
-import 'package:cda_inventory/services/stock_service.dart';
 import 'package:cda_inventory/services/inventory_sync_service.dart';
+import 'package:cda_inventory/services/stock_service.dart';
+import 'package:cda_inventory/services/bulk_import/dynamic_bulk_import_engine.dart';
+import 'package:cda_inventory/services/bulk_import/dynamic_import_parser.dart';
+import 'package:cda_inventory/services/bulk_import/import_field_config.dart';
+import 'package:cda_inventory/services/bulk_import/module_import_configs.dart';
+
+import 'bulk_import_preview_screen.dart';
+
+enum BulkImportTarget { newProducts, inventory, stockManagement }
 
 class BulkImportScreen extends StatefulWidget {
   final BulkImportTarget target;
@@ -46,8 +65,11 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
   static const _navy = Color(0xFF0A1628);
   static const _accent = Color(0xFF7B5EA7);
 
-  bool _isWorking = false; // parsing OR importing — same full-screen state
+  bool _isWorking = false;
   String _statusLabel = '';
+
+  // Only used by the legacy Stock Management path below — Inventory/New
+  // Products get their branch handling from each row via the engine.
   String _defaultBranch = 'CDA Admin';
 
   String get _title {
@@ -61,21 +83,44 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     }
   }
 
-  String get _requiredField => BulkImportService.requiredField[widget.target]!;
+  /// Non-null for modules migrated onto the Dynamic Bulk Import Engine.
+  ModuleImportConfig? get _engineConfig {
+    switch (widget.target) {
+      case BulkImportTarget.inventory:
+        return inventoryImportConfig;
+      case BulkImportTarget.newProducts:
+        return newProductsImportConfig;
+      case BulkImportTarget.stockManagement:
+        return null;
+    }
+  }
 
-  // ── FILE PICK → PARSE → IMPORT, all in one go ───────────────────────
+  String get _requiredFieldLabel {
+    final config = _engineConfig ?? stockManagementImportConfig;
+    final required = config.requiredFields;
+    return required.isEmpty ? 'name' : required.first.label;
+  }
+
+  // ── FILE PICK → PARSE → (preview & commit) OR (legacy immediate import)
   Future<void> _pickAndImport() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls', 'pdf'],
-      withData: true,
+      allowedExtensions: ['xlsx', 'xls', 'csv'],
     );
     if (result == null || result.files.isEmpty) return;
 
     final picked = result.files.single;
-    final bytes = picked.bytes;
-    if (bytes == null) {
+    Uint8List bytes;
+    try {
+      bytes = await picked.readAsBytes();
+    } catch (_) {
       _showSnack('Could not read that file — please try again.');
+      return;
+    }
+
+    final config = _engineConfig;
+    if (config == null) {
+      await _legacyStockImport(bytes, picked.name);
       return;
     }
 
@@ -84,73 +129,50 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
       _statusLabel = 'Reading ${picked.name}…';
     });
 
-    BulkImportResult parsed;
-    List<Map<String, String>> rows;
-    List<String> unrecognized;
+    ImportParseResult parsed;
     try {
-      parsed = BulkImportService.parse(bytes, picked.name);
-      final mapped = BulkImportService.toFieldRows(parsed, widget.target);
-      rows = mapped.rows;
-      unrecognized = mapped.unrecognized;
+      parsed = DynamicImportParser.parse(bytes, picked.name, config);
     } catch (e) {
       setState(() => _isWorking = false);
       _showSnack('Failed to parse "${picked.name}": $e');
       return;
     }
 
-    if (rows.isEmpty) {
-      setState(() => _isWorking = false);
-      await _showResultDialog(
-        fileName: picked.name,
-        totalRows: 0,
-        success: 0,
-        skippedMissingName: 0,
-        failures: const [],
-        warnings: parsed.warnings,
-        unrecognized: unrecognized,
+    if (!mounted) return;
+    setState(() => _isWorking = false);
+
+    if (parsed.isEmpty) {
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Nothing to import'),
+          content: Text(
+            parsed.fileWarnings.isNotEmpty
+                ? parsed.fileWarnings.join('\n')
+                : 'No data rows were found in "${picked.name}".',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          ],
+        ),
       );
       return;
     }
 
-    setState(() => _statusLabel = 'Importing ${rows.length} row(s)…');
-
-    var success = 0;
-    var skippedMissingName = 0;
-    final failures = <String>[];
-
-    for (final row in rows) {
-      if ((row[_requiredField] ?? '').trim().isEmpty) {
-        skippedMissingName++;
-        continue;
-      }
-      try {
-        if (widget.target == BulkImportTarget.newProducts) {
-          await NewProductService.addNewProduct(_toNewProduct(row));
-        } else if (widget.target == BulkImportTarget.inventory) {
-          await _addInventoryItem(row);
-        } else {
-          await _addStockItem(row);
-        }
-        success++;
-      } catch (e) {
-        failures.add('${row[_requiredField]}: $e');
-      }
-    }
-
-    if (!mounted) return;
-    setState(() => _isWorking = false);
-
-    await _showResultDialog(
-      fileName: picked.name,
-      totalRows: rows.length,
-      success: success,
-      skippedMissingName: skippedMissingName,
-      failures: failures,
-      warnings: parsed.warnings,
-      unrecognized: unrecognized,
+    final commitResult = await Navigator.push<ImportCommitResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BulkImportPreviewScreen(
+          config: config,
+          parseResult: parsed,
+          fileName: picked.name,
+          importedBy: 'Bulk Import',
+        ),
+      ),
     );
 
-    if (success > 0 && mounted) {
+    if (!mounted) return;
+    if (commitResult != null && (commitResult.created + commitResult.updated) > 0) {
       Navigator.pop(context, true);
     }
   }
@@ -160,23 +182,126 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ── RESULT DIALOG ────────────────────────────────────────────────────
-  // Everything the old preview screen used to show up front (parse
-  // warnings, ignored columns) now shows here instead, alongside the
-  // actual outcome — since there's no review step to show it on before
-  // the write happens.
-  Future<void> _showResultDialog({
+  // ═══════════════════════════════════════════════════════════════════
+  //  LEGACY STOCK MANAGEMENT PATH — unchanged behavior from before this
+  //  change: pick a file, import every row immediately (no preview step),
+  //  show a result dialog. Only the parser underneath is new (dynamic
+  //  Excel/CSV alias matching instead of the old fixed alias table) —
+  //  the write path (`StockService.addStockIn` +
+  //  `InventorySyncService.syncFromStockAdd`) is 100% untouched.
+  // ═══════════════════════════════════════════════════════════════════
+  Future<void> _legacyStockImport(Uint8List bytes, String fileName) async {
+    setState(() {
+      _isWorking = true;
+      _statusLabel = 'Reading $fileName…';
+    });
+
+    ImportParseResult parsed;
+    try {
+      parsed = DynamicImportParser.parse(
+        bytes,
+        fileName,
+        stockManagementImportConfig,
+      );
+    } catch (e) {
+      setState(() => _isWorking = false);
+      _showSnack('Failed to parse "$fileName": $e');
+      return;
+    }
+
+    final rows = parsed.validRows;
+    if (rows.isEmpty) {
+      setState(() => _isWorking = false);
+      await _showLegacyResultDialog(
+        fileName: fileName,
+        totalRows: parsed.rows.length,
+        success: 0,
+        skippedInvalid: parsed.invalidCount,
+        failures: const [],
+        warnings: parsed.fileWarnings,
+        unrecognized: parsed.unrecognizedHeaders,
+      );
+      return;
+    }
+
+    setState(() => _statusLabel = 'Importing ${rows.length} row(s)…');
+
+    var success = 0;
+    final failures = <String>[];
+
+    for (final row in rows) {
+      final name = (row.values['name'] ?? '').toString();
+      final branch = _normalizeStockBranch(row.values['branch']?.toString());
+      final quantity = (row.values['quantity'] as int?) ?? 1;
+      final rawCategory = (row.values['category'] ?? '').toString().toLowerCase();
+      final category = (rawCategory.contains('fixed') || rawCategory.contains('asset'))
+          ? 'fixed_asset'
+          : 'consumable';
+
+      try {
+        await StockService.addStockIn(
+          productName: name,
+          quantity: quantity,
+          receivedBy: 'Bulk Import',
+          branch: branch,
+          date: DateTime.now().toIso8601String(),
+          remarks: 'Bulk import',
+          category: category,
+        );
+
+        // Fan out to Search Products / Branch module / Fixed Assets or
+        // Consumables — same cross-module propagation a manual Stock add
+        // already gets.
+        await InventorySyncService.syncFromStockAdd(
+          name: name,
+          category: category,
+          quantity: quantity,
+          branchLabel: branch,
+          location: (row.values['location'] ?? '').toString(),
+          addedBy: 'Bulk Import',
+        );
+        success++;
+      } catch (e) {
+        failures.add('$name: $e');
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _isWorking = false);
+
+    await _showLegacyResultDialog(
+      fileName: fileName,
+      totalRows: parsed.rows.length,
+      success: success,
+      skippedInvalid: parsed.invalidCount,
+      failures: failures,
+      warnings: parsed.fileWarnings,
+      unrecognized: parsed.unrecognizedHeaders,
+    );
+
+    if (success > 0 && mounted) {
+      Navigator.pop(context, true);
+    }
+  }
+
+  String _normalizeStockBranch(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return _defaultBranch;
+    final norm = raw.trim().toLowerCase();
+    if (norm.contains('admin')) return 'CDA Admin';
+    if (norm.contains('ops')) return 'CDA Ops';
+    return raw.trim();
+  }
+
+  Future<void> _showLegacyResultDialog({
     required String fileName,
     required int totalRows,
     required int success,
-    required int skippedMissingName,
+    required int skippedInvalid,
     required List<String> failures,
     required List<String> warnings,
     required List<String> unrecognized,
   }) async {
     if (!mounted) return;
-    final requiredLabel = BulkImportService.fieldLabels[_requiredField] ?? _requiredField;
-
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -192,183 +317,37 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
                 const Text('No data rows were found in this file.')
               else
                 Text('$success of $totalRows row(s) imported.'),
-              if (skippedMissingName > 0) ...[
+              if (skippedInvalid > 0) ...[
                 const SizedBox(height: 6),
                 Text(
-                  '$skippedMissingName row(s) skipped — no "$requiredLabel" value could be found for them.',
+                  '$skippedInvalid row(s) skipped — missing "$_requiredFieldLabel".',
                   style: const TextStyle(fontSize: 13),
                 ),
               ],
-              // Every row was skipped for the same reason — that's almost
-              // always a header mismatch (e.g. a sheet laid out with
-              // category names as column headers instead of one product
-              // per row), not 300 genuinely blank rows. Call it out
-              // directly instead of leaving that to guesswork.
-              if (totalRows > 0 && success == 0 && skippedMissingName == totalRows) ...[
-                const SizedBox(height: 10),
+              if (unrecognized.isNotEmpty) ...[
+                const SizedBox(height: 6),
                 Text(
-                  'None of the rows had a recognizable "$requiredLabel" column. '
-                      'This usually means the file\'s headers are category names '
-                      '(e.g. ONFIELD, RPTO, TOOL KITS…) rather than one product per '
-                      'row — check the ignored columns below and make sure there\'s '
-                      'a plain "Name" / "Product Name" column with one product per row.',
-                  style: TextStyle(fontSize: 12.5, color: Colors.amber.shade900),
+                  'Ignored columns: ${unrecognized.join(', ')}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
-              ],
-              if (failures.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                const Text('Failed:', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                ...failures.map((f) => Text('• $f', style: const TextStyle(fontSize: 13))),
               ],
               if (warnings.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                const Text('Warnings:', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                ...warnings.map((w) => Text('• $w', style: const TextStyle(fontSize: 12.5))),
+                const SizedBox(height: 6),
+                ...warnings.map((w) => Text(w, style: TextStyle(fontSize: 12, color: Colors.orange[800]))),
               ],
-              if (unrecognized.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  'Ignored unrecognized column(s): ${unrecognized.join(', ')}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                ),
+              if (failures.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text('Failures:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                ...failures.take(10).map((f) => Text('• $f', style: const TextStyle(fontSize: 11.5, color: Colors.red))),
               ],
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
         ],
       ),
     );
-  }
-
-  // ── ROW → MODEL MAPPERS ──────────────────────────────────────────────
-  NewProduct _toNewProduct(Map<String, String> row) {
-    DateTime purchaseDate;
-    final rawDate = row['purchaseDate'];
-    purchaseDate = rawDate == null
-        ? DateTime.now()
-        : (DateTime.tryParse(rawDate) ?? _tryParseLooseDate(rawDate) ?? DateTime.now());
-
-    final branch = _normalizeNewProductBranch(row['branch']) ?? _defaultBranch;
-    final quantity = int.tryParse(row['quantity'] ?? '') ?? 1;
-
-    return NewProduct(
-      productId: '',
-      productName: row['productName'] ?? '',
-      productCode: row['productCode'] ?? '',
-      category: row['category']?.isNotEmpty == true ? row['category']! : 'General',
-      brand: row['brand'] ?? '',
-      modelNumber: row['modelNumber'] ?? '',
-      description: row['description'] ?? '',
-      vendorName: row['vendorName'] ?? '',
-      vendorContact: row['vendorContact'] ?? '',
-      vendorEmail: row['vendorEmail'] ?? '',
-      purchaseDate: purchaseDate,
-      purchaseCost: double.tryParse(row['purchaseCost'] ?? '') ?? 0,
-      quantity: quantity,
-      unit: row['unit']?.isNotEmpty == true ? row['unit']! : 'Pcs',
-      salePrice: double.tryParse(row['salePrice'] ?? '') ?? 0,
-      // Falls back to Quantity when the file doesn't have its own
-      // "Available Quantity for Sale" column — same as a fresh row on the
-      // Stock Summary Report, where the two start out equal.
-      availableQuantityForSale:
-      int.tryParse(row['availableQuantityForSale'] ?? '') ?? quantity,
-      reservedQuantity: int.tryParse(row['reservedQuantity'] ?? '') ?? 0,
-      stockValue: double.tryParse(row['stockValue'] ?? '') ?? 0,
-      branch: branch,
-      storageLocation: row['storageLocation'] ?? '',
-      minimumStockLevel: int.tryParse(row['minimumStockLevel'] ?? '') ?? 0,
-      status: row['status']?.isNotEmpty == true ? row['status']! : 'In Stock',
-      addedBy: row['addedBy']?.isNotEmpty == true ? row['addedBy']! : 'Bulk Import',
-      employeeId: row['employeeId'] ?? '',
-      department: row['department'] ?? '',
-      remarks: row['remarks'] ?? '',
-    );
-  }
-
-  Future<void> _addInventoryItem(Map<String, String> row) async {
-    await InventoryService().addProduct(
-      name: row['name'] ?? '',
-      category: row['category']?.isNotEmpty == true ? row['category']! : 'ONFIELD',
-      location: row['location'] ?? '',
-      quantity: int.tryParse(row['quantity'] ?? '') ?? 1,
-      description: row['description'] ?? '',
-      branch: _normalizeInventoryBranch(row['branch']) ?? (_defaultBranch == 'CDA Admin' ? 1 : 2),
-      addedBy: row['addedBy']?.isNotEmpty == true ? row['addedBy']! : 'Bulk Import',
-    );
-  }
-
-  Future<void> _addStockItem(Map<String, String> row) async {
-    final name = row['name'] ?? '';
-    final branch = _normalizeNewProductBranch(row['branch']) ?? _defaultBranch;
-    final quantity = int.tryParse(row['quantity'] ?? '') ?? 1;
-    final rawCategory = (row['category'] ?? '').trim().toLowerCase();
-    // Any value other than a recognizable "fixed asset" reading defaults
-    // to consumable — matches Add Stock Item's own two-choice picker, so
-    // a blank/unrecognized cell never blocks the import.
-    final category = (rawCategory.contains('fixed') || rawCategory.contains('asset'))
-        ? 'fixed_asset'
-        : 'consumable';
-
-    await StockService.addStockIn(
-      productName: name,
-      quantity: quantity,
-      receivedBy: 'Bulk Import',
-      branch: branch,
-      date: DateTime.now().toIso8601String(),
-      remarks: 'Bulk import',
-      category: category,
-    );
-
-    // Fan out to Search Products / Branch module / Fixed Assets or
-    // Consumables — same cross-module propagation a manual Inventory or
-    // New Products add already gets, so this item shows up everywhere
-    // without having to be entered twice.
-    await InventorySyncService.syncFromStockAdd(
-      name: name,
-      category: category,
-      quantity: quantity,
-      branchLabel: branch,
-      location: row['location'] ?? '',
-      addedBy: 'Bulk Import',
-    );
-  }
-
-  String? _normalizeNewProductBranch(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return null;
-    final norm = raw.trim().toLowerCase();
-    if (norm.contains('admin')) return 'CDA Admin';
-    if (norm.contains('ops')) return 'CDA Ops';
-    return null;
-  }
-
-  int? _normalizeInventoryBranch(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return null;
-    final norm = raw.trim().toLowerCase();
-    if (norm.contains('admin')) return 1;
-    if (norm.contains('ops')) return 2;
-    return int.tryParse(norm);
-  }
-
-  DateTime? _tryParseLooseDate(String raw) {
-    // Handles common spreadsheet formats like "24/07/2026" or "24-07-2026"
-    // that DateTime.tryParse (ISO-8601 only) doesn't understand.
-    final parts = raw.split(RegExp(r'[/\-.]'));
-    if (parts.length != 3) return null;
-    final numbers = parts.map((p) => int.tryParse(p.trim())).toList();
-    if (numbers.any((n) => n == null)) return null;
-    // Assume day/month/year, the common non-US spreadsheet convention.
-    try {
-      return DateTime(numbers[2]!, numbers[1]!, numbers[0]!);
-    } catch (_) {
-      return null;
-    }
   }
 
   // ── BUILD ────────────────────────────────────────────────────────────
@@ -401,19 +380,18 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
             Text(
               _isWorking
                   ? _statusLabel
-                  : 'Upload an Excel (.xlsx) or PDF file — products are added '
-                  'the moment the file finishes reading, no review step.',
+                  : 'Upload an Excel (.xlsx) or CSV (.csv) file. Column headers can be '
+                  'named however your file already has them — similar names '
+                  '(e.g. "Qty", "Stock", "Item Name") are matched automatically.',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
             if (!_isWorking) ...[
               const SizedBox(height: 8),
               Text(
-                'Put one product per row with a header row like Name, '
-                    'Category, Quantity, Branch. Only "${BulkImportService.fieldLabels[_requiredField] ?? _requiredField}" '
-                    'is required — a row missing everything else still imports '
-                    'with safe defaults; a row missing that one field is skipped '
-                    'and reported, not blocked.',
+                'Only "$_requiredFieldLabel" is required — every other column is '
+                    'optional and falls back to a safe default. '
+                    '${_engineConfig != null ? "You'll get a preview before anything is saved." : ""}',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: Colors.grey[600]),
               ),
