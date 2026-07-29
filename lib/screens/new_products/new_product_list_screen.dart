@@ -508,72 +508,101 @@ class _NewProductListScreenState extends State<NewProductListScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GridView.count(
-            crossAxisCount: 4,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 1.5,
+          // NOTE: previously a GridView.count(childAspectRatio: 1.5) — that
+          // locks card HEIGHT to a ratio of the card's WIDTH, so on wide
+          // screens the cards balloon into huge squares. Inventory's stat
+          // cards instead size themselves by their content (fixed small
+          // padding/icon/text), staying compact no matter the screen
+          // width. Two manual Rows below reproduce that same
+          // content-sized behaviour so both modules' cards match.
+          Row(
             children: [
-              _statCard(
-                icon: Icons.inventory_2_rounded,
-                label: 'Total Products',
-                value: '${stats['total']}',
-                color: _accent,
-                selected: _stockFilter == 'All' && _branchFilter == 'All',
-                onTap: () => setState(() {
-                  _stockFilter = 'All';
-                  _branchFilter = 'All';
-                }),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.inventory_2_rounded,
+                  label: 'Total Products',
+                  value: '${stats['total']}',
+                  color: _accent,
+                  selected: _stockFilter == 'All' && _branchFilter == 'All',
+                  onTap: () => setState(() {
+                    _stockFilter = 'All';
+                    _branchFilter = 'All';
+                  }),
+                ),
               ),
-              _statCard(
-                icon: Icons.check_circle_outline_rounded,
-                label: 'In Stock',
-                value: '${stats['inStock']}',
-                color: const Color(0xFF2E7D32),
-                selected: _stockFilter == NewProductService.stockIn,
-                onTap: () => _toggleStockFilter(NewProductService.stockIn),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.check_circle_outline_rounded,
+                  label: 'In Stock',
+                  value: '${stats['inStock']}',
+                  color: const Color(0xFF2E7D32),
+                  selected: _stockFilter == NewProductService.stockIn,
+                  onTap: () => _toggleStockFilter(NewProductService.stockIn),
+                ),
               ),
-              _statCard(
-                icon: Icons.warning_amber_rounded,
-                label: 'Low Stock',
-                value: '${stats['lowStock']}',
-                color: const Color(0xFFF9A825),
-                selected: _stockFilter == NewProductService.stockLow,
-                onTap: () => _toggleStockFilter(NewProductService.stockLow),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.warning_amber_rounded,
+                  label: 'Low Stock',
+                  value: '${stats['lowStock']}',
+                  color: const Color(0xFFF9A825),
+                  selected: _stockFilter == NewProductService.stockLow,
+                  onTap: () => _toggleStockFilter(NewProductService.stockLow),
+                ),
               ),
-              _statCard(
-                icon: Icons.remove_shopping_cart_rounded,
-                label: 'Out of Stock',
-                value: '${stats['outOfStock']}',
-                color: const Color(0xFFC62828),
-                selected: _stockFilter == NewProductService.stockOutOfStock,
-                onTap: () =>
-                    _toggleStockFilter(NewProductService.stockOutOfStock),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.remove_shopping_cart_rounded,
+                  label: 'Out of Stock',
+                  value: '${stats['outOfStock']}',
+                  color: const Color(0xFFC62828),
+                  selected: _stockFilter == NewProductService.stockOutOfStock,
+                  onTap: () =>
+                      _toggleStockFilter(NewProductService.stockOutOfStock),
+                ),
               ),
-              _statCard(
-                icon: Icons.apartment_rounded,
-                label: 'CDA Admin',
-                value: '${stats['cdaAdmin']}',
-                color: const Color(0xFF1976D2),
-                selected: _branchFilter == 'CDA Admin',
-                onTap: () => _toggleBranchFilter('CDA Admin'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _statCard(
+                  icon: Icons.apartment_rounded,
+                  label: 'CDA Admin',
+                  value: '${stats['cdaAdmin']}',
+                  color: const Color(0xFF1976D2),
+                  selected: _branchFilter == 'CDA Admin',
+                  onTap: () => _toggleBranchFilter('CDA Admin'),
+                ),
               ),
-              _statCard(
-                icon: Icons.store_rounded,
-                label: 'CDA Ops',
-                value: '${stats['cdaOps']}',
-                color: const Color(0xFF7B5EA7),
-                selected: _branchFilter == 'CDA Ops',
-                onTap: () => _toggleBranchFilter('CDA Ops'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.store_rounded,
+                  label: 'CDA Ops',
+                  value: '${stats['cdaOps']}',
+                  color: const Color(0xFF7B5EA7),
+                  selected: _branchFilter == 'CDA Ops',
+                  onTap: () => _toggleBranchFilter('CDA Ops'),
+                ),
               ),
-              _statCard(
-                icon: Icons.calendar_month_rounded,
-                label: 'Added This Month',
-                value: '${stats['addedThisMonth']}',
-                color: const Color(0xFF00ACC1),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.calendar_month_rounded,
+                  label: 'Added This Month',
+                  value: '${stats['addedThisMonth']}',
+                  color: const Color(0xFF00ACC1),
+                ),
               ),
+              const SizedBox(width: 8),
+              // Empty spacer keeps this row's cards the same width as the
+              // 4-card row above, instead of stretching to fill 3-across.
+              const Expanded(child: SizedBox.shrink()),
             ],
           ),
           const SizedBox(height: 18),
@@ -621,9 +650,12 @@ class _NewProductListScreenState extends State<NewProductListScreen>
     bool selected = false,
     VoidCallback? onTap,
   }) {
+    // Content-sized (fixed padding/icon/text, no aspect-ratio or fill
+    // constraint) so height stays constant no matter the screen width —
+    // matches Inventory dashboard's _statCard sizing.
     final card = AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: BoxDecoration(
         color: selected
             ? (color == Colors.white ? Colors.white : color).withValues(alpha: 0.28)
@@ -637,17 +669,17 @@ class _NewProductListScreenState extends State<NewProductListScreen>
         ),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color == Colors.white ? Colors.white70 : color, size: 15),
-          const SizedBox(height: 2),
+          Icon(icon, color: color == Colors.white ? Colors.white70 : color, size: 18),
+          const SizedBox(height: 4),
           Text(value,
               style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                  color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17)),
           Text(label,
-              style: const TextStyle(color: Colors.white60, fontSize: 8),
-              textAlign: TextAlign.center,
-              maxLines: 2,
+              style: const TextStyle(color: Colors.white60, fontSize: 9),
+              maxLines: 1,
               overflow: TextOverflow.ellipsis),
         ],
       ),

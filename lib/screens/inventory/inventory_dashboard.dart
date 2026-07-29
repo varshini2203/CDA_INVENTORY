@@ -1,6 +1,7 @@
 // lib/screens/inventory/inventory_dashboard.dart
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // 🆕 for created/updated timestamps in View sheet
 import '../../models/inventory_model.dart';
 import '../../services/inventory_service.dart';
 import 'add_product_screen.dart';
@@ -686,6 +687,249 @@ class _InventoryDashboardState extends State<InventoryDashboard>
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🆕 NAVIGATION HELPERS
+  // Centralised so the list card, grid card and card-body tap all behave
+  // identically, and every route reloads the list exactly once when it pops.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Future<void> _openEdit(InventoryItem item) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProductScreen(product: item),
+        settings: const RouteSettings(name: 'Edit Product'),
+      ),
+    );
+    if (mounted) _loadInventoryOnce();
+  }
+
+  /// 🆕 VIEW — read-only details, same role as Fixed Assets' "View" button.
+  ///
+  /// Implemented as a self-contained bottom sheet so it has zero dependency
+  /// on ProductDetailsScreen's constructor signature. If you'd rather push
+  /// your existing details page, replace the whole body of this method with:
+  ///
+  ///   await Navigator.push(
+  ///     context,
+  ///     MaterialPageRoute(
+  ///       builder: (_) => ProductDetailsScreen(product: item),
+  ///       settings: const RouteSettings(name: 'Product Details'),
+  ///     ),
+  ///   );
+  ///   if (mounted) _loadInventoryOnce();
+  ///
+  /// …and add `import 'product_details_screen.dart';` at the top.
+  Future<void> _openDetails(InventoryItem item) async {
+    final color = _categoryColor(item.category);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Grab handle
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // Header: icon + name + qty pill
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(_categoryIcon(item.category),
+                          color: color, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: kNavy),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _qtyColor(item.quantity),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Qty ${item.quantity}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _stockStatusChip(item.quantity),
+                const SizedBox(height: 18),
+                Divider(height: 1, color: Colors.grey.shade200),
+                const SizedBox(height: 16),
+
+                _detailRow(Icons.category_rounded, 'Category', item.category),
+                _detailRow(
+                  Icons.business_rounded,
+                  'Branch',
+                  item.branch == 1
+                      ? 'CDA Admin'
+                      : item.branch == 2
+                      ? 'CDA Ops'
+                      : 'Unassigned',
+                ),
+                _detailRow(Icons.location_on_outlined, 'Location',
+                    item.location.isEmpty ? '—' : item.location),
+                _detailRow(
+                    Icons.person_outline,
+                    'Added by',
+                    (item.addedBy ?? '').trim().isEmpty
+                        ? '—'
+                        : item.addedBy!.trim()),
+                _detailRow(Icons.notes_rounded, 'Description',
+                    item.description.isEmpty ? '—' : item.description),
+                _detailRow(Icons.event_available_rounded, 'Created',
+                    _fmtDate(item.createdAt)),
+                _detailRow(Icons.update_rounded, 'Last updated',
+                    _fmtDate(item.updatedAt)),
+
+                const SizedBox(height: 20),
+
+                // Footer actions inside the sheet
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: kCoral,
+                          side: BorderSide(color: kCoral.withOpacity(0.4)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(sheetCtx);
+                          _confirmDelete(item);
+                        },
+                        icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                        label: const Text('Remove',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kTeal,
+                          foregroundColor: kNavy,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(sheetCtx);
+                          _openEdit(item);
+                        },
+                        icon: const Icon(Icons.edit_rounded, size: 16),
+                        label: const Text('Edit Item',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _fmtDate(DateTime? ts) =>
+      ts == null ? '—' : DateFormat('dd MMM yyyy, hh:mm a').format(ts);
+
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: Colors.grey.shade500),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 96,
+            child: Text(label,
+                style:
+                TextStyle(fontSize: 12.5, color: Colors.grey.shade500)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: kNavy)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stockStatusChip(int qty) {
+    late final String label;
+    late final Color c;
+    if (qty == 0) {
+      label = 'Out of Stock';
+      c = kCoral;
+    } else if (qty <= 2) {
+      label = 'Low Stock';
+      c = kAmber;
+    } else {
+      label = 'In Stock';
+      c = kGreen;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: c.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.withOpacity(0.35)),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w700, color: c)),
+    );
+  }
+
   // ── Stats ──────────────────────────────────────────────────────────────────
   int get _totalItems => inventory.length;
   int get _totalQuantity =>
@@ -724,6 +968,9 @@ class _InventoryDashboardState extends State<InventoryDashboard>
                 SliverToBoxAdapter(child: _buildCategoryChips()),
                 SliverToBoxAdapter(child: _buildToolbar()),
                 _buildInventoryList(),
+                // Breathing room so the FAB never covers the last card's
+                // new View/Edit/Remove footer.
+                const SliverToBoxAdapter(child: SizedBox(height: 90)),
               ] else
                 const SliverFillRemaining(
                   child: Center(child: CircularProgressIndicator(color: kTeal)),
@@ -1303,7 +1550,8 @@ class _InventoryDashboardState extends State<InventoryDashboard>
             crossAxisCount: 2,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 1.1,
+            // 🆕 was 1.1 — taller now that each card has a 3-button footer.
+            childAspectRatio: 0.92,
           ),
           delegate: SliverChildBuilderDelegate(
                 (_, i) => _buildGridCard(filteredInventory[i]),
@@ -1324,143 +1572,218 @@ class _InventoryDashboardState extends State<InventoryDashboard>
     );
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🆕 CARD ACTION BUTTON (View / Edit / Remove) — Fixed Assets style
+  // Tinted pill with icon + label, equal width, sitting in the card footer.
+  // `iconOnly` drops the label for the narrow grid cards.
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _cardActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+    bool iconOnly = false,
+  }) {
+    return Expanded(
+      child: Material(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(9),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: color.withOpacity(0.28)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 14, color: color),
+                if (!iconOnly) ...[
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: color),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── LIST CARD ──────────────────────────────────────────────────────────────
   Widget _buildListCard(InventoryItem item) {
     final color = _categoryColor(item.category);
     final qty = item.quantity;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Material(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         elevation: 0,
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => EditProductScreen(product: item),
-                settings: const RouteSettings(name: 'Edit Product'),
-              ),
-            );
-            if (mounted) _loadInventoryOnce();
-          },
+          // 🆕 Tapping the card body now opens the read-only View (matching
+          // Fixed Assets). Edit / Remove stay as explicit footer buttons.
+          onTap: () => _openDetails(item),
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: Colors.grey.shade100),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2)),
               ],
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Left icon + qty
-                Container(
-                  width: 56,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(14),
-                      bottomLeft: Radius.circular(14),
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Icon(_categoryIcon(item.category), color: color, size: 22),
-                      const SizedBox(height: 4),
+                      // Left icon + qty strip
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        width: 56,
                         decoration: BoxDecoration(
-                          color: _qtyColor(qty),
-                          borderRadius: BorderRadius.circular(8),
+                          color: color.withOpacity(0.12),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(14),
+                          ),
                         ),
-                        child: Text("$qty",
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(_categoryIcon(item.category),
+                                color: color, size: 22),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: _qtyColor(qty),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text("$qty",
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700)),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Content
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: kNavy),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  _miniTag(item.category, color),
+                                  if (selectedBranch == 0 &&
+                                      item.branch != 0) ...[
+                                    const SizedBox(width: 6),
+                                    _miniTag(item.branch == 1 ? 'B1' : 'B2',
+                                        kPurple),
+                                  ],
+                                  const SizedBox(width: 6),
+                                  if (item.location.isNotEmpty)
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.location_on_outlined,
+                                              size: 11,
+                                              color: Colors.grey[500]),
+                                          const SizedBox(width: 2),
+                                          Expanded(
+                                            child: Text(item.location,
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey[600]),
+                                                overflow:
+                                                TextOverflow.ellipsis),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              if (item.description.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(item.description,
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey[500]),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
 
-                // Content
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.name,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: kNavy),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            _miniTag(item.category, color),
-                            if (selectedBranch == 0 && item.branch != 0) ...[
-                              const SizedBox(width: 6),
-                              _miniTag(item.branch == 1 ? 'B1' : 'B2', kPurple),
-                            ],
-                            const SizedBox(width: 6),
-                            if (item.location.isNotEmpty)
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.location_on_outlined, size: 11, color: Colors.grey[500]),
-                                    const SizedBox(width: 2),
-                                    Expanded(
-                                      child: Text(item.location,
-                                          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                                          overflow: TextOverflow.ellipsis),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                        if (item.description.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(item.description,
-                                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
+                Divider(height: 1, thickness: 1, color: Colors.grey.shade100),
 
-                // Actions
-                Column(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_rounded, size: 18, color: kAmber),
-                      onPressed: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => EditProductScreen(product: item),
-                            settings: const RouteSettings(name: 'Edit Product'),
-                          ),
-                        );
-                        if (mounted) _loadInventoryOnce();
-                      },
-                      tooltip: "Edit",
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_rounded, size: 18, color: kCoral),
-                      onPressed: () => _confirmDelete(item),
-                      tooltip: "Delete",
-                    ),
-                  ],
+                // 🆕 FOOTER ACTIONS — View / Edit / Remove
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                  child: Row(
+                    children: [
+                      _cardActionButton(
+                        icon: Icons.visibility_outlined,
+                        label: 'View',
+                        color: kNavy,
+                        onTap: () => _openDetails(item),
+                      ),
+                      const SizedBox(width: 8),
+                      _cardActionButton(
+                        icon: Icons.edit_rounded,
+                        label: 'Edit',
+                        color: kAmber,
+                        onTap: () => _openEdit(item),
+                      ),
+                      const SizedBox(width: 8),
+                      _cardActionButton(
+                        icon: Icons.delete_outline_rounded,
+                        label: 'Remove',
+                        color: kCoral,
+                        onTap: () => _confirmDelete(item),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -1480,16 +1803,8 @@ class _InventoryDashboardState extends State<InventoryDashboard>
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => EditProductScreen(product: item),
-              settings: const RouteSettings(name: 'Edit Product'),
-            ),
-          );
-          if (mounted) _loadInventoryOnce();
-        },
+        // 🆕 tap = View
+        onTap: () => _openDetails(item),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
@@ -1537,43 +1852,32 @@ class _InventoryDashboardState extends State<InventoryDashboard>
                 _miniTag(item.branch == 1 ? 'B1' : 'B2', kPurple),
               ],
               const Spacer(),
+
+              // 🆕 FOOTER ACTIONS — icon-only (no room for labels here)
               Row(
                 children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => EditProductScreen(product: item),
-                            settings: const RouteSettings(name: 'Edit Product'),
-                          ),
-                        );
-                        if (mounted) _loadInventoryOnce();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: kAmber.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.edit_rounded, size: 16, color: kAmber),
-                      ),
-                    ),
+                  _cardActionButton(
+                    icon: Icons.visibility_outlined,
+                    label: 'View',
+                    color: kNavy,
+                    iconOnly: true,
+                    onTap: () => _openDetails(item),
                   ),
                   const SizedBox(width: 6),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _confirmDelete(item),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: kCoral.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.delete_rounded, size: 16, color: kCoral),
-                      ),
-                    ),
+                  _cardActionButton(
+                    icon: Icons.edit_rounded,
+                    label: 'Edit',
+                    color: kAmber,
+                    iconOnly: true,
+                    onTap: () => _openEdit(item),
+                  ),
+                  const SizedBox(width: 6),
+                  _cardActionButton(
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Remove',
+                    color: kCoral,
+                    iconOnly: true,
+                    onTap: () => _confirmDelete(item),
                   ),
                 ],
               ),

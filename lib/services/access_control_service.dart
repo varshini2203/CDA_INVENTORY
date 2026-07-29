@@ -34,6 +34,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/app_access_models.dart';
 import 'activity_log_service.dart';
+import 'gamification_service.dart';
 
 /// Thrown by [AccessControlService.onUserLoggedIn] when the signed-in
 /// Firebase Auth account belongs to an employee the admin has removed.
@@ -233,6 +234,21 @@ class AccessControlService {
         );
       }
     }
+
+    // Ensure every authenticated user has a gamification profile,
+    // right here — the single choke point every login path (Admin
+    // login, Employee login, and the splash-screen auto-login for an
+    // already-signed-in session) already passes through. This means a
+    // profile is created the moment someone logs in, without them ever
+    // needing to open the Gamification tab. Best-effort: gamification
+    // is a secondary feature, so a failure here must never block or
+    // fail the actual login.
+    try {
+      await GamificationService.ensureProfile(
+        name: name,
+        branch: (merged['branch'] as String?) ?? '',
+      );
+    } catch (_) {}
 
     return AppUserAccess.fromMap(uid, merged);
   }

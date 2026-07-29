@@ -98,6 +98,15 @@ class ParsedImportRow {
   /// Kept so the preview screen can show/edit the original text.
   final Map<String, String> rawData;
 
+  /// Data for every column in the uploaded file that did NOT match any of
+  /// the module's configured field aliases, keyed by a Firestore-safe
+  /// camelCase slug derived from the raw header (e.g. "Serial No" ->
+  /// "serialNo"). Nothing from the file is ever silently dropped: a
+  /// recognized column ends up in [values]; anything else ends up here and
+  /// is written to Firestore under an `extraFields` map by
+  /// `DynamicBulkImportEngine`, instead of being ignored.
+  final Map<String, dynamic> extraFields;
+
   const ParsedImportRow({
     required this.sourceRowNumber,
     required this.values,
@@ -105,6 +114,7 @@ class ParsedImportRow {
     required this.errors,
     required this.warnings,
     required this.rawData,
+    this.extraFields = const {},
   });
 
   ParsedImportRow copyWithValues(Map<String, dynamic> newValues) =>
@@ -115,6 +125,7 @@ class ParsedImportRow {
         errors: errors,
         warnings: warnings,
         rawData: rawData,
+        extraFields: extraFields,
       );
 }
 
@@ -127,8 +138,12 @@ class ImportParseResult {
   /// recognized (directly or via alias).
   final Map<String, String> recognizedHeaders;
 
-  /// raw header text that didn't match any configured field — shown to the
-  /// user as "these columns were ignored", never blocks the import.
+  /// raw header text that didn't match any configured field. These are no
+  /// longer dropped — every row's cell data for these columns is preserved
+  /// in [ParsedImportRow.extraFields] and written to Firestore under an
+  /// `extraFields` map by the engine. Surfaced here purely so the preview
+  /// screen can show the user which columns were auto-mapped vs. saved as
+  /// custom fields; never blocks the import.
   final List<String> unrecognizedHeaders;
 
   /// One entry per non-empty data row, in file order.

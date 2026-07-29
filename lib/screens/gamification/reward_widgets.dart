@@ -8,6 +8,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../models/gamification_models.dart';
+import 'dashboard_fun_widgets.dart';
 
 // ── Design tokens ────────────────────────────────────────────────
 class GKColors {
@@ -259,14 +260,19 @@ class XPCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: GKColors.xpGradient),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [BoxShadow(color: GKColors.teal.withOpacity(0.4), blurRadius: 12)],
+              PulseScale(
+                minScale: 0.92,
+                maxScale: 1.08,
+                period: const Duration(milliseconds: 1400),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: GKColors.xpGradient),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [BoxShadow(color: GKColors.teal.withOpacity(0.4), blurRadius: 12)],
+                  ),
+                  child: const Icon(Icons.star_rounded, color: Colors.white, size: 22),
                 ),
-                child: const Icon(Icons.star_rounded, color: Colors.white, size: 22),
               ),
               const SizedBox(width: 12),
               Text('Level $level',
@@ -304,14 +310,18 @@ class StreakCard extends StatelessWidget {
       gradientColors: [GKColors.coral.withOpacity(0.18), GKColors.surface],
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: GKColors.streakGradient),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [BoxShadow(color: GKColors.coral.withOpacity(0.4), blurRadius: 12)],
+          WiggleIcon(
+            angle: 0.16,
+            period: const Duration(milliseconds: 900),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: GKColors.streakGradient),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [BoxShadow(color: GKColors.coral.withOpacity(0.4), blurRadius: 12)],
+              ),
+              child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 22),
             ),
-            child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -365,7 +375,11 @@ class StatTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 22),
+          WiggleIcon(
+            angle: 0.1,
+            period: const Duration(milliseconds: 1700),
+            child: Icon(icon, color: color, size: 22),
+          ),
           const SizedBox(height: 10),
           Text(value,
               style: const TextStyle(

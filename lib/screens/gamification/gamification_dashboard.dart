@@ -6,6 +6,7 @@ import '../../models/gamification_models.dart';
 import '../../services/auth_service.dart';
 import '../../services/gamification_service.dart';
 import 'reward_widgets.dart';
+import 'dashboard_fun_widgets.dart';
 import 'achievement_screen.dart';
 import 'mission_screen.dart';
 import 'leaderboard_screen.dart';
@@ -51,30 +52,46 @@ class _GamificationDashboardState extends State<GamificationDashboard> {
       appBar: AppBar(
         backgroundColor: GKColors.navy,
         elevation: 0,
-        title: const Text('Staff Rewards',
-            style: TextStyle(color: GKColors.textPrimary, fontWeight: FontWeight.w800)),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Staff Rewards',
+                style: TextStyle(color: GKColors.textPrimary, fontWeight: FontWeight.w800)),
+            const SizedBox(width: 8),
+            const WiggleIcon(
+              angle: 0.35,
+              period: Duration(milliseconds: 1100),
+              child: Text('🏆', style: TextStyle(fontSize: 18)),
+            ),
+          ],
+        ),
         iconTheme: const IconThemeData(color: GKColors.textPrimary),
       ),
-      body: _initializing
-          ? const Center(child: CircularProgressIndicator(color: GKColors.teal))
-          : StreamBuilder<GamificationProfile>(
-        stream: GamificationService.watchProfile(),
-        builder: (context, profileSnap) {
-          final profile = profileSnap.data ?? GamificationProfile.empty('');
-          return StreamBuilder<DailyMissionSet>(
-            stream: GamificationService.watchTodayMissions(),
-            builder: (context, missionSnap) {
-              final missions = missionSnap.data?.missions ?? const <Mission>[];
-              return StreamBuilder<List<RewardLogEntry>>(
-                stream: GamificationService.watchRecentActivity(limit: 6),
-                builder: (context, activitySnap) {
-                  final activity = activitySnap.data ?? const <RewardLogEntry>[];
-                  return _buildBody(context, profile, missions, activity);
+      body: Stack(
+        children: [
+          const Positioned.fill(child: ConfettiDrift()),
+          _initializing
+              ? const Center(child: CircularProgressIndicator(color: GKColors.teal))
+              : StreamBuilder<GamificationProfile>(
+            stream: GamificationService.watchProfile(),
+            builder: (context, profileSnap) {
+              final profile = profileSnap.data ?? GamificationProfile.empty('');
+              return StreamBuilder<DailyMissionSet>(
+                stream: GamificationService.watchTodayMissions(),
+                builder: (context, missionSnap) {
+                  final missions = missionSnap.data?.missions ?? const <Mission>[];
+                  return StreamBuilder<List<RewardLogEntry>>(
+                    stream: GamificationService.watchRecentActivity(limit: 6),
+                    builder: (context, activitySnap) {
+                      final activity = activitySnap.data ?? const <RewardLogEntry>[];
+                      return _buildBody(context, profile, missions, activity);
+                    },
+                  );
                 },
               );
             },
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -102,16 +119,27 @@ class _GamificationDashboardState extends State<GamificationDashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 FadeScaleIn(
-                  child: Text('Welcome back,',
+                  child: Text(pickFunnyGreeting(),
                       style: const TextStyle(color: GKColors.textSecondary, fontSize: 14)),
                 ),
                 FadeScaleIn(
                   delayMs: 60,
-                  child: Text(profile.name,
-                      style: const TextStyle(
-                          color: GKColors.textPrimary,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(profile.name,
+                          style: const TextStyle(
+                              color: GKColors.textPrimary,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900)),
+                      const SizedBox(width: 8),
+                      const WiggleIcon(
+                        angle: 0.5,
+                        period: Duration(milliseconds: 700),
+                        child: Text('👋', style: TextStyle(fontSize: 22)),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 20),
 
@@ -137,7 +165,7 @@ class _GamificationDashboardState extends State<GamificationDashboard> {
                 FadeScaleIn(
                   delayMs: 200,
                   child: GKSectionHeader(
-                    title: 'Overview',
+                    title: '📊 Overview',
                   ),
                 ),
                 FadeScaleIn(
@@ -187,7 +215,7 @@ class _GamificationDashboardState extends State<GamificationDashboard> {
                 FadeScaleIn(
                   delayMs: 260,
                   child: GKSectionHeader(
-                    title: "Today's Missions",
+                    title: "🎯 Today's Missions",
                     trailing: TextButton(
                       onPressed: () => _push(context, 'Missions', const MissionScreen()),
                       child: const Text('View all', style: TextStyle(color: GKColors.teal)),
@@ -195,7 +223,7 @@ class _GamificationDashboardState extends State<GamificationDashboard> {
                   ),
                 ),
                 if (missions.isEmpty)
-                  const _EmptyHint(text: 'No missions yet — pull to refresh.')
+                  const _EmptyHint(text: 'No missions yet — the hamsters are still loading them 🐹')
                 else
                   ...List.generate(missions.length, (i) {
                     return Padding(
@@ -211,7 +239,7 @@ class _GamificationDashboardState extends State<GamificationDashboard> {
                 FadeScaleIn(
                   delayMs: 320,
                   child: GKSectionHeader(
-                    title: 'Recent Activity Rewards',
+                    title: '📜 Recent Activity Rewards',
                     trailing: TextButton(
                       onPressed: () => _push(context, 'Achievements', const AchievementScreen()),
                       child: const Text('Badges', style: TextStyle(color: GKColors.teal)),
@@ -222,7 +250,7 @@ class _GamificationDashboardState extends State<GamificationDashboard> {
                   delayMs: 340,
                   child: GlassCard(
                     child: activity.isEmpty
-                        ? const _EmptyHint(text: 'No activity yet today. Go earn some XP!')
+                        ? const _EmptyHint(text: "Crickets 🦗 Go add a product and change that.")
                         : Column(
                       children: activity
                           .map((e) => RewardActivityTile(entry: e))
@@ -290,17 +318,23 @@ class _NavCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
+    return BounceTap(
       onTap: onTap,
-      gradientColors: [color.withOpacity(0.22), GKColors.surface],
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 26),
-          const SizedBox(height: 8),
-          Text(label,
-              style: const TextStyle(
-                  color: GKColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
-        ],
+      child: GlassCard(
+        gradientColors: [color.withOpacity(0.22), GKColors.surface],
+        child: Column(
+          children: [
+            FloatBob(
+              distance: 4,
+              period: const Duration(milliseconds: 1800),
+              child: Icon(icon, color: color, size: 26),
+            ),
+            const SizedBox(height: 8),
+            Text(label,
+                style: const TextStyle(
+                    color: GKColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+          ],
+        ),
       ),
     );
   }

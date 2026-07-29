@@ -9,12 +9,18 @@
 //
 // Flow for Inventory / New Products (the modules migrated onto the new
 // Dynamic Bulk Import Engine — see services/bulk_import/):
-//   pick a .xlsx or .csv file
+//   pick a .xlsx, .csv or .pdf file
 //     -> DynamicImportParser.parse()            (dynamic header/alias
 //                                                 matching, per-module
 //                                                 config, no fixed
 //                                                 template, only required
-//                                                 fields validated)
+//                                                 fields validated — same
+//                                                 code path for all three
+//                                                 file types; PDF just
+//                                                 arrives at rows via
+//                                                 pdf_table_extractor.dart
+//                                                 instead of the `excel`
+//                                                 package)
 //     -> BulkImportPreviewScreen                (editable-status preview,
 //                                                 duplicate detection +
 //                                                 Skip/Update/Increase
@@ -33,8 +39,11 @@
 // + `InventorySyncService.syncFromStockAdd`, exactly like before. This is
 // a natural candidate to migrate onto the full engine in a follow-up.
 //
-// PDF import has been removed — only Excel (.xlsx) and CSV (.csv) files
-// are accepted, for every target.
+// PDF support: text-based, table-formatted PDFs only. A scanned/
+// image-only PDF parses to zero rows with a dedicated warning message
+// (see pdf_table_extractor.dart's `ScannedPdfException`), which surfaces
+// through the same "Nothing to import" dialog every other empty-file case
+// already uses below — no separate PDF UI flow.
 
 import 'dart:typed_data';
 
@@ -63,7 +72,8 @@ class BulkImportScreen extends StatefulWidget {
 
 class _BulkImportScreenState extends State<BulkImportScreen> {
   static const _navy = Color(0xFF0A1628);
-  static const _accent = Color(0xFF7B5EA7);
+  static const _teal = Color(0xFF00D4AA);
+  static const _surface = Color(0xFFF4F6FA);
 
   bool _isWorking = false;
   String _statusLabel = '';
@@ -105,7 +115,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
   Future<void> _pickAndImport() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls', 'csv'],
+      allowedExtensions: ['xlsx', 'xls', 'csv', 'pdf'],
     );
     if (result == null || result.files.isEmpty) return;
 
@@ -354,10 +364,11 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: _surface,
       appBar: AppBar(
         backgroundColor: _navy,
         foregroundColor: Colors.white,
+        elevation: 0,
         title: Text(_title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
       ),
       body: _buildPicker(),
@@ -366,70 +377,117 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
 
   Widget _buildPicker() {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _isWorking ? Icons.cloud_upload_rounded : Icons.upload_file_rounded,
-              size: 56,
-              color: _accent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 16, offset: const Offset(0, 6)),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              _isWorking
-                  ? _statusLabel
-                  : 'Upload an Excel (.xlsx) or CSV (.csv) file. Column headers can be '
-                  'named however your file already has them — similar names '
-                  '(e.g. "Qty", "Stock", "Item Name") are matched automatically.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-            if (!_isWorking) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Only "$_requiredFieldLabel" is required — every other column is '
-                    'optional and falls back to a safe default. '
-                    '${_engineConfig != null ? "You'll get a preview before anything is saved." : ""}',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Default branch:', style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 8),
-                  DropdownButton<String>(
-                    value: _defaultBranch,
-                    isDense: true,
-                    items: const [
-                      DropdownMenuItem(value: 'CDA Admin', child: Text('CDA Admin')),
-                      DropdownMenuItem(value: 'CDA Ops', child: Text('CDA Ops')),
-                    ],
-                    onChanged: (v) => setState(() => _defaultBranch = v ?? 'CDA Admin'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: _teal.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    _isWorking ? Icons.cloud_upload_rounded : Icons.upload_file_rounded,
+                    size: 34,
+                    color: _teal,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  _isWorking
+                      ? _statusLabel
+                      : 'Upload an Excel (.xlsx), CSV (.csv), or text-based PDF (.pdf) '
+                      'report. Column headers can be named however your file already '
+                      'has them — similar names (e.g. "Qty", "Stock", "Item Name") '
+                      'are matched automatically. Scanned/image PDFs aren\'t supported.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _navy, height: 1.4),
+                ),
+                if (!_isWorking) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Only "$_requiredFieldLabel" is required — every other column is '
+                        'optional and falls back to a safe default. '
+                        '${_engineConfig != null ? "You'll get a preview before anything is saved." : ""}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600, height: 1.4),
+                  ),
+                  const SizedBox(height: 22),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _surface,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.business_rounded, size: 16, color: _navy),
+                            const SizedBox(width: 8),
+                            const Text('Default branch',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _navy)),
+                            const SizedBox(width: 10),
+                            DropdownButton<String>(
+                              value: _defaultBranch,
+                              isDense: true,
+                              underline: const SizedBox.shrink(),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _teal),
+                              items: const [
+                                DropdownMenuItem(value: 'CDA Admin', child: Text('CDA Admin')),
+                                DropdownMenuItem(value: 'CDA Ops', child: Text('CDA Ops')),
+                              ],
+                              onChanged: (v) => setState(() => _defaultBranch = v ?? 'CDA Admin'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Used only for rows whose Branch cell is blank or unrecognized.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
-              ),
-              Text(
-                'Used only for rows whose Branch cell is blank or unrecognized.',
-                style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
-              ),
-            ],
-            const SizedBox(height: 24),
-            _isWorking
-                ? const CircularProgressIndicator()
-                : FilledButton.icon(
-              onPressed: _pickAndImport,
-              icon: const Icon(Icons.folder_open_rounded),
-              label: const Text('Choose file & import'),
-              style: FilledButton.styleFrom(
-                backgroundColor: _navy,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              ),
+                const SizedBox(height: 24),
+                _isWorking
+                    ? const CircularProgressIndicator(color: _teal)
+                    : SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _pickAndImport,
+                    icon: const Icon(Icons.folder_open_rounded),
+                    label: const Text('Choose file & import',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _navy,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

@@ -11,10 +11,21 @@
 // then commits via `DynamicBulkImportEngine.commit` only once the user
 // confirms — nothing is written to Firestore before this screen's "Import"
 // button is pressed.
+//
+// ── Theme note ────────────────────────────────────────────────────────
+// Every color on this screen is set explicitly (via `AppColors` + the
+// local constants below) instead of relying on inherited `Theme`/`Card`
+// defaults. Text widgets with no explicit color pull whatever the
+// ambient Theme's default text color is — invisible if this screen is
+// ever pushed under a dark ThemeData while its own background stays
+// light (or vice versa). Explicit colors make this screen look the same
+// regardless of what theme the rest of the app is using at the time.
 
 import 'package:flutter/material.dart';
 
+import '../../shared/inventory_ui.dart';
 import '../../services/bulk_import/dynamic_bulk_import_engine.dart';
+import '../../services/bulk_import/dynamic_import_parser.dart';
 import '../../services/bulk_import/import_field_config.dart';
 import '../../services/bulk_import/module_import_configs.dart';
 
@@ -38,11 +49,21 @@ class BulkImportPreviewScreen extends StatefulWidget {
 }
 
 class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
-  static const _navy = Color(0xFF0A1628);
-  static const _accent = Color(0xFF7B5EA7);
+  // ── Explicit design tokens for this screen ──────────────────────────
+  // Reuses the app's shared AppColors (navy/teal/coral/amber/green) so
+  // this screen matches the Purchases/Bills/etc. visual language, plus a
+  // couple of local shades for text hierarchy on white cards.
+  static const _navy = AppColors.navy;
+  static const _accent = AppColors.teal;
+  static const _cardBg = Colors.white;
+  static const _textPrimary = AppColors.navy;
+  static const _textSecondary = Color(0xFF6B7686);
+  static const _border = Color(0xFFE3E8EF);
 
   bool _loadingDuplicates = true;
   bool _isImporting = false;
+  int _fanOutDone = 0;
+  int _fanOutTotal = 0;
   Set<String> _existingKeys = {};
   DuplicatePreview? _duplicatePreview;
   DuplicateAction _duplicateAction = DuplicateAction.update;
@@ -86,13 +107,24 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
   }
 
   Future<void> _confirmImport() async {
-    setState(() => _isImporting = true);
+    setState(() {
+      _isImporting = true;
+      _fanOutDone = 0;
+      _fanOutTotal = 0;
+    });
 
     final result = await DynamicBulkImportEngine.commit(
       config: widget.config,
       rows: widget.parseResult.validRows,
       duplicateAction: _duplicateAction,
       importedBy: widget.importedBy,
+      onProgress: (done, total) {
+        if (!mounted) return;
+        setState(() {
+          _fanOutDone = done;
+          _fanOutTotal = total;
+        });
+      },
     );
 
     await logBulkImportSummary(
@@ -117,36 +149,43 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(result.created + result.updated > 0
-            ? 'Import complete'
-            : 'Nothing imported'),
+        backgroundColor: _cardBg,
+        title: Text(
+          result.created + result.updated > 0
+              ? 'Import complete'
+              : 'Nothing imported',
+          style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w700),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('${widget.config.moduleLabel} — ${widget.fileName}',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: _textPrimary)),
               const SizedBox(height: 8),
-              Text('${result.created} created'),
-              Text('${result.updated} updated'),
-              if (result.skipped > 0) Text('${result.skipped} skipped'),
-              if (result.failed > 0) Text('${result.failed} failed'),
+              Text('${result.created} created', style: const TextStyle(color: _textPrimary)),
+              Text('${result.updated} updated', style: const TextStyle(color: _textPrimary)),
+              if (result.skipped > 0)
+                Text('${result.skipped} skipped', style: const TextStyle(color: _textPrimary)),
+              if (result.failed > 0)
+                Text('${result.failed} failed', style: const TextStyle(color: _textPrimary)),
               if (result.warnings.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 const Text('Warnings:',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                    style: TextStyle(fontWeight: FontWeight.w600, color: _textPrimary)),
                 ...result.warnings.take(10).map(
-                      (w) => Text('• $w', style: const TextStyle(fontSize: 12)),
+                      (w) => Text('• $w',
+                      style: TextStyle(fontSize: 12, color: Colors.amber.shade900)),
                 ),
               ],
               if (result.errors.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 const Text('Errors:',
-                    style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
+                    style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.coral)),
                 ...result.errors.take(10).map(
                       (e) => Text('• $e',
-                      style: const TextStyle(fontSize: 12, color: Colors.red)),
+                      style: const TextStyle(fontSize: 12, color: AppColors.coral)),
                 ),
               ],
             ],
@@ -155,7 +194,7 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
+            child: const Text('OK', style: TextStyle(color: _accent, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -166,22 +205,37 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
   Widget build(BuildContext context) {
     final parse = widget.parseResult;
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         backgroundColor: _navy,
         foregroundColor: Colors.white,
+        elevation: 0,
         title: Text('Preview — ${widget.config.moduleLabel}',
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: Colors.white)),
       ),
       body: _isImporting
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(color: _accent),
+            const SizedBox(height: 16),
+            Text(
+              _fanOutTotal > 0
+                  ? 'Syncing across modules — $_fanOutDone / $_fanOutTotal'
+                  : 'Importing…',
+              style: const TextStyle(color: _textSecondary, fontSize: 13),
+            ),
+          ],
+        ),
+      )
           : ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _buildSummaryCard(parse),
           const SizedBox(height: 12),
-          if (parse.unrecognizedHeaders.isNotEmpty)
-            _buildUnrecognizedCard(parse),
+          if (parse.recognizedHeaders.isNotEmpty || parse.unrecognizedHeaders.isNotEmpty)
+            _buildColumnMappingCard(parse),
           const SizedBox(height: 12),
           _buildDuplicateCard(),
           const SizedBox(height: 12),
@@ -200,7 +254,11 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
             label: Text('Import ${parse.validCount} row(s)'),
             style: FilledButton.styleFrom(
               backgroundColor: _navy,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: _navy.withOpacity(0.35),
+              disabledForegroundColor: Colors.white70,
               padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
@@ -208,152 +266,204 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
     );
   }
 
+  BoxDecoration get _cardDecoration => BoxDecoration(
+    color: _cardBg,
+    borderRadius: BorderRadius.circular(14),
+    border: Border.all(color: _border),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.04),
+        blurRadius: 8,
+        offset: const Offset(0, 2),
+      ),
+    ],
+  );
+
   Widget _buildSummaryCard(ImportParseResult parse) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.fileName,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-            const SizedBox(height: 8),
-            Text('${parse.rows.length} row(s) found — '
+    return Container(
+      decoration: _cardDecoration,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.fileName,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _textPrimary)),
+          const SizedBox(height: 8),
+          Text(
+            '${parse.rows.length} row(s) found — '
                 '${parse.validCount} ready to import, '
-                '${parse.invalidCount} need attention.'),
-            if (parse.fileWarnings.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              ...parse.fileWarnings.map(
-                    (w) => Text(w, style: TextStyle(color: Colors.orange[800], fontSize: 12)),
+                '${parse.invalidCount} need attention.',
+            style: const TextStyle(color: _textPrimary),
+          ),
+          if (parse.fileWarnings.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...parse.fileWarnings.map(
+                  (w) => Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(w,
+                    style: TextStyle(color: Colors.amber.shade900, fontSize: 12)),
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildUnrecognizedCard(ImportParseResult parse) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Ignored columns',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            const SizedBox(height: 4),
-            Text(
-              'These columns didn\'t match any known field for '
-                  '${widget.config.moduleLabel} and were left out — nothing else '
-                  'is affected.',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
+  Widget _buildColumnMappingCard(ImportParseResult parse) {
+    return Container(
+      decoration: _cardDecoration,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Column mapping',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: _textPrimary)),
+          const SizedBox(height: 4),
+          Text(
+            'Every column in this file is kept — recognized columns map '
+                'to ${widget.config.moduleLabel} fields; everything else is '
+                'still saved, as a custom field on each record.',
+            style: const TextStyle(fontSize: 12, color: _textSecondary),
+          ),
+          if (parse.recognizedHeaders.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text('Mapped to known fields',
+                style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: _textSecondary)),
+            const SizedBox(height: 6),
             Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: parse.unrecognizedHeaders
-                  .map((h) => Chip(label: Text(h, style: const TextStyle(fontSize: 11))))
-                  .toList(),
+              children: parse.recognizedHeaders.entries.map((e) {
+                final label = widget.config.fieldByKey(e.value)?.label ?? e.value;
+                return Chip(
+                  backgroundColor: AppColors.green.withOpacity(0.12),
+                  side: BorderSide(color: AppColors.green.withOpacity(0.3)),
+                  label: Text('${e.key} → $label',
+                      style: const TextStyle(fontSize: 11, color: _textPrimary)),
+                );
+              }).toList(),
             ),
           ],
-        ),
+          if (parse.unrecognizedHeaders.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text('Saved as custom fields',
+                style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: _textSecondary)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: parse.unrecognizedHeaders.map((h) {
+                final slug = DynamicImportParser.slugifyHeader(h);
+                return Chip(
+                  backgroundColor: _accent.withOpacity(0.10),
+                  side: BorderSide(color: _accent.withOpacity(0.3)),
+                  label: Text('$h → extraFields.$slug',
+                      style: const TextStyle(fontSize: 11, color: _textPrimary)),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
       ),
     );
   }
 
   Widget _buildDuplicateCard() {
     if (_loadingDuplicates) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: 12),
-              Text('Checking for duplicates…'),
-            ],
-          ),
+      return Container(
+        decoration: _cardDecoration,
+        padding: const EdgeInsets.all(16),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: _accent),
+            ),
+            SizedBox(width: 12),
+            Text('Checking for duplicates…', style: TextStyle(color: _textPrimary)),
+          ],
         ),
       );
     }
 
     if (_loadError != null) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(_loadError!, style: const TextStyle(color: Colors.red)),
-        ),
+      return Container(
+        decoration: _cardDecoration,
+        padding: const EdgeInsets.all(16),
+        child: Text(_loadError!, style: const TextStyle(color: AppColors.coral)),
       );
     }
 
     final preview = _duplicatePreview!;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Duplicates',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            const SizedBox(height: 4),
-            Text(
-              preview.total == 0
-                  ? 'No duplicates found — every row will be created as a new record.'
-                  : '${preview.matchedAgainstExisting} row(s) match an existing record; '
-                  '${preview.matchedWithinFile} row(s) repeat within this file. '
-                  'Choose what to do with them:',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-            if (preview.total > 0) ...[
-              const SizedBox(height: 10),
-              ...DuplicateAction.values.map(
-                    (action) => RadioListTile<DuplicateAction>(
-                  value: action,
-                  groupValue: _duplicateAction,
-                  onChanged: (v) => setState(() => _duplicateAction = v!),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  activeColor: _accent,
-                  title: Text(action.label,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  subtitle: Text(action.description, style: const TextStyle(fontSize: 11.5)),
-                ),
+    return Container(
+      decoration: _cardDecoration,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Duplicates',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: _textPrimary)),
+          const SizedBox(height: 4),
+          Text(
+            preview.total == 0
+                ? 'No duplicates found — every row will be created as a new record.'
+                : '${preview.matchedAgainstExisting} row(s) match an existing record; '
+                '${preview.matchedWithinFile} row(s) repeat within this file. '
+                'Choose what to do with them:',
+            style: const TextStyle(fontSize: 12, color: _textSecondary),
+          ),
+          if (preview.total > 0) ...[
+            const SizedBox(height: 10),
+            ...DuplicateAction.values.map(
+                  (action) => RadioListTile<DuplicateAction>(
+                value: action,
+                groupValue: _duplicateAction,
+                onChanged: (v) => setState(() => _duplicateAction = v!),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                activeColor: _accent,
+                title: Text(action.label,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600, color: _textPrimary)),
+                subtitle: Text(action.description,
+                    style: const TextStyle(fontSize: 11.5, color: _textSecondary)),
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildRowsCard(ImportParseResult parse) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Rows',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            const SizedBox(height: 8),
-            ...parse.rows.take(200).map(_buildRowTile),
-            if (parse.rows.length > 200)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'Showing the first 200 of ${parse.rows.length} rows — every row '
-                      'is still imported when you confirm.',
-                  style: TextStyle(fontSize: 11.5, color: Colors.grey[600]),
-                ),
+    return Container(
+      decoration: _cardDecoration,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Rows',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: _textPrimary)),
+          const SizedBox(height: 8),
+          ...parse.rows.take(200).map(_buildRowTile),
+          if (parse.rows.length > 200)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Showing the first 200 of ${parse.rows.length} rows — every row '
+                    'is still imported when you confirm.',
+                style: const TextStyle(fontSize: 11.5, color: _textSecondary),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -365,13 +475,13 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
     Color statusColor;
     String statusLabel;
     if (!row.isValid) {
-      statusColor = Colors.red;
+      statusColor = AppColors.coral;
       statusLabel = 'Invalid';
     } else if (isDuplicate) {
-      statusColor = Colors.orange;
+      statusColor = AppColors.amber;
       statusLabel = 'Duplicate';
     } else {
-      statusColor = Colors.green;
+      statusColor = AppColors.green;
       statusLabel = 'New';
     }
 
@@ -379,7 +489,8 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
+        color: _cardBg,
+        border: Border.all(color: _border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -390,14 +501,14 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
               Expanded(
                 child: Text(
                   title.isEmpty ? 'Row ${row.sourceRowNumber}' : title,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: _textPrimary),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
+                  color: statusColor.withOpacity(0.14),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -413,12 +524,12 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
           ),
           const SizedBox(height: 4),
           Text('Row ${row.sourceRowNumber}',
-              style: TextStyle(fontSize: 10.5, color: Colors.grey[500])),
+              style: const TextStyle(fontSize: 10.5, color: _textSecondary)),
           if (!row.isValid)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(row.errors.join(' '),
-                  style: const TextStyle(fontSize: 11.5, color: Colors.red)),
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.coral)),
             )
           else
             Padding(
@@ -435,7 +546,7 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
                     .map(
                       (f) => Text(
                     '${f.label}: ${row.values[f.key]}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                    style: const TextStyle(fontSize: 11, color: _textSecondary),
                   ),
                 )
                     .toList(),
@@ -445,7 +556,26 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(row.warnings.join(' '),
-                  style: TextStyle(fontSize: 10.5, color: Colors.orange[800])),
+                  style: TextStyle(fontSize: 10.5, color: Colors.amber.shade900)),
+            ),
+          if (row.isValid && row.extraFields.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 2,
+                children: row.extraFields.entries
+                    .map(
+                      (e) => Text(
+                    '${e.key}: ${e.value}',
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: _accent),
+                  ),
+                )
+                    .toList(),
+              ),
             ),
         ],
       ),

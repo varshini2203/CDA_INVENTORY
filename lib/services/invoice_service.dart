@@ -9,6 +9,7 @@ import 'package:cda_inventory/models/recurring_config.dart';
 import 'package:cda_inventory/models/customer_details.dart';
 import '../constants/gamification_constants.dart';
 import 'activity_log_service.dart';
+import 'gamification_service.dart';
 import 'staff_reward_service.dart';
 
 class InvoiceService {
@@ -82,6 +83,14 @@ class InvoiceService {
       module: 'Invoices',
       refId: 'invoices_${docRef.id}_add',
     );
+
+    // The Firestore add + activity log above already succeeded, so
+    // it's safe to award XP exactly once for this invoice. Best
+    // effort: a gamification hiccup must never block invoice creation.
+    try {
+      await GamificationService.recordInvoiceUploaded();
+    } catch (_) {}
+
     return invoice.copyWith(id: docRef.id);
   }
 

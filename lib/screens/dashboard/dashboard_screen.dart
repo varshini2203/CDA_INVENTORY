@@ -10,6 +10,7 @@ import 'package:cda_inventory/screens/consumables/consumable_list_screen.dart';
 import 'package:cda_inventory/screens/drone_tracking/drone_in_out_screen.dart';
 import 'package:cda_inventory/screens/drone_service/drone_service_dashboard_screen.dart';
 import 'package:cda_inventory/screens/stock_management/stock_dashboard_screen.dart';
+import 'package:cda_inventory/screens/inventory_movement/movement_dashboard_screen.dart';
 import 'package:cda_inventory/screens/purchases/purchases_menu_screen.dart';
 import 'package:cda_inventory/screens/invoices/invoice_list_screen.dart';
 import 'package:cda_inventory/screens/estimates/estimate_list_screen.dart';
@@ -106,6 +107,17 @@ const _modules = [
     'gradFrom': Color(0xFF0D2348),
     'gradTo': Color(0xFF0A1428),
     'image': 'assets/images/consumables.jpg',
+  },
+  {
+    'title': 'Inventory Movement',
+    'icon': Icons.compare_arrows_rounded,
+    'emoji': '🔀',
+    'desc': 'Transfers, in & out',
+    'tag': 'OPS',
+    'color': _blueLight,
+    'gradFrom': Color(0xFF0D2348),
+    'gradTo': Color(0xFF0A1428),
+    'image': 'assets/images/inventory_movement.png',
   },
   {
     'title': 'Drone In/Out',
@@ -217,6 +229,7 @@ const _modules = [
     'gradTo': Color(0xFF0A1428),
     'image': 'assets/images/stock history.jpg',
   },
+
   {
     'title': 'Reports',
     'icon': Icons.insert_chart_rounded,
@@ -282,6 +295,7 @@ const _drawerItems = [
   {'icon': Icons.manage_search_rounded,           'label': 'Search Products',  'key': 'Search Products'},
   {'icon': Icons.outbox_rounded,                  'label': 'Stock Out',        'key': 'Stock Out'},
   {'icon': Icons.history_rounded,                 'label': 'Stock History',    'key': 'Stock History'},
+  {'icon': Icons.compare_arrows_rounded,          'label': 'Inventory Movement', 'key': 'Inventory Movement'},
   {'icon': Icons.insert_chart_rounded,             'label': 'Reports',          'key': 'Reports'},
   {'icon': Icons.query_stats_rounded,               'label': 'Inventory Analytics', 'key': 'Inventory Analytics'},
   {'icon': Icons.emoji_events_rounded,             'label': 'Staff Rewards',    'key': 'Staff Rewards'},
@@ -330,6 +344,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'Search Products':  screen = const SearchScreen();           break;
       case 'Stock Out':        screen = const StockOutScreen();         break;
       case 'Stock History':    screen = const StockHistoryScreen();     break;
+      case 'Inventory Movement': screen = const MovementDashboardScreen(); break;
       case 'Reports':          screen = const ReportsDashboardScreen(); break;
       case 'Inventory Analytics': screen = const InventoryAnalyticsScreen(); break;
       case 'Staff Rewards':    screen = const GamificationDashboard();  break;

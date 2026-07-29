@@ -31,6 +31,8 @@
 // place bulk-import logic lives, and adding a future module never means
 // touching this file.
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'import_field_config.dart';
@@ -139,6 +141,23 @@ class DynamicBulkImportEngine {
     return 0;
   }
 
+  /// Merges a row's [ParsedImportRow.extraFields] (columns the module
+  /// didn't explicitly map) into the Firestore field map under a single
+  /// `extraFields` map field, so unmapped columns are written alongside
+  /// the mapped ones instead of being dropped. Leaves [fields] untouched
+  /// when there's nothing extra to add, so modules with no unrecognized
+  /// columns write exactly the same document shape as before this change.
+  static Map<String, dynamic> _withExtraFields(
+      Map<String, dynamic> fields,
+      Map<String, dynamic> extraFields,
+      ) {
+    if (extraFields.isEmpty) return fields;
+    return {
+      ...fields,
+      'extraFields': extraFields,
+    };
+  }
+
   /// Fetches every dedupe key already in `config.collectionPath`, WITHOUT
   /// writing anything. Public so the preview screen can flag which rows
   /// are duplicates before the user picks a `DuplicateAction`, re-using
@@ -191,6 +210,10 @@ class DynamicBulkImportEngine {
     required List<ParsedImportRow> rows,
     required DuplicateAction duplicateAction,
     String? importedBy,
+    // Called repeatedly during step 4 (cross-module fan-out) with
+    // (rowsSynced, rowsToSync) so the caller can show real progress
+    // instead of a blind spinner during large imports.
+    void Function(int done, int total)? onProgress,
   }) async {
     final total = rows.length;
     if (total == 0) {
@@ -274,7 +297,7 @@ class DynamicBulkImportEngine {
           plan[docId] = _PlannedWrite(
             docId: docId,
             existedBefore: false,
-            fields: config.buildFields(row.values),
+            fields: _withExtraFields(config.buildFields(row.values), row.extraFields),
             quantity: _quantityOf(config, row.values),
             rowIndexes: [i],
           );
@@ -287,7 +310,7 @@ class DynamicBulkImportEngine {
           // A repeat within this same file — merge into the existing plan
           // entry regardless of the chosen action, so multiple rows for
           // the same item in one file always combine sensibly.
-          alreadyPlanned.fields = config.buildFields(row.values);
+          alreadyPlanned.fields = _withExtraFields(config.buildFields(row.values), row.extraFields);
           alreadyPlanned.quantity += _quantityOf(config, row.values);
           alreadyPlanned.rowIndexes.add(i);
           outcome[i] = alreadyPlanned.existedBefore
@@ -314,7 +337,7 @@ class DynamicBulkImportEngine {
         plan[existingDocId] = _PlannedWrite(
           docId: existingDocId,
           existedBefore: true,
-          fields: config.buildFields(row.values),
+          fields: _withExtraFields(config.buildFields(row.values), row.extraFields),
           quantity: plannedQuantity,
           rowIndexes: [i],
           appliedAction: duplicateAction,
@@ -412,22 +435,54 @@ class DynamicBulkImportEngine {
     }
 
     // ── 4) Fan each successfully-written row out to other modules.
-    //       Isolated per row so one failure never blocks the rest.
+    //       Each row's fan-out (e.g. `InventorySyncService.syncFromNewProductAdd`)
+    //       does several of its own sequential Firestore writes, so running
+    //       hundreds of rows one at a time here — as this used to do — turns
+    //       a big import into a huge serial queue of network round-trips with
+    //       no feedback, which looks identical to a hang even though the main
+    //       batch write above already succeeded. Two changes fix that:
+    //         - process rows in small concurrent groups instead of one at a
+    //           time, so the wall-clock cost drops roughly by the group size
+    //         - cap each row's fan-out with a timeout, so a single stuck
+    //           downstream call (e.g. a bad query) can never wedge the whole
+    //           import forever — it's recorded as a warning and the import
+    //           still finishes.
+    // Isolated per row so one failure/timeout never blocks the rest.
     final warnings = <String>[];
-    if (config.afterWrite != null) {
-      for (final entry in successfulEntries) {
+    if (config.afterWrite != null && successfulEntries.isNotEmpty) {
+      const fanOutConcurrency = 10;
+      const fanOutTimeout = Duration(seconds: 20);
+      var fanOutDone = 0;
+
+      Future<void> runOne(_PlannedWrite entry) async {
         try {
           final fields = <String, dynamic>{...entry.fields};
           if (config.quantityFieldKey != null) {
             fields[config.quantityFieldKey!] = entry.quantity;
           }
-          await config.afterWrite!(entry.docId, fields);
+          await config.afterWrite!(entry.docId, fields).timeout(fanOutTimeout);
+        } on TimeoutException {
+          warnings.add(
+            'Row(s) ${entry.rowIndexes.map((i) => rows[i].sourceRowNumber).join(', ')}: '
+                'saved, but cross-module sync timed out and was skipped.',
+          );
         } catch (e) {
           warnings.add(
             'Row(s) ${entry.rowIndexes.map((i) => rows[i].sourceRowNumber).join(', ')}: '
                 'saved, but cross-module sync failed: $e',
           );
+        } finally {
+          fanOutDone++;
+          onProgress?.call(fanOutDone, successfulEntries.length);
         }
+      }
+
+      for (var start = 0; start < successfulEntries.length; start += fanOutConcurrency) {
+        final chunk = successfulEntries.sublist(
+          start,
+          (start + fanOutConcurrency).clamp(0, successfulEntries.length),
+        );
+        await Future.wait(chunk.map(runOne));
       }
     }
 
