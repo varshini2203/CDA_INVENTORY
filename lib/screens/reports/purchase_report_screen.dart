@@ -8,10 +8,12 @@ import 'package:cda_inventory/services/excel_export_service.dart'
     hide MonthlySummary, DroneReportRow, ReportService;
 import 'package:cda_inventory/services/pdf_export_service.dart';
 import 'package:cda_inventory/widgets/reports/report_date_range_picker.dart';
+import 'package:cda_inventory/widgets/reports/branch_filter_bar.dart';
 
 class PurchaseReportScreen extends StatefulWidget {
   final DateTimeRange initialRange;
-  const PurchaseReportScreen({super.key, required this.initialRange});
+  final String? initialBranch; // null = All Branches
+  const PurchaseReportScreen({super.key, required this.initialRange, this.initialBranch});
 
   @override
   State<PurchaseReportScreen> createState() => _PurchaseReportScreenState();
@@ -20,7 +22,10 @@ class PurchaseReportScreen extends StatefulWidget {
 class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
   late DateTimeRange _range;
   List<Purchase> _allPurchases = [];
-  List<Purchase> _rows = [];
+  List<Purchase> _rowsAll = []; // date-filtered, before branch filtering
+  String? _selectedBranch;
+  List<Purchase> get _rows =>
+      filterByBranch(_rowsAll, _selectedBranch, (r) => r.branch);
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -38,6 +43,7 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
   void initState() {
     super.initState();
     _range = widget.initialRange;
+    _selectedBranch = widget.initialBranch;
     _load();
   }
 
@@ -68,7 +74,7 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
       final all = await PurchaseService.getAllPurchases();
       setState(() {
         _allPurchases = all;
-        _rows = _filterByRange(all, _range);
+        _rowsAll = _filterByRange(all, _range);
         _loading = false;
       });
     } catch (e) {
@@ -102,7 +108,7 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
     if (picked != null) {
       setState(() {
         _range = picked;
-        _rows = _filterByRange(_allPurchases, _range);
+        _rowsAll = _filterByRange(_allPurchases, _range);
       });
     }
   }
@@ -110,8 +116,10 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
   Future<void> _export({required bool pdf}) async {
     setState(() => _busy = true);
     try {
+      final branchSuffix =
+      _selectedBranch == null ? '' : '_${branchDisplayName(_selectedBranch).replaceAll(' ', '')}';
       final label =
-          '${DateFormat('ddMMMyyyy').format(_range.start)}_to_${DateFormat('ddMMMyyyy').format(_range.end)}';
+          '${DateFormat('ddMMMyyyy').format(_range.start)}_to_${DateFormat('ddMMMyyyy').format(_range.end)}$branchSuffix';
       if (pdf) {
         final bytes = await PdfExportService.buildPurchaseReport(_rows, _range.start);
         await PdfExportService.download(bytes, 'Purchase_Report_$label.pdf');
@@ -154,6 +162,7 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
       ),
       body: Column(children: [
         _rangeBar(),
+        _branchBar(),
         if (!_loading && _error == null) _statsBar(total),
         Expanded(
           child: _loading
@@ -204,6 +213,16 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
     ),
   );
 
+  Widget _branchBar() => Container(
+    color: kNavy,
+    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+    child: BranchFilterBar(
+      selected: _selectedBranch,
+      accent: kTeal,
+      onChanged: (branch) => setState(() => _selectedBranch = branch),
+    ),
+  );
+
   Widget _statsBar(double total) {
     return Container(
       color: Colors.white,
@@ -251,7 +270,7 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
             Text(p.vendorName,
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                 overflow: TextOverflow.ellipsis),
-            Text('${p.invoiceNumber}  •  ${p.branch}  •  ${p.purchaseDate}',
+            Text('${p.invoiceNumber}  •  ${branchDisplayName(p.branch)}  •  ${p.purchaseDate}',
                 style: TextStyle(color: Colors.grey.shade400, fontSize: 10.5)),
           ]),
         ),

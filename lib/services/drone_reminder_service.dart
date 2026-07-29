@@ -43,7 +43,7 @@ class DroneReminderService {
 
   bool _initialized = false;
 
-  static const Duration reminderDelay = Duration(minutes: 5);
+  static const Duration reminderDelay = Duration(hours: 5);
 
   // Distinct "long-short-long-short-long" buzz so a drone reminder feels
   // different in the hand from every other notification in the app —

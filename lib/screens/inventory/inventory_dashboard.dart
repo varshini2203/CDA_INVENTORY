@@ -10,6 +10,7 @@ import 'package:cda_inventory/data/seed_products.dart';
 import 'package:cda_inventory/data/seed_adambakkam_inventory_dashboard.dart';
 import 'package:cda_inventory/services/seed_guard_service.dart';
 import 'package:cda_inventory/screens/bulk_import/bulk_import_screen.dart';
+import 'package:cda_inventory/screens/inventory/bulk_operations_screen.dart'; // 🆕 Bulk Operations module
 
 class InventoryDashboard extends StatefulWidget {
   const InventoryDashboard({super.key});
@@ -1049,6 +1050,20 @@ class _InventoryDashboardState extends State<InventoryDashboard>
               ),
             );
             if (imported == true && mounted) _loadInventoryOnce();
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.checklist_rounded),
+          tooltip: 'Bulk Operations',
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                settings: const RouteSettings(name: 'Bulk Operations'),
+                builder: (_) => const BulkOperationsScreen(),
+              ),
+            );
+            if (mounted) _loadInventoryOnce();
           },
         ),
         IconButton(

@@ -50,6 +50,7 @@ class DroneReportRow {
   final String status; // 'IN' | 'OUT'
   final String? notes;
   final DateTime? timestamp;
+  final String? branch; // raw value: 'Branch 1' (CDA Admin) or 'Branch 2' (CDA Ops)
 
   DroneReportRow({
     required this.droneId,
@@ -59,6 +60,7 @@ class DroneReportRow {
     required this.status,
     this.notes,
     this.timestamp,
+    this.branch,
   });
 }
 
@@ -186,6 +188,7 @@ class ReportService {
         notes: historyData['notes']?.toString(),
         timestamp:
         (historyData['timestamp'] as Timestamp?)?.toDate(),
+        branch: droneData?['branch']?.toString(),
       );
     }).toList();
 
@@ -286,6 +289,7 @@ class ReportService {
         status: historyData['status']?.toString() ?? '',
         notes: historyData['notes']?.toString(),
         timestamp: (historyData['timestamp'] as Timestamp?)?.toDate(),
+        branch: droneData?['branch']?.toString(),
       );
     }).toList();
 

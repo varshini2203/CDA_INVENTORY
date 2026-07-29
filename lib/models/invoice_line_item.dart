@@ -3,6 +3,7 @@ class InvoiceLineItem {
   final String id;
   final String description;
   final String? hsnCode;       // HSN/SAC code for GST filing (also used for Serial No.)
+  final String? skuCode;       // optional SKU / internal item code
   final int quantity;
   final String unit;           // e.g. NONE, PCS, KG, BOX...
   final double unitPrice;
@@ -13,6 +14,7 @@ class InvoiceLineItem {
     required this.id,
     required this.description,
     this.hsnCode,
+    this.skuCode,
     required this.quantity,
     this.unit = 'NONE',
     required this.unitPrice,
@@ -30,6 +32,7 @@ class InvoiceLineItem {
     id: m['id']?.toString() ?? '',
     description: m['description']?.toString() ?? '',
     hsnCode: m['hsn_code']?.toString(),
+    skuCode: m['sku_code']?.toString(),
     quantity: (m['quantity'] as num?)?.toInt() ?? 0,
     unit: m['unit']?.toString() ?? 'NONE',
     unitPrice: (m['unit_price'] as num?)?.toDouble() ?? 0.0,
@@ -41,6 +44,7 @@ class InvoiceLineItem {
     'id': id,
     'description': description,
     'hsn_code': hsnCode,
+    'sku_code': skuCode,
     'quantity': quantity,
     'unit': unit,
     'unit_price': unitPrice,

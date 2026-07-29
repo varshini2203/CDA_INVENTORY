@@ -7,10 +7,12 @@ import 'package:cda_inventory/services/excel_export_service.dart'
     hide MonthlySummary, DroneReportRow, ReportService;
 import 'package:cda_inventory/services/pdf_export_service.dart';
 import 'package:cda_inventory/widgets/reports/report_date_range_picker.dart';
+import 'package:cda_inventory/widgets/reports/branch_filter_bar.dart';
 
 class DroneInOutReportScreen extends StatefulWidget {
   final DateTimeRange initialRange;
-  const DroneInOutReportScreen({super.key, required this.initialRange});
+  final String? initialBranch; // null = All Branches
+  const DroneInOutReportScreen({super.key, required this.initialRange, this.initialBranch});
 
   @override
   State<DroneInOutReportScreen> createState() => _DroneInOutReportScreenState();
@@ -18,7 +20,10 @@ class DroneInOutReportScreen extends StatefulWidget {
 
 class _DroneInOutReportScreenState extends State<DroneInOutReportScreen> {
   late DateTimeRange _range;
-  List<DroneReportRow> _rows = [];
+  List<DroneReportRow> _rowsAll = []; // date-filtered, before branch filtering
+  String? _selectedBranch;
+  List<DroneReportRow> get _rows =>
+      filterByBranch(_rowsAll, _selectedBranch, (r) => r.branch);
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -34,6 +39,7 @@ class _DroneInOutReportScreenState extends State<DroneInOutReportScreen> {
   void initState() {
     super.initState();
     _range = widget.initialRange;
+    _selectedBranch = widget.initialBranch;
     _load();
   }
 
@@ -72,7 +78,7 @@ class _DroneInOutReportScreenState extends State<DroneInOutReportScreen> {
           .toList()
         ..sort((a, b) => (b.timestamp ?? DateTime(0)).compareTo(a.timestamp ?? DateTime(0)));
       setState(() {
-        _rows = filtered;
+        _rowsAll = filtered;
         _loading = false;
       });
     } catch (e) {
@@ -102,8 +108,10 @@ class _DroneInOutReportScreenState extends State<DroneInOutReportScreen> {
   Future<void> _export({required bool pdf}) async {
     setState(() => _busy = true);
     try {
+      final branchSuffix =
+      _selectedBranch == null ? '' : '_${branchDisplayName(_selectedBranch).replaceAll(' ', '')}';
       final label =
-          '${DateFormat('ddMMMyyyy').format(_range.start)}_to_${DateFormat('ddMMMyyyy').format(_range.end)}';
+          '${DateFormat('ddMMMyyyy').format(_range.start)}_to_${DateFormat('ddMMMyyyy').format(_range.end)}$branchSuffix';
       if (pdf) {
         final bytes = await PdfExportService.buildDroneReport(_rows, _range.start);
         await PdfExportService.download(bytes, 'Drone_InOut_Report_$label.pdf');
@@ -145,6 +153,7 @@ class _DroneInOutReportScreenState extends State<DroneInOutReportScreen> {
       ),
       body: Column(children: [
         _rangeBar(),
+        _branchBar(),
         if (!_loading && _error == null) _statsBar(),
         Expanded(
           child: _loading
@@ -192,6 +201,16 @@ class _DroneInOutReportScreenState extends State<DroneInOutReportScreen> {
           Icon(Icons.expand_more_rounded, color: Colors.white.withOpacity(0.6), size: 18),
         ]),
       ),
+    ),
+  );
+
+  Widget _branchBar() => Container(
+    color: kNavy,
+    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+    child: BranchFilterBar(
+      selected: _selectedBranch,
+      accent: kTeal,
+      onChanged: (branch) => setState(() => _selectedBranch = branch),
     ),
   );
 
@@ -247,7 +266,7 @@ class _DroneInOutReportScreenState extends State<DroneInOutReportScreen> {
             if (r.droneModel.isNotEmpty)
               Text(r.droneModel, style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
             const SizedBox(height: 3),
-            Text('Used by: ${r.pilot}', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+            Text('Pilot: ${r.pilot}', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
             if (r.timestamp != null)
               Text(DateFormat('dd MMM yyyy, hh:mm a').format(r.timestamp!),
                   style: TextStyle(color: Colors.grey.shade400, fontSize: 10.5)),

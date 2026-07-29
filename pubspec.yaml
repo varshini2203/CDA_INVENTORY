@@ -33,6 +33,9 @@ dependencies:
   timezone: ^0.10.1
   file_picker: ^12.0.0-beta.7
   syncfusion_flutter_pdf: ^28.1.33
+  firebase_messaging: ^16.4.3
+  cloud_functions: ^6.3.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
