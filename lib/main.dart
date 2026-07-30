@@ -24,6 +24,8 @@ import 'providers/language_provider.dart';
 import 'core/access/access_scope.dart';
 import 'core/access/access_route_observer.dart';
 import 'services/drone_reminder_service.dart';
+import 'services/push_notification_service.dart';
+import 'widgets/in_app_notification_banner.dart';
 
 // Flutter's default scroll behavior only lets touch/stylus drag a
 // scrollable — a mouse click-and-drag is deliberately excluded, which is
@@ -46,6 +48,10 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Full push-notification pipeline (FCM + system tray while foregrounded +
+  // in-app slide-down banner). See lib/services/push_notification_service.dart.
+  await PushNotificationService.instance.init();
 
   // Local notifications used for the "did you forget to bring the drone
   // back?" 1-hour reminder — see lib/services/drone_reminder_service.dart.
@@ -88,6 +94,14 @@ class ChennaiDroneInventoryApp extends StatelessWidget {
             title: 'Chennai Drone Academy Inventory',
             theme: themeProvider.themeData,
             scrollBehavior: AppScrollBehavior(),
+            // Lets a notification tap navigate even without a BuildContext
+            // handy (e.g. app was terminated and just launched by a tap).
+            navigatorKey: PushNotificationService.instance.navigatorKey,
+            // Wraps every screen so a push that arrives while the app is
+            // open shows a slide-down in-app banner, not just the system
+            // tray notification.
+            builder: (context, child) =>
+                InAppNotificationBanner(child: child!),
             // Logs every screen push app-wide so the admin's Live Activity
             // Feed sees "whatever happens in the app" without needing to
             // instrument each of the 100+ individual screens by hand.

@@ -228,121 +228,137 @@ Date        : ${_invoice.purchaseDate}
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(child: Icon(Icons.receipt_long, size: 80, color: Colors.blue.shade900)),
-                    const SizedBox(height: 12),
-                    Center(
-                      child: Text('INVOICE',
-                          style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue.shade900,
-                              letterSpacing: 2)),
-                    ),
-                    const Divider(height: 30),
-                    _buildDetailRow('Invoice Number', _invoice.invoiceNo, Icons.tag, copyable: true),
-                    _buildDetailRow('Product Name', _invoice.displayProductName, Icons.inventory_2),
-                    _buildDetailRow('Vendor Name', _invoice.vendorName, Icons.store),
-                    _buildDetailRow('Quantity', _invoice.displayQuantity.toString(), Icons.numbers),
-                    _buildDetailRow('Amount', '₹${_invoice.displayAmount.toStringAsFixed(2)}',
-                        Icons.currency_rupee, valueColor: Colors.green.shade700),
-                    _buildDetailRow('Purchase Date', _invoice.purchaseDate, Icons.calendar_today),
-                    if (_invoice.amountPaid > 0)
-                      _buildDetailRow('Balance Due', '₹${_invoice.balanceDue.toStringAsFixed(2)}',
-                          Icons.account_balance_wallet, valueColor: Colors.red.shade600),
-                    const Divider(height: 30),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.blue.shade200),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Total Amount',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue.shade900)),
-                          Text(
-                            '₹${_invoice.grandTotal.toStringAsFixed(2)}',
+          : Theme(
+        // This screen's Cards/Text below rely on explicit light colors
+        // (white cards, black87 text). Without this override they inherit
+        // the app's default dark theme's Card background, which makes the
+        // dark text nearly invisible against a dark card.
+        data: Theme.of(context).copyWith(
+          brightness: Brightness.light,
+          cardColor: Colors.white,
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            brightness: Brightness.light,
+            surface: Colors.white,
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Card(
+                elevation: 4,
+                color: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(child: Icon(Icons.receipt_long, size: 80, color: Colors.blue.shade900)),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Text('INVOICE',
                             style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green.shade700),
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade900,
+                                letterSpacing: 2)),
+                      ),
+                      const Divider(height: 30),
+                      _buildDetailRow('Invoice Number', _invoice.invoiceNo, Icons.tag, copyable: true),
+                      _buildDetailRow('Product Name', _invoice.displayProductName, Icons.inventory_2),
+                      _buildDetailRow('Vendor Name', _invoice.vendorName, Icons.store),
+                      _buildDetailRow('Quantity', _invoice.displayQuantity.toString(), Icons.numbers),
+                      _buildDetailRow('Amount', '₹${_invoice.displayAmount.toStringAsFixed(2)}',
+                          Icons.currency_rupee, valueColor: Colors.green.shade700),
+                      _buildDetailRow('Purchase Date', _invoice.purchaseDate, Icons.calendar_today),
+                      if (_invoice.amountPaid > 0)
+                        _buildDetailRow('Balance Due', '₹${_invoice.balanceDue.toStringAsFixed(2)}',
+                            Icons.account_balance_wallet, valueColor: Colors.red.shade600),
+                      const Divider(height: 30),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Total Amount',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue.shade900)),
+                            Text(
+                              '₹${_invoice.grandTotal.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green.shade700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                elevation: 3,
+                color: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Actions',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue.shade900)),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _actionButton(
+                                icon: Icons.edit, label: 'Edit', color: Colors.orange.shade700, onTap: _editInvoice),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _actionButton(
+                                icon: Icons.delete,
+                                label: 'Delete',
+                                color: Colors.red,
+                                onTap: _showDeleteConfirmDialog),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _actionButton(
+                              icon: Icons.copy,
+                              label: 'Copy Details',
+                              color: Colors.blue.shade700,
+                              onTap: () => _copyToClipboard('Invoice No', _invoice.invoiceNo),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _actionButton(
+                              icon: Icons.download,
+                              label: 'Download PDF',
+                              color: Colors.green,
+                              onTap: _downloadPdf,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              elevation: 3,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('Actions',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue.shade900)),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _actionButton(
-                              icon: Icons.edit, label: 'Edit', color: Colors.orange.shade700, onTap: _editInvoice),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _actionButton(
-                              icon: Icons.delete,
-                              label: 'Delete',
-                              color: Colors.red,
-                              onTap: _showDeleteConfirmDialog),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _actionButton(
-                            icon: Icons.copy,
-                            label: 'Copy Details',
-                            color: Colors.blue.shade700,
-                            onTap: () => _copyToClipboard('Invoice No', _invoice.invoiceNo),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _actionButton(
-                            icon: Icons.download,
-                            label: 'Download PDF',
-                            color: Colors.green,
-                            onTap: _downloadPdf,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

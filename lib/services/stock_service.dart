@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cda_inventory/models/stock.dart';
 import '../constants/gamification_constants.dart';
 import 'activity_log_service.dart';
+import 'gamification_service.dart';
 import 'staff_reward_service.dart';
 
 class StockService {
@@ -308,6 +309,13 @@ class StockService {
       refId: 'stock_${itemId}_in_${txnRef.id}',
     );
 
+    // batch.commit() above already succeeded, so it's safe to award XP
+    // exactly once for this Stock In. Best-effort so a gamification
+    // hiccup never surfaces as a Stock In failure.
+    try {
+      await GamificationService.recordStockUpdate();
+    } catch (_) {}
+
     return true;
   }
 
@@ -379,6 +387,14 @@ class StockService {
       refId: 'stock_${itemId}_out_${txnRef.id}',
     );
 
+    // Validation (insufficient-stock check) + batch.commit() above
+    // already succeeded, so it's safe to award XP exactly once for
+    // this Stock Out. Best-effort so a gamification hiccup never
+    // surfaces as a Stock Out failure.
+    try {
+      await GamificationService.recordStockUpdate();
+    } catch (_) {}
+
     return true;
   }
 
@@ -439,6 +455,13 @@ class StockService {
       module: _module,
       refId: 'stock_${itemId}_adjust_${txnRef.id}',
     );
+
+    // batch.commit() above already succeeded, so it's safe to award XP
+    // exactly once for this adjustment. Best-effort so a gamification
+    // hiccup never surfaces as an adjustment failure.
+    try {
+      await GamificationService.recordStockUpdate();
+    } catch (_) {}
   }
 
   // ── TRANSFER — move quantity from one branch to another ─────────────────────

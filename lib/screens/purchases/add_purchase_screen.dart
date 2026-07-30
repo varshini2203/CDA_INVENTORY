@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
 import 'package:printing/printing.dart';
 import 'package:cda_inventory/models/purchase.dart';
 import 'package:cda_inventory/models/invoice_line_item.dart';
@@ -294,11 +295,58 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
     // readAsBytes() works identically on Web, mobile, and desktop.
     final bytes = await picked.readAsBytes();
     if (!mounted) return;
+
+    // image_picker's `imageQuality` is ignored on Flutter Web, so a photo
+    // straight from a phone/desktop camera can be several MB. Encoding
+    // that to Base64 on every save/print freezes the UI (Dart runs on the
+    // single browser thread on Web) and can exceed Firestore's 1MB
+    // document cap outright. Downscale/recompress once here, same
+    // approach already used by BillsService for bill photos.
+    final compressed = _compressBillImage(bytes);
+
     setState(() {
-      _newBillImageBytes = bytes;
+      _newBillImageBytes = compressed;
       _existingBillImageBase64 = null; // replaced by the new capture
     });
     _showSnack('Bill image attached');
+  }
+
+  // Firestore caps a document at 1,048,487 bytes and Base64 inflates raw
+  // bytes by ~33%, so target well under that (500KB raw → ~667KB Base64)
+  // to leave headroom for the rest of the purchase document's fields.
+  static const int _maxRawImageBytes = 500000;
+  static const int _maxImageDimension = 1600;
+
+  static Uint8List _compressBillImage(Uint8List bytes) {
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      // Not a decodable image — return as-is and let Firestore reject it
+      // if it's really too big, rather than silently corrupting the bytes.
+      return bytes;
+    }
+
+    img.Image working = decoded;
+    if (working.width > _maxImageDimension || working.height > _maxImageDimension) {
+      working = img.copyResize(
+        working,
+        width: working.width >= working.height ? _maxImageDimension : null,
+        height: working.height > working.width ? _maxImageDimension : null,
+      );
+    }
+
+    var quality = 85;
+    Uint8List out = Uint8List.fromList(img.encodeJpg(working, quality: quality));
+
+    while (out.length > _maxRawImageBytes && quality > 30) {
+      quality -= 10;
+      out = Uint8List.fromList(img.encodeJpg(working, quality: quality));
+    }
+    while (out.length > _maxRawImageBytes && working.width > 400 && working.height > 400) {
+      working = img.copyResize(working, width: (working.width * 0.8).round());
+      out = Uint8List.fromList(img.encodeJpg(working, quality: quality));
+    }
+
+    return out;
   }
 
   void _removeBillImage() {

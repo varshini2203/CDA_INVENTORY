@@ -8,10 +8,12 @@ import 'package:cda_inventory/services/excel_export_service.dart'
     hide MonthlySummary, DroneReportRow, ReportService;
 import 'package:cda_inventory/services/pdf_export_service.dart';
 import 'package:cda_inventory/widgets/reports/report_date_range_picker.dart';
+import 'package:cda_inventory/widgets/reports/branch_filter_bar.dart';
 
 class StockHistoryReportScreen extends StatefulWidget {
   final DateTimeRange initialRange;
-  const StockHistoryReportScreen({super.key, required this.initialRange});
+  final String? initialBranch; // null = All Branches
+  const StockHistoryReportScreen({super.key, required this.initialRange, this.initialBranch});
 
   @override
   State<StockHistoryReportScreen> createState() => _StockHistoryReportScreenState();
@@ -19,7 +21,10 @@ class StockHistoryReportScreen extends StatefulWidget {
 
 class _StockHistoryReportScreenState extends State<StockHistoryReportScreen> {
   late DateTimeRange _range;
-  List<StockTransaction> _rows = [];
+  List<StockTransaction> _rowsAll = []; // date-filtered, before branch filtering
+  String? _selectedBranch;
+  List<StockTransaction> get _rows =>
+      filterByBranch(_rowsAll, _selectedBranch, (r) => r.branch);
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -35,6 +40,7 @@ class _StockHistoryReportScreenState extends State<StockHistoryReportScreen> {
   void initState() {
     super.initState();
     _range = widget.initialRange;
+    _selectedBranch = widget.initialBranch;
     _load();
   }
 
@@ -86,7 +92,7 @@ class _StockHistoryReportScreenState extends State<StockHistoryReportScreen> {
         ..sort((a, b) => (_parseDdMmYyyy(b.date) ?? DateTime(0))
             .compareTo(_parseDdMmYyyy(a.date) ?? DateTime(0)));
       setState(() {
-        _rows = filtered;
+        _rowsAll = filtered;
         _loading = false;
       });
     } catch (e) {
@@ -116,8 +122,10 @@ class _StockHistoryReportScreenState extends State<StockHistoryReportScreen> {
   Future<void> _export({required bool pdf}) async {
     setState(() => _busy = true);
     try {
+      final branchSuffix =
+      _selectedBranch == null ? '' : '_${branchDisplayName(_selectedBranch).replaceAll(' ', '')}';
       final label =
-          '${DateFormat('ddMMMyyyy').format(_range.start)}_to_${DateFormat('ddMMMyyyy').format(_range.end)}';
+          '${DateFormat('ddMMMyyyy').format(_range.start)}_to_${DateFormat('ddMMMyyyy').format(_range.end)}$branchSuffix';
       if (pdf) {
         final bytes = await PdfExportService.buildStockReport(_rows, _range.start);
         await PdfExportService.download(bytes, 'Stock_History_Report_$label.pdf');
@@ -159,6 +167,7 @@ class _StockHistoryReportScreenState extends State<StockHistoryReportScreen> {
       ),
       body: Column(children: [
         _rangeBar(),
+        _branchBar(),
         if (!_loading && _error == null) _statsBar(),
         Expanded(
           child: _loading
@@ -206,6 +215,16 @@ class _StockHistoryReportScreenState extends State<StockHistoryReportScreen> {
           Icon(Icons.expand_more_rounded, color: Colors.white.withOpacity(0.6), size: 18),
         ]),
       ),
+    ),
+  );
+
+  Widget _branchBar() => Container(
+    color: kNavy,
+    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+    child: BranchFilterBar(
+      selected: _selectedBranch,
+      accent: kTeal,
+      onChanged: (branch) => setState(() => _selectedBranch = branch),
     ),
   );
 
@@ -276,7 +295,7 @@ class _StockHistoryReportScreenState extends State<StockHistoryReportScreen> {
           child: Row(children: [
             Expanded(child: _detail('QTY', '${t.quantity}', color)),
             _divider(),
-            Expanded(child: _detail('BRANCH', t.branch, Colors.grey.shade600)),
+            Expanded(child: _detail('BRANCH', branchDisplayName(t.branch), Colors.grey.shade600)),
             _divider(),
             Expanded(child: _detail('PERSON', t.person, Colors.grey.shade600)),
           ]),

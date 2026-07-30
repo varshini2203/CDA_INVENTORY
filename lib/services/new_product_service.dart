@@ -23,6 +23,7 @@ import 'package:image/image.dart' as img;
 
 import 'package:cda_inventory/models/new_product.dart';
 import 'activity_log_service.dart';
+import 'gamification_service.dart';
 import 'inventory_sync_service.dart';
 
 class NewProductService {
@@ -86,12 +87,28 @@ class NewProductService {
 
   // ── GET ALL (cached one-shot fetch — call once from initState and
   //    reuse the result, do NOT call this from build()) ────────────────
+  // NOTE: We deliberately do NOT use .orderBy('createdAt', ...) here.
+  // Firestore's orderBy() silently EXCLUDES any document that is missing
+  // the field being ordered on (e.g. docs added by hand via the Firebase
+  // Console, or older/imported docs without a createdAt timestamp) —
+  // they don't just sort last, they vanish from the result set entirely.
+  // Fetching everything and sorting client-side avoids that trap.
+  static int _byCreatedAtDesc(NewProduct a, NewProduct b) {
+    final aTime = a.createdAt;
+    final bTime = b.createdAt;
+    if (aTime == null && bTime == null) return 0;
+    if (aTime == null) return 1; // docs without a timestamp go last
+    if (bTime == null) return -1;
+    return bTime.compareTo(aTime); // descending (newest first)
+  }
+
   static Future<List<NewProduct>> getNewProducts(
       {bool forceRefresh = false}) async {
     if (!forceRefresh && _cache != null) return List<NewProduct>.from(_cache!);
 
-    final snap = await _col.orderBy('createdAt', descending: true).get();
-    final list = snap.docs.map(NewProduct.fromFirestore).toList();
+    final snap = await _col.get();
+    final list = snap.docs.map(NewProduct.fromFirestore).toList()
+      ..sort(_byCreatedAtDesc);
 
     _cache = list;
     return List<NewProduct>.from(list);
@@ -100,10 +117,9 @@ class NewProductService {
   /// Live stream of all new products, newest first. Useful for screens
   /// that want real-time dashboard counts without a manual refresh.
   static Stream<List<NewProduct>> streamNewProducts() {
-    return _col
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map(NewProduct.fromFirestore).toList());
+    return _col.snapshots().map((snap) =>
+    snap.docs.map(NewProduct.fromFirestore).toList()
+      ..sort(_byCreatedAtDesc));
   }
 
   static Future<NewProduct?> getNewProductById(String id) async {
@@ -153,6 +169,13 @@ class NewProductService {
       // InventorySyncService already isolates + logs each module's own
       // failure internally.
     }
+
+    // The Firestore add + activity log above already succeeded, so
+    // it's safe to award XP exactly once for this creation. Best
+    // effort: a gamification hiccup must never block the primary add.
+    try {
+      await GamificationService.recordProductAdded();
+    } catch (_) {}
 
     return created;
   }

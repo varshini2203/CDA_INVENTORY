@@ -3,6 +3,13 @@
 // "Sale Invoices" screen — styled to match the Vyapar desktop layout:
 // search + Add Sale bar, filter chips (status / date / firm / user),
 // a Total Sales Amount summary card, and a full Transactions table.
+//
+// Payment-In is now wired in two places:
+//   1. A "Payment-In" button in the top bar (general receipt entry, no
+//      customer preselected).
+//   2. A "Receive Payment" row action (in the "⋮" menu) on any invoice
+//      that still has a balance due — this pre-fills that invoice's
+//      customer name on the Add Payment-In screen.
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +22,7 @@ import 'package:cda_inventory/services/invoice_pdf_service.dart';
 import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/screens/invoices/add_invoice_screen.dart';
 import 'package:cda_inventory/utils/status_helpers.dart';
+import 'package:cda_inventory/screens/sales/add_payment_in_screen.dart';
 
 class InvoiceListScreen extends StatefulWidget {
   const InvoiceListScreen({super.key});
@@ -366,6 +374,20 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     if (result == true) _loadInvoices();
   }
 
+  // ── Payment-In: general (top bar) and per-invoice (row menu) ───────────
+  void _navigateToPaymentIn({String? customerName}) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'Payment-In'),
+        builder: (_) => AddPaymentInScreen(initialCustomerName: customerName),
+      ),
+    );
+    // A Payment-In can change an invoice's balance/status, so refresh
+    // regardless of the returned value.
+    _loadInvoices(forceRefresh: true);
+  }
+
   // ═══════════════════════════════════════════════════════════════════════
   // BUILD
   // ═══════════════════════════════════════════════════════════════════════
@@ -413,7 +435,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     );
   }
 
-  // ── Top bar: search + Add Sale ──────────────────────────────────────────
+  // ── Top bar: search + Payment-In + Add Sale ─────────────────────────────
   Widget _buildTopBar() {
     return Row(
       children: [
@@ -468,6 +490,18 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
           ),
         ),
         const SizedBox(width: 10),
+        OutlinedButton.icon(
+          onPressed: () => _navigateToPaymentIn(),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: kBlue,
+            side: const BorderSide(color: kBlue),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          icon: const Icon(Icons.currency_rupee_rounded, size: 16),
+          label: const Text('Payment-In', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+        ),
+        const SizedBox(width: 8),
         ElevatedButton.icon(
           onPressed: _navigateToAddInvoice,
           style: ElevatedButton.styleFrom(
@@ -723,6 +757,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
       onDelete: _showDeleteConfirmDialog,
       onPrint: _printInvoice,
       onShare: _shareInvoice,
+      onReceivePayment: (inv) => _navigateToPaymentIn(customerName: _partyName(inv)),
     );
   }
 
@@ -844,6 +879,7 @@ class _InvoiceTable extends StatelessWidget {
   final void Function(Invoice) onDelete;
   final void Function(Invoice) onPrint;
   final void Function(Invoice) onShare;
+  final void Function(Invoice) onReceivePayment;
 
   const _InvoiceTable({
     required this.invoices,
@@ -855,6 +891,7 @@ class _InvoiceTable extends StatelessWidget {
     required this.onDelete,
     required this.onPrint,
     required this.onShare,
+    required this.onReceivePayment,
   });
 
   static const double wDate    = 88;
@@ -923,6 +960,7 @@ class _InvoiceTable extends StatelessWidget {
   Widget _dataRow(BuildContext context, Invoice inv, int index) {
     final status = inv.effectiveStatus;
     final color = statusColor(status);
+    final hasBalance = inv.balanceDue > 0.01;
     return InkWell(
       onTap: () => onView(inv),
       child: Container(
@@ -989,11 +1027,21 @@ class _InvoiceTable extends StatelessWidget {
                   if (v == 'view') onView(inv);
                   if (v == 'edit') onEdit(inv);
                   if (v == 'delete') onDelete(inv);
+                  if (v == 'payment') onReceivePayment(inv);
                 },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'view', child: Text('View')),
-                  PopupMenuItem(value: 'edit', child: Text('Edit')),
-                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'view', child: Text('View')),
+                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  if (hasBalance)
+                    const PopupMenuItem(
+                      value: 'payment',
+                      child: Row(children: [
+                        Icon(Icons.currency_rupee_rounded, size: 16, color: _InvoiceListScreenState.kGreen),
+                        SizedBox(width: 8),
+                        Text('Receive Payment'),
+                      ]),
+                    ),
+                  const PopupMenuItem(value: 'delete', child: Text('Delete')),
                 ],
               ),
             ]),

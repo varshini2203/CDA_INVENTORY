@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/product.dart';
 import '../constants/gamification_constants.dart';
 import 'activity_log_service.dart';
+import 'gamification_service.dart';
 import 'staff_reward_service.dart';
 
 class ProductService {
@@ -88,6 +89,14 @@ class ProductService {
       module: _module,
       refId: 'products_${docRef.id}_add',
     );
+
+    // Firestore write + activity log above already succeeded at this
+    // point, so it's safe to award XP exactly once for this creation.
+    // Best-effort: never let a gamification hiccup surface as a
+    // product-creation failure.
+    try {
+      await GamificationService.recordProductAdded();
+    } catch (_) {}
 
     return product.copyWith(id: docRef.id, createdAt: DateTime.now());
   }

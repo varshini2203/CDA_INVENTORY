@@ -13,6 +13,7 @@ import 'package:cda_inventory/services/excel_export_service.dart'
     hide MonthlySummary, DroneReportRow, ReportService;
 import 'package:cda_inventory/services/pdf_export_service.dart';
 import 'package:cda_inventory/widgets/reports/report_date_range_picker.dart';
+import 'package:cda_inventory/widgets/reports/branch_filter_bar.dart';
 
 class ReportsDashboardScreen extends StatefulWidget {
   const ReportsDashboardScreen({super.key});
@@ -26,12 +27,27 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
   // ── Date range (replaces the old single "month" selector) ────────────────
   late DateTimeRange _range;
 
-  // Raw rows fetched for the current range (kept so export can reuse them
-  // instead of re-fetching).
-  List<DroneReportRow> _droneRows = [];
-  List<dynamic> _stockRows = []; // StockTransaction, kept dynamic to avoid extra import churn
-  List<dynamic> _invoiceRows = []; // Invoice
-  List<Purchase> _purchasesInRange = [];
+  // Raw rows fetched for the current date range, BEFORE branch filtering
+  // (kept so export can reuse them instead of re-fetching, and so switching
+  // branches doesn't require another Firestore round trip).
+  List<DroneReportRow> _droneRowsAll = [];
+  List<dynamic> _stockRowsAll = []; // StockTransaction, kept dynamic to avoid extra import churn
+  List<dynamic> _invoiceRowsAll = []; // Invoice
+  List<Purchase> _purchasesAll = [];
+
+  // Which branch the dashboard is currently scoped to. null = All Branches
+  // (both Branch 1 / CDA Admin and Branch 2 / CDA Ops combined).
+  String? _selectedBranch;
+
+  // ── Branch-filtered views used everywhere in the UI/export below ────────
+  List<DroneReportRow> get _droneRows =>
+      filterByBranch(_droneRowsAll, _selectedBranch, (r) => r.branch);
+  List<dynamic> get _stockRows =>
+      filterByBranch(_stockRowsAll, _selectedBranch, (r) => (r.branch as String?));
+  List<dynamic> get _invoiceRows =>
+      filterByBranch(_invoiceRowsAll, _selectedBranch, (r) => (r.branch as String?));
+  List<Purchase> get _purchasesInRange =>
+      filterByBranch(_purchasesAll, _selectedBranch, (p) => p.branch);
 
   bool _loading = true;
   String? _exportingType;
@@ -156,10 +172,10 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
       final purchasesFiltered = _filterPurchasesByRange(allPurchases, _range);
 
       setState(() {
-        _droneRows = droneFiltered;
-        _stockRows = stockFiltered;
-        _invoiceRows = invoiceFiltered;
-        _purchasesInRange = purchasesFiltered;
+        _droneRowsAll = droneFiltered;
+        _stockRowsAll = stockFiltered;
+        _invoiceRowsAll = invoiceFiltered;
+        _purchasesAll = purchasesFiltered;
         _loading = false;
       });
       _animController.forward(from: 0);
@@ -196,12 +212,35 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
     setState(() => _exportingType = pdf ? 'pdf' : 'excel');
     try {
       final month = DateTime(_range.start.year, _range.start.month);
-      final summary =
-      await ReportService.fetchMonthlySummary(month.year, month.month);
-      final drones = await ReportService.fetchDroneInOutReport(month.year, month.month);
-      final stock = await ReportService.fetchStockHistoryReport(month.year, month.month);
-      final invoices = await ReportService.fetchInvoiceReport(month.year, month.month);
-      final label = DateFormat('MMM_yyyy').format(month);
+      final rawDrones = await ReportService.fetchDroneInOutReport(month.year, month.month);
+      final rawStock = await ReportService.fetchStockHistoryReport(month.year, month.month);
+      final rawInvoices = await ReportService.fetchInvoiceReport(month.year, month.month);
+
+      // Scope the export to the branch currently selected on the dashboard
+      // (null = both branches, unchanged behaviour).
+      final drones = filterByBranch(rawDrones, _selectedBranch, (r) => r.branch);
+      final stock = filterByBranch(rawStock, _selectedBranch, (r) => (r.branch as String?));
+      final invoices = filterByBranch(rawInvoices, _selectedBranch, (r) => (r.branch as String?));
+
+      // MonthlySummary is recomputed here (rather than via
+      // ReportService.fetchMonthlySummary) so its totals match the
+      // branch-filtered drones/stock/invoices above.
+      final stockIn = stock.where((t) => t.type == 'IN').toList();
+      final stockOut = stock.where((t) => t.type == 'OUT').toList();
+      final summary = MonthlySummary(
+        droneInCount: drones.where((d) => d.status == 'IN').length,
+        droneOutCount: drones.where((d) => d.status == 'OUT').length,
+        stockInCount: stockIn.length,
+        stockOutCount: stockOut.length,
+        stockInQty: stockIn.fold<int>(0, (s, t) => s + t.quantity),
+        stockOutQty: stockOut.fold<int>(0, (s, t) => s + t.quantity),
+        invoiceCount: invoices.length,
+        invoiceTotal: invoices.fold<double>(0, (s, i) => s + i.amount),
+      );
+
+      final branchSuffix =
+      _selectedBranch == null ? '' : '_${branchDisplayName(_selectedBranch).replaceAll(' ', '')}';
+      final label = '${DateFormat('MMM_yyyy').format(month)}$branchSuffix';
 
       if (pdf) {
         final bytes = await PdfExportService.buildFullMonthlyReport(
@@ -223,8 +262,9 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
         ExcelExportService.download(bytes, 'Monthly_Report_$label.xlsx');
       }
       if (mounted) {
+        final scope = _selectedBranch == null ? '' : ' — ${branchDisplayName(_selectedBranch)}';
         _showSnack(
-            '${pdf ? "PDF" : "Excel"} report downloaded (for ${DateFormat('MMMM yyyy').format(month)})');
+            '${pdf ? "PDF" : "Excel"} report downloaded (for ${DateFormat('MMMM yyyy').format(month)}$scope)');
       }
     } catch (e) {
       if (mounted) _showSnack('Export failed: $e', isError: true);
@@ -331,6 +371,8 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     _rangeSelector(),
+                    const SizedBox(height: 10),
+                    _branchSelector(),
                     const SizedBox(height: 14),
                     FadeTransition(opacity: _fadeAnim, child: _summaryGrid()),
                     const SizedBox(height: 16),
@@ -347,7 +389,8 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(settings: const RouteSettings(name: 'Drone In Out Report'),
-                            builder: (_) => DroneInOutReportScreen(initialRange: _range)),
+                            builder: (_) => DroneInOutReportScreen(
+                                initialRange: _range, initialBranch: _selectedBranch)),
                       ),
                     ),
                     _ReportListTile(
@@ -358,7 +401,8 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(settings: const RouteSettings(name: 'Stock History Report'),
-                            builder: (_) => StockHistoryReportScreen(initialRange: _range)),
+                            builder: (_) => StockHistoryReportScreen(
+                                initialRange: _range, initialBranch: _selectedBranch)),
                       ),
                     ),
                     _ReportListTile(
@@ -369,7 +413,8 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(settings: const RouteSettings(name: 'Invoice Report'),
-                            builder: (_) => InvoiceReportScreen(initialRange: _range)),
+                            builder: (_) => InvoiceReportScreen(
+                                initialRange: _range, initialBranch: _selectedBranch)),
                       ),
                     ),
                     _ReportListTile(
@@ -380,7 +425,8 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(settings: const RouteSettings(name: 'Purchase Report'),
-                            builder: (_) => PurchaseReportScreen(initialRange: _range)),
+                            builder: (_) => PurchaseReportScreen(
+                                initialRange: _range, initialBranch: _selectedBranch)),
                       ),
                     ),
                   ]),
@@ -430,6 +476,36 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
           Icon(Icons.expand_more_rounded, color: Colors.grey.shade400),
         ]),
       ),
+    );
+  }
+
+  Widget _branchSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Row(children: [
+        Text('BRANCH',
+            style: TextStyle(
+                color: Colors.grey.shade400,
+                fontSize: 9,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w700)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: BranchFilterBar(
+            selected: _selectedBranch,
+            dark: false,
+            accent: kTeal,
+            onChanged: (branch) => setState(() => _selectedBranch = branch),
+          ),
+        ),
+      ]),
     );
   }
 
@@ -520,7 +596,9 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
         ]),
         const SizedBox(height: 4),
         Text(
-          'Drone, stock & invoice data for ${DateFormat('MMMM yyyy').format(_range.start)} — everything, one file.',
+          _selectedBranch == null
+              ? 'Drone, stock & invoice data for ${DateFormat('MMMM yyyy').format(_range.start)} — everything, one file.'
+              : 'Drone, stock & invoice data for ${DateFormat('MMMM yyyy').format(_range.start)} — ${branchDisplayName(_selectedBranch)} only.',
           style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11.5),
         ),
         const SizedBox(height: 14),

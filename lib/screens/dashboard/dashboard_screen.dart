@@ -10,9 +10,11 @@ import 'package:cda_inventory/screens/consumables/consumable_list_screen.dart';
 import 'package:cda_inventory/screens/drone_tracking/drone_in_out_screen.dart';
 import 'package:cda_inventory/screens/drone_service/drone_service_dashboard_screen.dart';
 import 'package:cda_inventory/screens/stock_management/stock_dashboard_screen.dart';
+import 'package:cda_inventory/screens/inventory_movement/movement_dashboard_screen.dart';
 import 'package:cda_inventory/screens/purchases/purchases_menu_screen.dart';
 import 'package:cda_inventory/screens/invoices/invoice_list_screen.dart';
 import 'package:cda_inventory/screens/estimates/estimate_list_screen.dart';
+import 'package:cda_inventory/screens/proforma/proforma_list_screen.dart';
 import 'package:cda_inventory/screens/search/search_screen.dart';
 import 'package:cda_inventory/screens/stock_management/stock_out_screen.dart';
 import 'package:cda_inventory/screens/stock_management/stock_history_screen.dart';
@@ -33,6 +35,11 @@ import 'package:cda_inventory/screens/admin/admin_notifications_screen.dart';
 import 'package:cda_inventory/screens/admin/employee_access_screen.dart';
 import 'package:cda_inventory/screens/admin/activity_feed_screen.dart';
 import 'package:provider/provider.dart';
+import 'package:cda_inventory/screens/sales/sale_order_list_screen.dart';
+import 'package:cda_inventory/screens/delivery_challan/delivery_challan_list_screen.dart';
+import 'package:cda_inventory/screens/sales/sale_return_list_screen.dart';
+import 'package:cda_inventory/screens/sales/payment_in_list_screen.dart';
+// ...
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🎨 CDA NAVY DESIGN TOKENS
@@ -106,6 +113,17 @@ const _modules = [
     'gradFrom': Color(0xFF0D2348),
     'gradTo': Color(0xFF0A1428),
     'image': 'assets/images/consumables.jpg',
+  },
+  {
+    'title': 'Inventory Movement',
+    'icon': Icons.compare_arrows_rounded,
+    'emoji': '🔀',
+    'desc': 'Transfers, in & out',
+    'tag': 'OPS',
+    'color': _blueLight,
+    'gradFrom': Color(0xFF0D2348),
+    'gradTo': Color(0xFF0A1428),
+    'image': 'assets/images/inventory_movement.png',
   },
   {
     'title': 'Drone In/Out',
@@ -217,6 +235,7 @@ const _modules = [
     'gradTo': Color(0xFF0A1428),
     'image': 'assets/images/stock history.jpg',
   },
+
   {
     'title': 'Reports',
     'icon': Icons.insert_chart_rounded,
@@ -254,14 +273,8 @@ const _modules = [
 
 const _drawerItems = [
   {'icon': Icons.dashboard_rounded,               'label': 'Dashboard',        'key': 'home'},
-  {'icon': Icons.precision_manufacturing_rounded, 'label': 'Fixed Assets',     'key': 'Fixed Assets'},
   {'icon': Icons.inventory_2_rounded,             'label': 'Inventory',        'key': 'Inventory'},
   {'icon': Icons.new_releases_rounded,            'label': 'New Products',     'key': 'New Products'},
-  {'icon': Icons.category_rounded,                'label': 'Consumables',      'key': 'Consumables'},
-  {'icon': Icons.flight_takeoff_rounded,          'label': 'Drone In/Out',     'key': 'Drone In/Out'},
-  {'icon': Icons.miscellaneous_services_rounded,  'label': 'Drone Services',   'key': 'Drone Services'},
-  {'icon': Icons.analytics_rounded,               'label': 'Stock Management', 'key': 'Stock Management'},
-  {'icon': Icons.business_rounded,                'label': 'Branch Inventory', 'key': 'Branch Inventory'},
   {'icon': Icons.shopping_cart_rounded,           'label': 'Purchases',        'key': 'Purchases'},
   {
     'icon': Icons.receipt_long_rounded,
@@ -275,10 +288,16 @@ const _drawerItems = [
       {'label': 'Sale Order',              'key': 'Sale Order'},
       {'label': 'Delivery Challan',        'key': 'Delivery Challan'},
       {'label': 'Sale Return/ Credit Note','key': 'Sale Return/ Credit Note'},
-      {'label': 'Vyapar POS',              'key': 'Vyapar POS'},
     ],
   },
   {'icon': Icons.document_scanner_rounded,        'label': 'Bills',            'key': 'Bills'},
+  {'icon': Icons.compare_arrows_rounded,          'label': 'Inventory Movement', 'key': 'Inventory Movement'},
+  {'icon': Icons.precision_manufacturing_rounded, 'label': 'Fixed Assets',     'key': 'Fixed Assets'},
+  {'icon': Icons.category_rounded,                'label': 'Consumables',      'key': 'Consumables'},
+  {'icon': Icons.flight_takeoff_rounded,          'label': 'Drone In/Out',     'key': 'Drone In/Out'},
+  {'icon': Icons.miscellaneous_services_rounded,  'label': 'Drone Services',   'key': 'Drone Services'},
+  {'icon': Icons.analytics_rounded,               'label': 'Stock Management', 'key': 'Stock Management'},
+  {'icon': Icons.business_rounded,                'label': 'Branch Inventory', 'key': 'Branch Inventory'},
   {'icon': Icons.manage_search_rounded,           'label': 'Search Products',  'key': 'Search Products'},
   {'icon': Icons.outbox_rounded,                  'label': 'Stock Out',        'key': 'Stock Out'},
   {'icon': Icons.history_rounded,                 'label': 'Stock History',    'key': 'Stock History'},
@@ -326,13 +345,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'Sale Invoices':    screen = const InvoiceListScreen();      break;
       case 'Invoice List':     screen = const InvoiceListScreen();      break;
       case 'Estimate/ Quotation': screen = const EstimateListScreen();  break;
+      case 'Proforma Invoice':    screen = const ProformaListScreen();  break;
       case 'Bills':            screen = const BillsScreen();            break;
       case 'Search Products':  screen = const SearchScreen();           break;
       case 'Stock Out':        screen = const StockOutScreen();         break;
       case 'Stock History':    screen = const StockHistoryScreen();     break;
+      case 'Inventory Movement': screen = const MovementDashboardScreen(); break;
       case 'Reports':          screen = const ReportsDashboardScreen(); break;
       case 'Inventory Analytics': screen = const InventoryAnalyticsScreen(); break;
       case 'Staff Rewards':    screen = const GamificationDashboard();  break;
+      case 'Sale Order': screen = const SaleOrderListScreen(); break;
+      case 'Delivery Challan': screen = const DeliveryChallanListScreen(); break;
+      case 'Sale Return/ Credit Note': screen = const SaleReturnListScreen(); break;
+      case 'Payment-In': screen = const PaymentInListScreen(); break;
       case 'Inventory':
         Navigator.pushNamed(context, '/inventory');
         return;
@@ -614,6 +639,11 @@ class _DroneReminderBell extends StatefulWidget {
 class _DroneReminderBellState extends State<_DroneReminderBell>
     with SingleTickerProviderStateMixin {
   final DroneService _service = DroneService();
+  // Cached once (same reasoning as _StreakBadge above): calling
+  // _service.overdueDronesCountStream() inline as the StreamBuilder's
+  // `stream:` argument recreated the Firestore listener on every rebuild
+  // of this widget, contributing to the same 429 resource-exhausted churn.
+  late final Stream<int> _overdueCountStream = _service.overdueDronesCountStream();
   late final AnimationController _ctrl;
   // Highest count we've already "seen" (i.e. the user opened the reminders
   // screen for it). Animation stays off once count <= _seenCount and comes
@@ -649,7 +679,7 @@ class _DroneReminderBellState extends State<_DroneReminderBell>
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<int>(
-      stream: _service.overdueDronesCountStream(),
+      stream: _overdueCountStream,
       builder: (context, snapshot) {
         final count = snapshot.data ?? 0;
         final unseen = count > 0 && count > _seenCount;
@@ -911,13 +941,33 @@ class _FlyingDrone extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 // STREAK BADGE — flame icon with current day-streak count, opens rewards screen
 // ═══════════════════════════════════════════════════════════════════════════════
-class _StreakBadge extends StatelessWidget {
+class _StreakBadge extends StatefulWidget {
   const _StreakBadge();
+
+  @override
+  State<_StreakBadge> createState() => _StreakBadgeState();
+}
+
+class _StreakBadgeState extends State<_StreakBadge> {
+  // Cached once for the lifetime of this widget. _StreakBadge previously
+  // called GamificationService.watchProfile() directly inside the
+  // StreamBuilder's `stream:` argument of a StatelessWidget. Since this
+  // badge lives in the dashboard app bar, every rebuild of the dashboard
+  // (tab switches, other Provider updates, animations, etc.) recreated the
+  // widget's `stream:` value, which made StreamBuilder tear down the old
+  // Firestore .snapshots() listener and open a brand-new one. That churn —
+  // repeatedly opening/closing Firestore listen channels — is what was
+  // exhausting the Firestore connection quota and surfacing as 429
+  // resource-exhausted errors (seen on the Staff Rewards screen, which
+  // shares the same profile document). Holding the stream in State means
+  // it's created once in initState and reused across every rebuild.
+  late final Stream<GamificationProfile> _profileStream =
+  GamificationService.watchProfile();
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<GamificationProfile>(
-      stream: GamificationService.watchProfile(),
+      stream: _profileStream,
       builder: (context, snapshot) {
         final streak = snapshot.data?.currentStreak ?? 0;
         return GestureDetector(
@@ -972,6 +1022,12 @@ class _NotificationBell extends StatefulWidget {
 
 class _NotificationBellState extends State<_NotificationBell>
     with SingleTickerProviderStateMixin {
+  // Cached once (same reasoning as _StreakBadge / _DroneReminderBell above):
+  // calling AccessControlService.streamPendingCount() inline as the
+  // StreamBuilder's `stream:` argument recreated the Firestore listener on
+  // every rebuild of this widget, contributing to the same 429
+  // resource-exhausted churn seen on Staff Rewards.
+  late final Stream<int> _pendingCountStream = AccessControlService.streamPendingCount();
   late final AnimationController _ctrl;
   // Highest count already "seen" (i.e. admin opened Pending Requests for
   // it). Ringing stops the moment that happens and only resumes once a
@@ -1028,7 +1084,7 @@ class _NotificationBellState extends State<_NotificationBell>
       // Pending-employee count, not generic "unread" count — this is the
       // exact metric requirement 4 asks the badge to reflect, and it can
       // never disagree with what the Pending Requests page shows.
-      stream: AccessControlService.streamPendingCount(),
+      stream: _pendingCountStream,
       builder: (context, snapshot) {
         final count = snapshot.data ?? 0;
         final unseen = count > 0 && count > _seenCount;
@@ -2627,11 +2683,18 @@ class _ExpandableDrawerNavItemState extends State<_ExpandableDrawerNavItem> {
                       color: _h || _open ? color : _textSub, fontSize: 13,
                       fontWeight: _h || _open ? FontWeight.w600 : FontWeight.w400)),
                   const Spacer(),
-                  AnimatedRotation(
-                    duration: const Duration(milliseconds: 200),
-                    turns: _open ? 0.25 : 0.0,
-                    child: Icon(Icons.chevron_right_rounded,
-                        color: color.withOpacity(_h || _open ? 0.9 : 0.5), size: 15),
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: _h || _open ? color.withOpacity(0.22) : color.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: AnimatedRotation(
+                      duration: const Duration(milliseconds: 200),
+                      turns: _open ? 0.5 : 0.0,
+                      child: Icon(Icons.keyboard_arrow_down_rounded,
+                          color: color.withOpacity(_h || _open ? 1 : 0.7), size: 16),
+                    ),
                   ),
                 ]),
               ),
@@ -2641,8 +2704,14 @@ class _ExpandableDrawerNavItemState extends State<_ExpandableDrawerNavItem> {
         AnimatedCrossFade(
           duration: const Duration(milliseconds: 200),
           crossFadeState: _open ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-          firstChild: Padding(
-            padding: const EdgeInsets.only(left: 20),
+          firstChild: Container(
+            margin: const EdgeInsets.fromLTRB(22, 2, 10, 6),
+            decoration: BoxDecoration(
+              color: _bgDeep.withOpacity(0.55),
+              borderRadius: BorderRadius.circular(10),
+              border: Border(left: BorderSide(color: color.withOpacity(0.45), width: 2)),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 4),
             child: Column(
               children: widget.children.map((c) => _DrawerSubNavItem(
                 label: c['label']!,
@@ -2675,32 +2744,30 @@ class _DrawerSubNavItemState extends State<_DrawerSubNavItem> {
       onExit: (_) => setState(() => _h = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),
-        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
         decoration: BoxDecoration(
-          color: _h ? color.withOpacity(0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(9),
+          color: _h ? color.withOpacity(0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
         ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(8),
           onTap: widget.onTap,
           splashColor: color.withOpacity(0.10),
           highlightColor: Colors.transparent,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             child: Row(children: [
-              Container(
-                width: 5, height: 5,
-                decoration: BoxDecoration(
-                  color: _h ? color : _textMuted,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 10),
+              Icon(Icons.subdirectory_arrow_right_rounded,
+                  size: 14, color: _h ? color : _textMuted),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(widget.label, style: TextStyle(
-                    color: _h ? color : _textSub, fontSize: 12.5,
-                    fontWeight: _h ? FontWeight.w600 : FontWeight.w400)),
+                    color: _h ? color : _textSub, fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: _h ? FontWeight.w700 : FontWeight.w500)),
               ),
+              if (_h)
+                Icon(Icons.north_east_rounded, size: 12, color: color.withOpacity(0.8)),
             ]),
           ),
         ),
