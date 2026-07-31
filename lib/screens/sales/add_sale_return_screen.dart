@@ -14,7 +14,8 @@ import 'package:cda_inventory/services/sale_return_pdf_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 
 class AddSaleReturnScreen extends StatefulWidget {
-  const AddSaleReturnScreen({super.key});
+  final SaleReturn? returnToEdit;
+  const AddSaleReturnScreen({super.key, this.returnToEdit});
 
   @override
   State<AddSaleReturnScreen> createState() => _AddSaleReturnScreenState();
@@ -55,6 +56,24 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
   static const Color kTextDark  = Color(0xFF1F2937);
   static const Color kTextSub   = Color(0xFF6B7280);
   static const Color kTextMute  = Color(0xFF9CA3AF);
+
+  bool get _isEdit => widget.returnToEdit != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final r = widget.returnToEdit;
+    if (r != null) {
+      productController.text = r.productName;
+      customerController.text = r.customerName;
+      quantityController.text = r.quantity.toString();
+      amountController.text = r.amount % 1 == 0 ? r.amount.toStringAsFixed(0) : r.amount.toString();
+      referenceInvoiceController.text = r.referenceInvoice;
+      dateController.text = r.returnDate;
+      selectedBranch = kBranches.contains(r.branch) ? r.branch : kBranches.first;
+      selectedReason = reasons.contains(r.reason) ? r.reason : 'Damaged Goods';
+    }
+  }
 
   @override
   void dispose() {
@@ -106,6 +125,7 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
   // ── Build a SaleReturn object from the current form state. Used by
   //    _printPreview() for a live preview of unsaved changes. ─────────────
   SaleReturn _buildDraftReturn() => SaleReturn(
+    id: widget.returnToEdit?.id,
     productName: productController.text.trim(),
     customerName: customerController.text.trim(),
     quantity: int.tryParse(quantityController.text.trim()) ?? 0,
@@ -114,6 +134,7 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
     referenceInvoice: referenceInvoiceController.text.trim(),
     branch: selectedBranch,
     returnDate: dateController.text.trim(),
+    createdAt: widget.returnToEdit?.createdAt,
   );
 
   Future<void> _printPreview() async {
@@ -143,6 +164,19 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
       branch: selectedBranch,
       returnDate: dateController.text.trim(),
     );
+
+    if (_isEdit) {
+      final result = await SaleReturnService.updateSaleReturn(widget.returnToEdit!.id!, ret);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      if (result['success'] == true) {
+        showAppSnack(context, 'Sale return updated');
+        Navigator.pop(context, true);
+      } else {
+        showAppSnack(context, result['message'] ?? 'Something went wrong', isError: true);
+      }
+      return;
+    }
 
     final result = await SaleReturnService.addSaleReturn(ret);
     if (!mounted) return;
@@ -210,8 +244,8 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
           icon: const Icon(Icons.arrow_back_ios_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Sale Return / Credit Note',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        title: Text(_isEdit ? 'Edit Sale Return' : 'Sale Return / Credit Note',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         actions: [
           IconButton(
               icon: const Icon(Icons.refresh_rounded),
@@ -249,8 +283,8 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Sale Return / Credit Note',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: kTextDark)),
+                        Text(_isEdit ? 'Edit Sale Return / Credit Note' : 'Sale Return / Credit Note',
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: kTextDark)),
                         const SizedBox(height: 18),
                         _buildProductAndMetaRow(),
                         const SizedBox(height: 22),
@@ -586,12 +620,12 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
         ),
         child: _isLoading
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-            : const Row(
+            : Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.save_rounded, size: 16, color: Colors.white),
-            SizedBox(width: 8),
-            Text('Save Return', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+            const Icon(Icons.save_rounded, size: 16, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(_isEdit ? 'Update Return' : 'Save Return', style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
           ],
         ),
       ),

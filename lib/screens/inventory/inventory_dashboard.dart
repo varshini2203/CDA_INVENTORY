@@ -1983,4 +1983,3 @@ class _BranchOption {
   final IconData icon;
   const _BranchOption(this.id, this.label, this.icon);
 }
-

@@ -2,6 +2,7 @@
 //
 // Firestore version — IDs are Strings. Theme matched to Invoice pages.
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +13,7 @@ import '../../services/drone_service.dart';
 import '../../services/drone_reminder_service.dart';
 import '../../constants/drone_categories.dart';
 import '../../core/access/access_scope.dart';
+import '../../data/seed_drones.dart';
 import 'add_drone_entry_screen.dart';
 import 'edit_drone_screen.dart';
 import 'drone_history_screen.dart';
@@ -28,6 +30,7 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
   final DroneService _service = DroneService();
   List<Drone> _drones = [];
   bool _loading = true;
+  bool _seeding = false;
   String? _error;
   String _search = '';
   String _filter = 'ALL';
@@ -90,6 +93,30 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
         _error = result.error;
       }
     });
+  }
+
+  /// Seeds the `drones` Firestore collection with the curated drone
+  /// inventory from `lib/data/seed_drones.dart` (extracted from the CDA
+  /// Admin and CDA Ops inventory spreadsheets). Safe to run more than
+  /// once — `seedDrones()` skips any drone that's already in Firestore.
+  Future<void> _seedFleet() async {
+    if (_seeding) return;
+    setState(() => _seeding = true);
+    try {
+      await seedDrones(FirebaseFirestore.instance);
+      if (!mounted) return;
+      _showSnack(
+        'Fleet seed data loaded',
+        icon: Icons.cloud_done_rounded,
+        color: kTeal,
+      );
+      await _loadDrones();
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Seeding failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _seeding = false);
+    }
   }
 
   Future<void> _toggleStatus(Drone drone) async {
@@ -271,7 +298,9 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
               inCount: _inCount,
               outCount: _outCount,
               loading: _loading,
+              seeding: _seeding,
               onRefresh: _loadDrones,
+              onSeed: _seedFleet,
               onBack: () => Navigator.maybePop(context),
             ),
           ),
@@ -514,7 +543,9 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
     }
     final items = _filtered;
     if (_drones.isEmpty) {
-      return SliverFillRemaining(child: _EmptyView(onAdd: _openAdd));
+      return SliverFillRemaining(
+          child: _EmptyView(
+              onAdd: _openAdd, onSeed: _seedFleet, seeding: _seeding));
     }
     if (items.isEmpty) {
       return SliverFillRemaining(
@@ -558,7 +589,9 @@ class _DroneHeaderDelegate extends SliverPersistentHeaderDelegate {
   final List<Drone> drones;
   final int inCount, outCount;
   final bool loading;
+  final bool seeding;
   final VoidCallback onRefresh;
+  final VoidCallback onSeed;
   final VoidCallback onBack;
 
   static const Color kNavy = Color(0xFF0A1628);
@@ -574,7 +607,9 @@ class _DroneHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.inCount,
     required this.outCount,
     required this.loading,
+    required this.seeding,
     required this.onRefresh,
+    required this.onSeed,
     required this.onBack,
   });
 
@@ -763,6 +798,18 @@ class _DroneHeaderDelegate extends SliverPersistentHeaderDelegate {
                     ),
                   ],
                   const Spacer(),
+                  IconButton(
+                    icon: seeding
+                        ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.cloud_upload_rounded,
+                        color: Colors.white),
+                    onPressed: seeding ? null : onSeed,
+                    tooltip: 'Seed fleet data',
+                  ),
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded,
                         color: Colors.white),
@@ -1903,7 +1950,13 @@ class _PulsingDroneIcon extends StatelessWidget {
 
 class _EmptyView extends StatelessWidget {
   final VoidCallback onAdd;
-  const _EmptyView({required this.onAdd});
+  final VoidCallback onSeed;
+  final bool seeding;
+  const _EmptyView(
+      {required this.onAdd, required this.onSeed, required this.seeding});
+
+  static const Color kTeal = Color(0xFF00D4AA);
+  static const Color kPurple = Color(0xFF6C63FF);
 
   @override
   Widget build(BuildContext context) {
@@ -1939,8 +1992,30 @@ class _EmptyView extends StatelessWidget {
             label: const Text('Register Drone',
                 style: TextStyle(fontWeight: FontWeight.w700)),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00D4AA),
+              backgroundColor: kTeal,
               foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 28, vertical: 15),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: seeding ? null : onSeed,
+            icon: seeding
+                ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    color: kPurple, strokeWidth: 2))
+                : const Icon(Icons.cloud_upload_rounded, size: 18),
+            label: Text(
+                seeding ? 'Seeding fleet…' : 'Seed Fleet Data',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kPurple,
+              side: BorderSide(color: kPurple.withOpacity(0.5)),
               padding: const EdgeInsets.symmetric(
                   horizontal: 28, vertical: 15),
               shape: RoundedRectangleBorder(
