@@ -80,6 +80,141 @@ class _PurchaseReturnListScreenState extends State<PurchaseReturnListScreen> {
 
   double get _totalValue => _filtered.fold(0.0, (sum, p) => sum + p.amount);
 
+  // ── Edit an existing purchase return ────────────────────────────────────
+  Future<void> _editReturn(PurchaseReturn p) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'Edit Purchase Return'),
+        builder: (_) => AddPurchaseReturnScreen(returnToEdit: p),
+      ),
+    );
+    if (result == true) _fetch();
+  }
+
+  // ── View full purchase return details ───────────────────────────────────
+  void _viewReturn(PurchaseReturn p) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        minChildSize: 0.35,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              Row(children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.teal.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.keyboard_return_rounded, color: AppColors.teal, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(p.productName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 17, color: AppColors.navy)),
+                      const SizedBox(height: 2),
+                      Text(p.vendorName, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                Text('₹${p.amount.toStringAsFixed(0)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navy)),
+              ]),
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+              _detailRow('Quantity', '${p.quantity}'),
+              _detailRow('Reason', p.reason),
+              _detailRow('Reference Invoice',
+                  p.referenceInvoice.isEmpty ? '—' : p.referenceInvoice),
+              _detailRow('Branch', kBranchLabels[p.branch] ?? p.branch),
+              _detailRow('Return Date', p.returnDate),
+              const SizedBox(height: 20),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _editReturn(p);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.navy,
+                      side: const BorderSide(color: AppColors.navy),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    label: const Text('Edit'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.navy,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 130,
+          child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+        ),
+        Expanded(
+          child: Text(value,
+              style: const TextStyle(color: AppColors.navy, fontSize: 13.5, fontWeight: FontWeight.w600)),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -335,21 +470,72 @@ class _PurchaseReturnListScreenState extends State<PurchaseReturnListScreen> {
               InfoChip(Icons.location_city_rounded, kBranchLabels[p.branch] ?? p.branch),
             ]),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                InfoChip(Icons.calendar_today_rounded, p.returnDate),
-                if (p.id != null)
-                  GestureDetector(
+            Row(children: [InfoChip(Icons.calendar_today_rounded, p.returnDate)]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _viewReturn(p),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.navy.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.navy.withOpacity(0.18)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.visibility_outlined, color: AppColors.navy, size: 16),
+                        SizedBox(width: 4),
+                        Text('View',
+                            style: TextStyle(
+                                color: AppColors.navy, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _editReturn(p),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.amber.withOpacity(0.35)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_outlined, color: AppColors.amber, size: 16),
+                        SizedBox(width: 4),
+                        Text('Edit',
+                            style: TextStyle(
+                                color: AppColors.amber, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (p.id != null) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
                     onTap: () => _delete(p.id!),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
                         color: AppColors.coral.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: AppColors.coral.withOpacity(0.35)),
                       ),
                       child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.delete_outline_rounded, color: AppColors.coral, size: 16),
@@ -361,8 +547,10 @@ class _PurchaseReturnListScreenState extends State<PurchaseReturnListScreen> {
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+              ] else
+                const SizedBox(width: 8),
+            ]),
           ]),
         ),
       ]),

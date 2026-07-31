@@ -3,10 +3,12 @@
 // "Add Estimate" form — Vyapar-style itemized estimate/quotation builder.
 
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:cda_inventory/models/estimate.dart';
 import 'package:cda_inventory/models/invoice_line_item.dart';
 import 'package:cda_inventory/models/customer_details.dart';
 import 'package:cda_inventory/services/estimate_service.dart';
+import 'package:cda_inventory/services/estimate_pdf_service.dart';
 
 class _ItemRow {
   final String id;
@@ -180,6 +182,50 @@ class _AddEstimateScreenState extends State<AddEstimateScreen> {
     }
   }
 
+  Estimate _buildEstimateFromForm() {
+    final validRows = _rows.where((r) => !r.isEmpty).toList();
+    return Estimate(
+      id: widget.estimateToEdit?.id,
+      referenceNo: _refNoController.text.trim(),
+      partyName: _partyNameController.text.trim(),
+      customer: CustomerDetails(
+        name: _partyNameController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+      ),
+      lineItems: validRows.map((r) => r.toLineItem()).toList(),
+      estimateDate: _fmtDate(_estimateDate),
+      validTill: _validTill != null ? _fmtDate(_validTill!) : null,
+      gstEnabled: _gstEnabled,
+      isInterState: _isInterState,
+      shipping: _shipping,
+      roundOffEnabled: _roundOffEnabled,
+      status: widget.estimateToEdit?.status ?? 'Open',
+      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      termsNotes: _termsNotesController.text.trim(),
+      branch: widget.estimateToEdit?.branch,
+      addedBy: widget.estimateToEdit?.addedBy,
+    );
+  }
+
+  // ── Print — SkyLynk-branded PDF preview/print of the current form,
+  // same letterhead and layout as the Tax Invoice ─────────────────────────
+  Future<void> _print() async {
+    final validRows = _rows.where((r) => !r.isEmpty).toList();
+    if (validRows.isEmpty) {
+      _showSnack('Add at least one item before printing', isError: true);
+      return;
+    }
+    final estimate = _buildEstimateFromForm();
+    try {
+      await Printing.layoutPdf(
+        onLayout: (format) => EstimatePdfService.generate(estimate),
+        name: 'estimate_${estimate.referenceNo}.pdf',
+      );
+    } catch (e) {
+      _showSnack('Failed to generate PDF: $e', isError: true);
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final validRows = _rows.where((r) => !r.isEmpty).toList();
@@ -190,27 +236,7 @@ class _AddEstimateScreenState extends State<AddEstimateScreen> {
 
     setState(() => _isSaving = true);
     try {
-      final estimate = Estimate(
-        id: widget.estimateToEdit?.id,
-        referenceNo: _refNoController.text.trim(),
-        partyName: _partyNameController.text.trim(),
-        customer: CustomerDetails(
-          name: _partyNameController.text.trim(),
-          phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-        ),
-        lineItems: validRows.map((r) => r.toLineItem()).toList(),
-        estimateDate: _fmtDate(_estimateDate),
-        validTill: _validTill != null ? _fmtDate(_validTill!) : null,
-        gstEnabled: _gstEnabled,
-        isInterState: _isInterState,
-        shipping: _shipping,
-        roundOffEnabled: _roundOffEnabled,
-        status: widget.estimateToEdit?.status ?? 'Open',
-        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-        termsNotes: _termsNotesController.text.trim(),
-        branch: widget.estimateToEdit?.branch,
-        addedBy: widget.estimateToEdit?.addedBy,
-      );
+      final estimate = _buildEstimateFromForm();
 
       if (_isEditMode) {
         await _service.updateEstimate(estimate);
@@ -248,41 +274,83 @@ class _AddEstimateScreenState extends State<AddEstimateScreen> {
         title: Text(_isEditMode ? 'Edit Estimate' : 'Add Estimate',
             style: const TextStyle(color: kTextDark, fontWeight: FontWeight.w700, fontSize: 17)),
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
-          children: [
-            _sectionCard(child: _partyAndMetaSection()),
-            const SizedBox(height: 14),
-            _sectionCard(child: _itemsSection()),
-            const SizedBox(height: 14),
-            _sectionCard(child: _totalsSection()),
-            const SizedBox(height: 14),
-            _sectionCard(child: _notesSection()),
-          ],
+      body: Theme(
+        data: Theme.of(context).copyWith(
+          brightness: Brightness.light,
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            brightness: Brightness.light,
+            onSurface: kTextDark,
+            surface: Colors.white,
+          ),
+          textTheme: Theme.of(context).textTheme.apply(
+            bodyColor: kTextDark,
+            displayColor: kTextDark,
+          ),
+          iconTheme: const IconThemeData(color: kTextSub),
+          canvasColor: Colors.white,
+          inputDecorationTheme: const InputDecorationTheme(
+            hintStyle: TextStyle(color: kTextMute),
+          ),
+        ),
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
+            children: [
+              _sectionCard(child: _partyAndMetaSection()),
+              const SizedBox(height: 14),
+              _sectionCard(child: _itemsSection()),
+              const SizedBox(height: 14),
+              _sectionCard(child: _totalsSection()),
+              const SizedBox(height: 14),
+              _sectionCard(child: _notesSection()),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: SizedBox(
-            height: 48,
-            child: ElevatedButton(
-              onPressed: _isSaving ? null : _save,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kRed,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving ? null : _print,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kTextDark,
+                      side: const BorderSide(color: kBorder),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.print_rounded, size: 18),
+                    label: const Text('Print', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  ),
+                ),
               ),
-              child: _isSaving
-                  ? const SizedBox(
-                  width: 20, height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                  : Text(_isEditMode ? 'Update Estimate' : 'Save Estimate',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _isSaving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kRed,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+                        : Text(_isEditMode ? 'Update Estimate' : 'Save Estimate',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

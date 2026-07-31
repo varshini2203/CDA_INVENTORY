@@ -118,6 +118,42 @@ class PurchaseService {
     }
   }
 
+  // ── Duplicate bill-number check (used before create/update) ────────────────
+  static Future<bool> billNumberExists(String billNumber, {String? excludeId}) async {
+    if (billNumber.trim().isEmpty) return false;
+    final snapshot =
+    await _col.where('invoice_number', isEqualTo: billNumber).get();
+    if (snapshot.docs.isEmpty) return false;
+    if (excludeId == null) return true;
+    return snapshot.docs.any((doc) => doc.id != excludeId);
+  }
+
+  // ── Next bill number suggestion (e.g. "PB-0001") ────────────────────────
+  // Looks at the highest numeric suffix among existing purchase bill
+  // numbers and suggests the next one in sequence, zero-padded to 4
+  // digits. Falls back to re-checking against Firestore in case the
+  // in-memory cache is stale (e.g. another device just saved a bill).
+  static Future<String> suggestNextBillNumber({bool forceRefresh = false}) async {
+    final purchases = await getAllPurchases(forceRefresh: forceRefresh);
+    int maxNum = 0;
+    for (final p in purchases) {
+      final match = RegExp(r'(\d+)$').firstMatch(p.invoiceNumber);
+      if (match == null) continue;
+      final n = int.tryParse(match.group(1)!);
+      if (n != null && n > maxNum) maxNum = n;
+    }
+
+    int next = maxNum + 1;
+    String candidate = 'PB-${next.toString().padLeft(4, '0')}';
+    int guard = 0;
+    while (await billNumberExists(candidate) && guard < 20) {
+      next++;
+      candidate = 'PB-${next.toString().padLeft(4, '0')}';
+      guard++;
+    }
+    return candidate;
+  }
+
   // ── GET single purchase by ID ──────────────────────────────────────────────
   static Future<Purchase?> getPurchaseById(String id) async {
     try {

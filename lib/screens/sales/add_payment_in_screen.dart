@@ -8,16 +8,23 @@
 // payment mode with contextual reference label, notes, attachments and
 // advance-amount tracking. No paywall — every feature is live.
 
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
+import 'package:printing/printing.dart';
 import 'package:cda_inventory/models/payment_in.dart';
 import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/services/payment_in_service.dart';
 import 'package:cda_inventory/services/invoice_service.dart';
+import 'package:cda_inventory/services/payment_in_pdf_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 
 class AddPaymentInScreen extends StatefulWidget {
   final String? initialCustomerName;
-  const AddPaymentInScreen({super.key, this.initialCustomerName});
+  final PaymentIn? paymentToEdit;
+  const AddPaymentInScreen({super.key, this.initialCustomerName, this.paymentToEdit});
 
   @override
   State<AddPaymentInScreen> createState() => _AddPaymentInScreenState();
@@ -36,6 +43,8 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
   bool _isLoading = false;
   bool _isLoadingInvoices = true;
   String? _attachmentName;
+  Uint8List? _attachmentBytes;
+  String? _existingAttachmentBase64;
 
   static const modes = ['Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Card'];
 
@@ -45,6 +54,10 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
   List<Invoice> _outstandingInvoices = [];
   final Set<String> _selectedInvoiceIds = {};
   final Map<String, TextEditingController> _allocationControllers = {};
+
+  bool get _isEditMode => widget.paymentToEdit != null;
+  List<PaymentInInvoiceAllocation> get _lockedAllocations =>
+      widget.paymentToEdit?.invoiceAllocations ?? [];
 
   // ── Purchase-Order-style light theme tokens (same as Payment-Out) ─────
   static const Color kBg        = Color(0xFFF4F6F9);
@@ -62,9 +75,22 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
   @override
   void initState() {
     super.initState();
+    final p = widget.paymentToEdit;
+    if (p != null) {
+      customerController.text = p.customerName;
+      phoneController.text = p.phone;
+      amountController.text = p.amount % 1 == 0 ? p.amount.toStringAsFixed(0) : p.amount.toString();
+      referenceController.text = p.referenceNumber;
+      notesController.text = p.notes;
+      dateController.text = p.paymentDate;
+      selectedBranch = kBranches.contains(p.branch) ? p.branch : kBranches.first;
+      selectedMode = modes.contains(p.paymentMode) ? p.paymentMode : 'Cash';
+      _attachmentName = p.attachmentName;
+      _existingAttachmentBase64 = p.attachmentBase64;
+    }
     _loadInvoices().then((_) {
       final prefill = widget.initialCustomerName?.trim();
-      if (prefill != null && prefill.isNotEmpty && mounted) {
+      if (!_isEditMode && prefill != null && prefill.isNotEmpty && mounted) {
         customerController.text = prefill;
         _onCustomerChanged(prefill);
       }
@@ -127,6 +153,105 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
     }
   }
 
+  // ── Add Attachment — lets the user actually pick a photo/scan instead
+  // of fabricating a placeholder filename. ─────────────────────────────
+  Future<void> _pickAttachment() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded, color: kBlue),
+              title: const Text('Scan with Camera',
+                  style: TextStyle(color: kTextDark, fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: kBlue),
+              title: const Text('Choose from Gallery',
+                  style: TextStyle(color: kTextDark, fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    if (picked == null) return;
+
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+
+    final compressed = _compressAttachment(bytes);
+    setState(() {
+      _attachmentBytes = compressed;
+      _existingAttachmentBase64 = null; // replaced by the new capture
+      _attachmentName = picked.name.isNotEmpty
+          ? picked.name
+          : 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    });
+  }
+
+  // Same 500KB budget / downscale strategy as Payment-Out, so a
+  // Base64-encoded receipt never blows past Firestore's 1MB doc cap.
+  static const int _maxRawAttachmentBytes = 500000;
+  static const int _maxAttachmentDimension = 1600;
+
+  static Uint8List _compressAttachment(Uint8List bytes) {
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return bytes;
+
+    img.Image working = decoded;
+    if (working.width > _maxAttachmentDimension || working.height > _maxAttachmentDimension) {
+      working = img.copyResize(
+        working,
+        width: working.width >= working.height ? _maxAttachmentDimension : null,
+        height: working.height > working.width ? _maxAttachmentDimension : null,
+      );
+    }
+
+    var quality = 85;
+    Uint8List out = Uint8List.fromList(img.encodeJpg(working, quality: quality));
+
+    while (out.length > _maxRawAttachmentBytes && quality > 30) {
+      quality -= 10;
+      out = Uint8List.fromList(img.encodeJpg(working, quality: quality));
+    }
+    while (out.length > _maxRawAttachmentBytes && working.width > 400 && working.height > 400) {
+      working = img.copyResize(working, width: (working.width * 0.8).round());
+      out = Uint8List.fromList(img.encodeJpg(working, quality: quality));
+    }
+
+    return out;
+  }
+
+  void _removeAttachment() {
+    setState(() {
+      _attachmentBytes = null;
+      _existingAttachmentBase64 = null;
+      _attachmentName = null;
+    });
+  }
+
   void _clearForm() {
     customerController.clear();
     phoneController.clear();
@@ -142,6 +267,8 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
       selectedBranch = kBranches.first;
       selectedMode = 'Cash';
       _attachmentName = null;
+      _attachmentBytes = null;
+      _existingAttachmentBase64 = null;
       _outstandingInvoices = [];
       _selectedInvoiceIds.clear();
     });
@@ -252,6 +379,62 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
     }
   }
 
+  // ── Build the invoice allocations from current form state (unsaved). Used
+  //    only for the live Print preview — actual save-time validation of
+  //    balances/limits still happens in _save(). ──────────────────────────
+  List<PaymentInInvoiceAllocation> _currentAllocationsForPreview() {
+    if (_isEditMode) return _lockedAllocations;
+    final list = <PaymentInInvoiceAllocation>[];
+    for (final inv in _outstandingInvoices) {
+      final id = inv.id;
+      if (id == null || !_selectedInvoiceIds.contains(id)) continue;
+      final applied = double.tryParse(_allocationControllers[id]?.text.trim() ?? '') ?? 0;
+      if (applied <= 0) continue;
+      list.add(PaymentInInvoiceAllocation(invoiceId: id, invoiceNo: inv.invoiceNo, amountApplied: applied));
+    }
+    return list;
+  }
+
+  // ── Build a PaymentIn object from the current form state. Used by
+  //    _printPreview() for a live preview of unsaved changes. ─────────────
+  PaymentIn _buildDraftPaymentIn() {
+    final allocations = _currentAllocationsForPreview();
+    final allocatedSum = allocations.fold(0.0, (s, a) => s + a.amountApplied);
+    final totalAmount = _enteredAmount;
+
+    return PaymentIn(
+      id: widget.paymentToEdit?.id,
+      customerName: customerController.text.trim(),
+      phone: phoneController.text.trim(),
+      amount: totalAmount,
+      paymentMode: selectedMode,
+      referenceNumber: referenceController.text.trim(),
+      branch: selectedBranch,
+      paymentDate: dateController.text.trim(),
+      notes: notesController.text.trim(),
+      invoiceAllocations: allocations,
+      advanceAmount: (totalAmount - allocatedSum).clamp(0, double.infinity),
+      attachmentName: _attachmentName,
+      attachmentBase64: _attachmentBytes != null
+          ? base64Encode(_attachmentBytes!)
+          : _existingAttachmentBase64,
+      createdAt: widget.paymentToEdit?.createdAt,
+    );
+  }
+
+  Future<void> _printPreview() async {
+    if (customerController.text.trim().isEmpty) {
+      showAppSnack(context, 'Enter a customer name to preview', isError: true);
+      return;
+    }
+    if (_enteredAmount <= 0) {
+      showAppSnack(context, 'Enter the amount received to preview', isError: true);
+      return;
+    }
+    final draft = _buildDraftPaymentIn();
+    await Printing.layoutPdf(onLayout: (format) => PaymentInPdfService.generate(draft));
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (dateController.text.isEmpty) {
@@ -263,36 +446,56 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
       return;
     }
 
-    final allocations = <PaymentInInvoiceAllocation>[];
-    for (final inv in _outstandingInvoices) {
-      final id = inv.id;
-      if (id == null || !_selectedInvoiceIds.contains(id)) continue;
-      final applied = double.tryParse(_allocationControllers[id]?.text.trim() ?? '') ?? 0;
-      if (applied <= 0) continue;
-      if (applied > inv.balanceDue + 0.01) {
+    List<PaymentInInvoiceAllocation> allocations;
+    double allocatedSum;
+    final totalAmount = double.parse(amountController.text.trim());
+
+    if (_isEditMode) {
+      // Invoice allocations aren't re-editable here — they were already
+      // applied to the invoice's balance-due when this receipt was first
+      // recorded, so we keep them fixed and only let the user correct the
+      // payment's own details (customer, amount, mode, notes, attachment).
+      allocations = _lockedAllocations;
+      allocatedSum = allocations.fold(0.0, (s, a) => s + a.amountApplied);
+      if (totalAmount + 0.01 < allocatedSum) {
         showAppSnack(
           context,
-          'Amount for ${inv.invoiceNo} exceeds its balance due (₹${inv.balanceDue.toStringAsFixed(2)})',
+          'Amount received (₹${totalAmount.toStringAsFixed(2)}) can\'t be less than the amount already applied to invoices (₹${allocatedSum.toStringAsFixed(2)})',
           isError: true,
         );
         return;
       }
-      allocations.add(PaymentInInvoiceAllocation(
-        invoiceId: id,
-        invoiceNo: inv.invoiceNo,
-        amountApplied: applied,
-      ));
-    }
-
-    final allocatedSum = allocations.fold(0.0, (s, a) => s + a.amountApplied);
-    final totalAmount = double.parse(amountController.text.trim());
-    if (allocatedSum > totalAmount + 0.01) {
-      showAppSnack(
-        context,
-        'Amount applied to invoices (₹${allocatedSum.toStringAsFixed(2)}) exceeds amount received (₹${totalAmount.toStringAsFixed(2)})',
-        isError: true,
-      );
-      return;
+    } else {
+      final newAllocations = <PaymentInInvoiceAllocation>[];
+      for (final inv in _outstandingInvoices) {
+        final id = inv.id;
+        if (id == null || !_selectedInvoiceIds.contains(id)) continue;
+        final applied = double.tryParse(_allocationControllers[id]?.text.trim() ?? '') ?? 0;
+        if (applied <= 0) continue;
+        if (applied > inv.balanceDue + 0.01) {
+          showAppSnack(
+            context,
+            'Amount for ${inv.invoiceNo} exceeds its balance due (₹${inv.balanceDue.toStringAsFixed(2)})',
+            isError: true,
+          );
+          return;
+        }
+        newAllocations.add(PaymentInInvoiceAllocation(
+          invoiceId: id,
+          invoiceNo: inv.invoiceNo,
+          amountApplied: applied,
+        ));
+      }
+      allocations = newAllocations;
+      allocatedSum = allocations.fold(0.0, (s, a) => s + a.amountApplied);
+      if (allocatedSum > totalAmount + 0.01) {
+        showAppSnack(
+          context,
+          'Amount applied to invoices (₹${allocatedSum.toStringAsFixed(2)}) exceeds amount received (₹${totalAmount.toStringAsFixed(2)})',
+          isError: true,
+        );
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -308,25 +511,36 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
       notes: notesController.text.trim(),
       invoiceAllocations: allocations,
       advanceAmount: (totalAmount - allocatedSum).clamp(0, double.infinity),
+      attachmentName: _attachmentName,
+      attachmentBase64: _attachmentBytes != null
+          ? base64Encode(_attachmentBytes!)
+          : _existingAttachmentBase64,
     );
 
-    final result = await PaymentInService.addPaymentIn(payment);
+    final result = _isEditMode
+        ? await PaymentInService.updatePaymentIn(widget.paymentToEdit!.id!, payment)
+        : await PaymentInService.addPaymentIn(payment);
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (result['success'] == true) {
-      showSuccessDialog(
-        context,
-        title: 'Payment Received!',
-        message: allocations.isEmpty
-            ? 'The payment-in has been recorded successfully.'
-            : 'The payment-in has been recorded and applied to ${allocations.length} invoice${allocations.length == 1 ? '' : 's'}.',
-        onAddMore: () {
-          _clearForm();
-          _loadInvoices();
-        },
-        onViewList: () => Navigator.pop(context, true),
-      );
+      if (_isEditMode) {
+        showAppSnack(context, 'Payment updated successfully');
+        Navigator.pop(context, true);
+      } else {
+        showSuccessDialog(
+          context,
+          title: 'Payment Received!',
+          message: allocations.isEmpty
+              ? 'The payment-in has been recorded successfully.'
+              : 'The payment-in has been recorded and applied to ${allocations.length} invoice${allocations.length == 1 ? '' : 's'}.',
+          onAddMore: () {
+            _clearForm();
+            _loadInvoices();
+          },
+          onViewList: () => Navigator.pop(context, true),
+        );
+      }
     } else {
       showAppSnack(context, result['message'] ?? 'Something went wrong', isError: true);
     }
@@ -374,8 +588,8 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
           icon: const Icon(Icons.arrow_back_ios_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Payment-In',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        title: Text(_isEditMode ? 'Edit Payment-In' : 'Payment-In',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         actions: [
           IconButton(
               icon: const Icon(Icons.refresh_rounded),
@@ -418,7 +632,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
                         const SizedBox(height: 18),
                         _buildCustomerAndMetaRow(),
                         const SizedBox(height: 22),
-                        _buildOutstandingInvoicesCard(),
+                        _isEditMode ? _buildLockedAllocationsCard() : _buildOutstandingInvoicesCard(),
                         const SizedBox(height: 22),
                         _buildBottomSection(),
                         const SizedBox(height: 22),
@@ -458,24 +672,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
             ),
           ]),
         ),
-        Padding(
-          padding: const EdgeInsets.only(left: 6, top: 6),
-          child: InkWell(
-            onTap: () {},
-            child: const Icon(Icons.add_circle, size: 20, color: kBlue),
-          ),
-        ),
         const Spacer(),
-        IconButton(
-          tooltip: 'Save layout',
-          icon: const Icon(Icons.dashboard_customize_outlined, size: 18, color: kTextSub),
-          onPressed: () {},
-        ),
-        IconButton(
-          tooltip: 'Settings',
-          icon: const Icon(Icons.settings_outlined, size: 18, color: kTextSub),
-          onPressed: () {},
-        ),
         IconButton(
           tooltip: 'Close',
           icon: Container(
@@ -645,6 +842,65 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
     ]);
   }
 
+  // ── Edit mode: allocations were already applied to invoice balances when
+  // this receipt was first recorded, so show them read-only instead of a
+  // re-editable picker. ────────────────────────────────────────────────
+  Widget _buildLockedAllocationsCard() {
+    if (_lockedAllocations.isEmpty) {
+      return _cardWrap(
+        child: Row(children: [
+          const Icon(Icons.info_outline_rounded, size: 16, color: kTextMute),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'This receipt was recorded as an advance with no invoices settled.',
+              style: TextStyle(fontSize: 12.5, color: kTextSub),
+            ),
+          ),
+        ]),
+      );
+    }
+    return _cardWrap(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text('Applied to Invoices',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kTextDark)),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(color: kHeaderBg, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
+            child: const Text('Locked',
+                style: TextStyle(fontSize: 11, color: kTextSub, fontWeight: FontWeight.w600)),
+          ),
+        ]),
+        const SizedBox(height: 4),
+        const Text(
+          'These were settled when the receipt was first recorded and can\'t be changed here. Delete and re-create the payment if the invoice allocation itself needs to change.',
+          style: TextStyle(fontSize: 11.5, color: kTextMute),
+        ),
+        const SizedBox(height: 10),
+        for (final alloc in _lockedAllocations)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: kHeaderBg,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: kBorder),
+            ),
+            child: Row(children: [
+              Expanded(
+                child: Text(alloc.invoiceNo,
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kTextDark)),
+              ),
+              Text('₹${alloc.amountApplied.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kGreen)),
+            ]),
+          ),
+      ]),
+    );
+  }
+
   // ── Outstanding Invoices — multi-select settlement ─────────────────────
   Widget _buildOutstandingInvoicesCard() {
     final allSelected = _outstandingInvoices.isNotEmpty &&
@@ -811,7 +1067,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
         const Text('Attachments', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kTextDark)),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: () => setState(() => _attachmentName = 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg'),
+          onPressed: _pickAttachment,
           style: OutlinedButton.styleFrom(
             foregroundColor: kTextSub,
             side: const BorderSide(color: kBorder),
@@ -839,7 +1095,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
                     style: const TextStyle(fontSize: 12, color: kTextDark), overflow: TextOverflow.ellipsis),
               ),
               InkWell(
-                onTap: () => setState(() => _attachmentName = null),
+                onTap: _removeAttachment,
                 child: const Icon(Icons.close_rounded, size: 15, color: kTextMute),
               ),
             ]),
@@ -902,6 +1158,28 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
   Widget _buildFooterBar() {
     return Row(children: [
       const Spacer(),
+      OutlinedButton.icon(
+        onPressed: _printPreview,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: kTextDark,
+          side: const BorderSide(color: kBorder),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.horizontal(left: Radius.circular(6)),
+          ),
+        ),
+        icon: const Icon(Icons.print_outlined, size: 16),
+        label: const Text('Print', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      ),
+      Container(
+        padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 6),
+        decoration: BoxDecoration(
+          border: Border.all(color: kBorder),
+          borderRadius: const BorderRadius.horizontal(right: Radius.circular(6)),
+        ),
+        child: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: kTextSub),
+      ),
+      const SizedBox(width: 10),
       ElevatedButton(
         onPressed: _isLoading ? null : _save,
         style: ElevatedButton.styleFrom(
@@ -913,12 +1191,13 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
         ),
         child: _isLoading
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-            : const Row(
+            : Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.save_rounded, size: 16, color: Colors.white),
-            SizedBox(width: 8),
-            Text('Save Payment-In', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+            const Icon(Icons.save_rounded, size: 16, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(_isEditMode ? 'Update Payment-In' : 'Save Payment-In',
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
           ],
         ),
       ),

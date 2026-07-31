@@ -13,7 +13,8 @@ import 'package:cda_inventory/services/purchase_return_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 
 class AddPurchaseReturnScreen extends StatefulWidget {
-  const AddPurchaseReturnScreen({super.key});
+  final PurchaseReturn? returnToEdit;
+  const AddPurchaseReturnScreen({super.key, this.returnToEdit});
 
   @override
   State<AddPurchaseReturnScreen> createState() => _AddPurchaseReturnScreenState();
@@ -31,6 +32,8 @@ class _AddPurchaseReturnScreenState extends State<AddPurchaseReturnScreen> {
   String selectedBranch = kBranches.first;
   String selectedReason = 'Damaged Goods';
   bool _isLoading = false;
+
+  bool get _isEditMode => widget.returnToEdit != null;
 
   static const reasons = [
     'Damaged Goods',
@@ -53,6 +56,22 @@ class _AddPurchaseReturnScreenState extends State<AddPurchaseReturnScreen> {
   static const Color kTextDark  = Color(0xFF1F2937);
   static const Color kTextSub   = Color(0xFF6B7280);
   static const Color kTextMute  = Color(0xFF9CA3AF);
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditMode) {
+      final r = widget.returnToEdit!;
+      productController.text = r.productName;
+      vendorController.text = r.vendorName;
+      quantityController.text = r.quantity.toString();
+      amountController.text = r.amount.toString();
+      referenceInvoiceController.text = r.referenceInvoice;
+      dateController.text = r.returnDate;
+      selectedBranch = kBranches.contains(r.branch) ? r.branch : kBranches.first;
+      selectedReason = reasons.contains(r.reason) ? r.reason : 'Other';
+    }
+  }
 
   @override
   void dispose() {
@@ -110,6 +129,7 @@ class _AddPurchaseReturnScreenState extends State<AddPurchaseReturnScreen> {
     setState(() => _isLoading = true);
 
     final ret = PurchaseReturn(
+      id: widget.returnToEdit?.id,
       productName: productController.text.trim(),
       vendorName: vendorController.text.trim(),
       quantity: int.parse(quantityController.text.trim()),
@@ -118,20 +138,27 @@ class _AddPurchaseReturnScreenState extends State<AddPurchaseReturnScreen> {
       referenceInvoice: referenceInvoiceController.text.trim(),
       branch: selectedBranch,
       returnDate: dateController.text.trim(),
+      createdAt: widget.returnToEdit?.createdAt,
     );
 
-    final result = await PurchaseReturnService.addPurchaseReturn(ret);
+    final result = _isEditMode
+        ? await PurchaseReturnService.updatePurchaseReturn(widget.returnToEdit!.id!, ret)
+        : await PurchaseReturnService.addPurchaseReturn(ret);
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (result['success'] == true) {
-      showSuccessDialog(
-        context,
-        title: 'Return Recorded!',
-        message: 'The purchase return / debit note has been recorded successfully.',
-        onAddMore: _clearForm,
-        onViewList: () => Navigator.pop(context, true),
-      );
+      if (_isEditMode) {
+        Navigator.pop(context, true);
+      } else {
+        showSuccessDialog(
+          context,
+          title: 'Return Recorded!',
+          message: 'The purchase return / debit note has been recorded successfully.',
+          onAddMore: _clearForm,
+          onViewList: () => Navigator.pop(context, true),
+        );
+      }
     } else {
       showAppSnack(context, result['message'] ?? 'Something went wrong', isError: true);
     }
@@ -186,8 +213,8 @@ class _AddPurchaseReturnScreenState extends State<AddPurchaseReturnScreen> {
           icon: const Icon(Icons.arrow_back_ios_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Purchase Return / Dr. Note',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        title: Text(_isEditMode ? 'Edit Purchase Return / Dr. Note' : 'Purchase Return / Dr. Note',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         actions: [
           IconButton(
               icon: const Icon(Icons.refresh_rounded),
@@ -225,8 +252,8 @@ class _AddPurchaseReturnScreenState extends State<AddPurchaseReturnScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Purchase Return',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: kTextDark)),
+                        Text(_isEditMode ? 'Edit Purchase Return' : 'Purchase Return',
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: kTextDark)),
                         const SizedBox(height: 18),
                         _buildProductAndMetaRow(),
                         const SizedBox(height: 22),
@@ -259,8 +286,8 @@ class _AddPurchaseReturnScreenState extends State<AddPurchaseReturnScreen> {
             borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Text('Purchase Return #1',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kTextDark)),
+            Text(_isEditMode ? 'Edit Purchase Return' : 'Purchase Return #1',
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kTextDark)),
             const SizedBox(width: 10),
             InkWell(
               onTap: () => Navigator.pop(context),
@@ -540,12 +567,13 @@ class _AddPurchaseReturnScreenState extends State<AddPurchaseReturnScreen> {
         ),
         child: _isLoading
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-            : const Row(
+            : Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.save_rounded, size: 16, color: Colors.white),
-            SizedBox(width: 8),
-            Text('Save Return', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+            const Icon(Icons.save_rounded, size: 16, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(_isEditMode ? 'Update Return' : 'Save Return',
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
           ],
         ),
       ),

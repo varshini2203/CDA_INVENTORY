@@ -375,6 +375,7 @@ Future<bool> showConfirmDeleteDialog(
   final confirm = await showDialog<bool>(
     context: context,
     builder: (_) => Dialog(
+      backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -440,6 +441,7 @@ Future<void> showSuccessDialog(
     context: context,
     barrierDismissible: false,
     builder: (_) => Dialog(
+      backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(28),

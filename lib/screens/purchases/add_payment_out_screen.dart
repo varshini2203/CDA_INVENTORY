@@ -6,13 +6,18 @@
 // Firebase/Firestore business logic (PaymentOut model, PaymentOutService,
 // validation, branch list, success dialog) is preserved unchanged.
 
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
 import 'package:cda_inventory/models/payment_out.dart';
 import 'package:cda_inventory/services/payment_out_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 
 class AddPaymentOutScreen extends StatefulWidget {
-  const AddPaymentOutScreen({super.key});
+  final PaymentOut? paymentToEdit;
+  const AddPaymentOutScreen({super.key, this.paymentToEdit});
 
   @override
   State<AddPaymentOutScreen> createState() => _AddPaymentOutScreenState();
@@ -31,6 +36,10 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
   String selectedMode = 'Cash';
   bool _isLoading = false;
   String? _attachmentName;
+  Uint8List? _attachmentBytes;
+  String? _existingAttachmentBase64;
+
+  bool get _isEditMode => widget.paymentToEdit != null;
 
   static const modes = ['Cash', 'Bank Transfer', 'UPI', 'Cheque'];
 
@@ -46,6 +55,23 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
   static const Color kTextDark  = Color(0xFF1F2937);
   static const Color kTextSub   = Color(0xFF6B7280);
   static const Color kTextMute  = Color(0xFF9CA3AF);
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.paymentToEdit;
+    if (p != null) {
+      vendorController.text = p.vendorName;
+      amountController.text = p.amount % 1 == 0 ? p.amount.toStringAsFixed(0) : p.amount.toString();
+      referenceController.text = p.referenceNumber;
+      notesController.text = p.notes;
+      dateController.text = p.paymentDate;
+      selectedBranch = kBranches.contains(p.branch) ? p.branch : kBranches.first;
+      selectedMode = modes.contains(p.paymentMode) ? p.paymentMode : 'Cash';
+      _attachmentName = p.attachmentName;
+      _existingAttachmentBase64 = p.attachmentBase64;
+    }
+  }
 
   @override
   void dispose() {
@@ -81,6 +107,105 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
     }
   }
 
+  // ── Add Attachment — lets the user actually pick a photo/scan instead
+  // of fabricating a placeholder filename. ─────────────────────────────
+  Future<void> _pickAttachment() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded, color: kBlue),
+              title: const Text('Scan with Camera',
+                  style: TextStyle(color: kTextDark, fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: kBlue),
+              title: const Text('Choose from Gallery',
+                  style: TextStyle(color: kTextDark, fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    if (picked == null) return;
+
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+
+    final compressed = _compressAttachment(bytes);
+    setState(() {
+      _attachmentBytes = compressed;
+      _existingAttachmentBase64 = null; // replaced by the new capture
+      _attachmentName = picked.name.isNotEmpty
+          ? picked.name
+          : 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    });
+  }
+
+  // Same 500KB budget / downscale strategy as the Add Purchase bill photo,
+  // so a Base64-encoded receipt never blows past Firestore's 1MB doc cap.
+  static const int _maxRawAttachmentBytes = 500000;
+  static const int _maxAttachmentDimension = 1600;
+
+  static Uint8List _compressAttachment(Uint8List bytes) {
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return bytes;
+
+    img.Image working = decoded;
+    if (working.width > _maxAttachmentDimension || working.height > _maxAttachmentDimension) {
+      working = img.copyResize(
+        working,
+        width: working.width >= working.height ? _maxAttachmentDimension : null,
+        height: working.height > working.width ? _maxAttachmentDimension : null,
+      );
+    }
+
+    var quality = 85;
+    Uint8List out = Uint8List.fromList(img.encodeJpg(working, quality: quality));
+
+    while (out.length > _maxRawAttachmentBytes && quality > 30) {
+      quality -= 10;
+      out = Uint8List.fromList(img.encodeJpg(working, quality: quality));
+    }
+    while (out.length > _maxRawAttachmentBytes && working.width > 400 && working.height > 400) {
+      working = img.copyResize(working, width: (working.width * 0.8).round());
+      out = Uint8List.fromList(img.encodeJpg(working, quality: quality));
+    }
+
+    return out;
+  }
+
+  void _removeAttachment() {
+    setState(() {
+      _attachmentBytes = null;
+      _existingAttachmentBase64 = null;
+      _attachmentName = null;
+    });
+  }
+
   void _clearForm() {
     vendorController.clear();
     phoneController.clear();
@@ -92,6 +217,8 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
       selectedBranch = kBranches.first;
       selectedMode = 'Cash';
       _attachmentName = null;
+      _attachmentBytes = null;
+      _existingAttachmentBase64 = null;
     });
   }
 
@@ -111,20 +238,31 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
       branch: selectedBranch,
       paymentDate: dateController.text.trim(),
       notes: notesController.text.trim(),
+      attachmentName: _attachmentName,
+      attachmentBase64: _attachmentBytes != null
+          ? base64Encode(_attachmentBytes!)
+          : _existingAttachmentBase64,
     );
 
-    final result = await PaymentOutService.addPaymentOut(payment);
+    final result = _isEditMode
+        ? await PaymentOutService.updatePaymentOut(widget.paymentToEdit!.id!, payment)
+        : await PaymentOutService.addPaymentOut(payment);
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (result['success'] == true) {
-      showSuccessDialog(
-        context,
-        title: 'Payment Recorded!',
-        message: 'The payment-out has been recorded successfully.',
-        onAddMore: _clearForm,
-        onViewList: () => Navigator.pop(context, true),
-      );
+      if (_isEditMode) {
+        showAppSnack(context, 'Payment updated successfully');
+        Navigator.pop(context, true);
+      } else {
+        showSuccessDialog(
+          context,
+          title: 'Payment Recorded!',
+          message: 'The payment-out has been recorded successfully.',
+          onAddMore: _clearForm,
+          onViewList: () => Navigator.pop(context, true),
+        );
+      }
     } else {
       showAppSnack(context, result['message'] ?? 'Something went wrong', isError: true);
     }
@@ -172,7 +310,7 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
           icon: const Icon(Icons.arrow_back_ios_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Payment-Out',
+        title: Text(_isEditMode ? 'Edit Payment' : 'Payment-Out',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         actions: [
           IconButton(
@@ -436,7 +574,7 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
         const Text('Attachments', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kTextDark)),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: () => setState(() => _attachmentName = 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg'),
+          onPressed: _pickAttachment,
           style: OutlinedButton.styleFrom(
             foregroundColor: kTextSub,
             side: const BorderSide(color: kBorder),
@@ -464,7 +602,7 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
                     style: const TextStyle(fontSize: 12, color: kTextDark), overflow: TextOverflow.ellipsis),
               ),
               InkWell(
-                onTap: () => setState(() => _attachmentName = null),
+                onTap: _removeAttachment,
                 child: const Icon(Icons.close_rounded, size: 15, color: kTextMute),
               ),
             ]),
@@ -526,12 +664,13 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
         ),
         child: _isLoading
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-            : const Row(
+            : Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.save_rounded, size: 16, color: Colors.white),
-            SizedBox(width: 8),
-            Text('Save Payment', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+            const Icon(Icons.save_rounded, size: 16, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(_isEditMode ? 'Update Payment' : 'Save Payment',
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
           ],
         ),
       ),

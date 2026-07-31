@@ -334,7 +334,7 @@ class _DroneServiceDashboardScreenState
       expandedHeight: 108,
       iconTheme: const IconThemeData(color: Colors.white),
       flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
+        titlePadding: const EdgeInsetsDirectional.only(start: 56, bottom: 16),
         title: const Text('Drone Services',
             style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
         background: Container(

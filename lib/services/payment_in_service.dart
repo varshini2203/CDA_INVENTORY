@@ -109,6 +109,71 @@ class PaymentInService {
     }
   }
 
+  // ── UPDATE payment-in (+ re-sync invoice balances) ───────────────────────
+  // Reverses the old allocation's effect on each invoice's payment list
+  // first, then re-applies the (possibly unchanged) new allocations. This
+  // keeps invoice balance-due correct even if the customer, amount, or
+  // allocations were edited.
+  static Future<Map<String, dynamic>> updatePaymentIn(
+      String id, PaymentIn payment) async {
+    try {
+      final existing = await getPaymentInById(id);
+      final invoiceService = InvoiceService();
+
+      if (existing != null) {
+        for (final oldAlloc in existing.invoiceAllocations) {
+          try {
+            await invoiceService.removePayment(
+                oldAlloc.invoiceId, '${id}_${oldAlloc.invoiceId}');
+          } catch (_) {
+            // Invoice may have been deleted separately — safe to skip.
+          }
+        }
+      }
+
+      await _col.doc(id).update(payment.toFirestore());
+
+      for (final alloc in payment.invoiceAllocations) {
+        if (alloc.amountApplied <= 0) continue;
+        try {
+          await invoiceService.recordPayment(
+            alloc.invoiceId,
+            PaymentRecord(
+              id: '${id}_${alloc.invoiceId}',
+              amount: alloc.amountApplied,
+              date: DateTime.now(),
+              method: payment.paymentMode,
+              reference: payment.referenceNumber.isEmpty
+                  ? null
+                  : payment.referenceNumber,
+              notes: 'Payment-In receipt for ${payment.customerName}',
+            ),
+          );
+        } catch (_) {
+          // Invoice may have been deleted separately — safe to skip.
+        }
+      }
+
+      clearCache();
+      ActivityLogService.logAction(
+        'Updated payment-in for ${payment.customerName}',
+        module: 'Payments In',
+        details:
+        'Amount: ₹${payment.amount}, Mode: ${payment.paymentMode}, Ref: ${payment.referenceNumber}, Branch: ${payment.branch}',
+      );
+
+      return {
+        'success': true,
+        'message': 'Payment updated successfully',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to update payment: $e',
+      };
+    }
+  }
+
   // ── DELETE payment-in ────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> deletePaymentIn(String id) async {
     try {

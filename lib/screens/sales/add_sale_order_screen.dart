@@ -7,7 +7,8 @@ import 'package:cda_inventory/services/sale_order_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 
 class AddSaleOrderScreen extends StatefulWidget {
-  const AddSaleOrderScreen({super.key});
+  final SaleOrder? orderToEdit;
+  const AddSaleOrderScreen({super.key, this.orderToEdit});
   @override
   State<AddSaleOrderScreen> createState() => _AddSaleOrderScreenState();
 }
@@ -39,11 +40,34 @@ class _AddSaleOrderScreenState extends State<AddSaleOrderScreen> {
 
   final List<_LineRow> _rows = [];
 
+  bool get _isEditMode => widget.orderToEdit != null;
+
   @override
   void initState() {
     super.initState();
-    orderDateController.text = _fmt(DateTime.now());
-    _addRow();
+    final o = widget.orderToEdit;
+    if (o != null) {
+      customerController.text = o.customer?.name ?? '';
+      phoneController.text = o.customer?.phone ?? '';
+      orderDateController.text = o.orderDate;
+      deliveryDateController.text = o.deliveryDate ?? '';
+      notesController.text = o.notes;
+      shippingController.text = o.shipping % 1 == 0 ? o.shipping.toStringAsFixed(0) : o.shipping.toString();
+      selectedBranch = kBranches.contains(o.branch) ? o.branch : kBranches.first;
+      gstEnabled = o.gstEnabled;
+      isInterState = o.isInterState;
+      roundOffEnabled = o.roundOffEnabled;
+      if (o.lineItems.isEmpty) {
+        _addRow();
+      } else {
+        for (final item in o.lineItems) {
+          _rows.add(_LineRow.fromItem(item));
+        }
+      }
+    } else {
+      orderDateController.text = _fmt(DateTime.now());
+      _addRow();
+    }
   }
 
   String _fmt(DateTime d) =>
@@ -104,8 +128,9 @@ class _AddSaleOrderScreenState extends State<AddSaleOrderScreen> {
       return;
     }
     setState(() => _isLoading = true);
-    final orderNo = await SaleOrderService.generateOrderNo();
+    final orderNo = _isEditMode ? widget.orderToEdit!.orderNo : await SaleOrderService.generateOrderNo();
     final order = SaleOrder(
+      id: _isEditMode ? widget.orderToEdit!.id : null,
       orderNo: orderNo,
       customer: CustomerDetails(
         name: customerController.text.trim(),
@@ -113,6 +138,7 @@ class _AddSaleOrderScreenState extends State<AddSaleOrderScreen> {
       ),
       orderDate: orderDateController.text.trim(),
       deliveryDate: deliveryDateController.text.trim().isEmpty ? null : deliveryDateController.text.trim(),
+      status: _isEditMode ? widget.orderToEdit!.status : 'Open',
       branch: selectedBranch,
       notes: notesController.text.trim(),
       lineItems: _lineItems,
@@ -122,24 +148,32 @@ class _AddSaleOrderScreenState extends State<AddSaleOrderScreen> {
       isInterState: isInterState,
     );
     try {
-      await SaleOrderService.createOrder(order);
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      showSuccessDialog(
-        context,
-        title: 'Sale Order Created!',
-        message: 'Order $orderNo has been saved successfully.',
-        onAddMore: () => setState(() {
-          customerController.clear();
-          phoneController.clear();
-          notesController.clear();
-          shippingController.text = '0';
-          for (final r in _rows) r.dispose();
-          _rows.clear();
-          _addRow();
-        }),
-        onViewList: () => Navigator.pop(context, true),
-      );
+      if (_isEditMode) {
+        await SaleOrderService.updateOrder(order);
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        showAppSnack(context, 'Sale order updated successfully');
+        Navigator.pop(context, true);
+      } else {
+        await SaleOrderService.createOrder(order);
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        showSuccessDialog(
+          context,
+          title: 'Sale Order Created!',
+          message: 'Order $orderNo has been saved successfully.',
+          onAddMore: () => setState(() {
+            customerController.clear();
+            phoneController.clear();
+            notesController.clear();
+            shippingController.text = '0';
+            for (final r in _rows) r.dispose();
+            _rows.clear();
+            _addRow();
+          }),
+          onViewList: () => Navigator.pop(context, true),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -180,7 +214,7 @@ class _AddSaleOrderScreenState extends State<AddSaleOrderScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, size: 20), onPressed: () => Navigator.pop(context)),
-        title: const Text('Sale Order', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        title: Text(_isEditMode ? 'Edit Sale Order' : 'Sale Order', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
       ),
       body: SafeArea(
         child: Theme(
@@ -192,7 +226,7 @@ class _AddSaleOrderScreenState extends State<AddSaleOrderScreen> {
           ),
           child: Column(children: [
             Container(height: 44, color: kTabBar, alignment: Alignment.centerLeft, padding: const EdgeInsets.only(left: 10),
-                child: const Text('New Sale Order', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kTextDark))),
+                child: Text(_isEditMode ? 'Edit Sale Order' : 'New Sale Order', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kTextDark))),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
@@ -402,22 +436,42 @@ class _AddSaleOrderScreenState extends State<AddSaleOrderScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
       child: _isLoading
           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-          : const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.save_rounded, size: 16, color: Colors.white), SizedBox(width: 8),
-        Text('Save Sale Order', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+          : Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.save_rounded, size: 16, color: Colors.white), const SizedBox(width: 8),
+        Text(_isEditMode ? 'Update Sale Order' : 'Save Sale Order', style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
       ]),
     ),
   ]);
 }
 
 class _LineRow {
-  final String id = DateTime.now().microsecondsSinceEpoch.toString() + (100 + (DateTime.now().millisecond)).toString();
+  String id = DateTime.now().microsecondsSinceEpoch.toString() + (100 + (DateTime.now().millisecond)).toString();
   final descController = TextEditingController();
   final qtyController = TextEditingController(text: '1');
   final priceController = TextEditingController();
   final discountController = TextEditingController(text: '0');
   final taxController = TextEditingController(text: '0');
   String unit = 'NONE';
+
+  _LineRow();
+
+  factory _LineRow.fromItem(InvoiceLineItem item) {
+    final row = _LineRow();
+    row.id = item.id.isNotEmpty ? item.id : row.id;
+    row.descController.text = item.description;
+    row.qtyController.text = item.quantity.toString();
+    row.priceController.text = item.unitPrice % 1 == 0
+        ? item.unitPrice.toStringAsFixed(0)
+        : item.unitPrice.toString();
+    row.discountController.text = item.discountPercent % 1 == 0
+        ? item.discountPercent.toStringAsFixed(0)
+        : item.discountPercent.toString();
+    row.taxController.text = item.taxPercent % 1 == 0
+        ? item.taxPercent.toStringAsFixed(0)
+        : item.taxPercent.toString();
+    row.unit = item.unit;
+    return row;
+  }
 
   void dispose() {
     descController.dispose();

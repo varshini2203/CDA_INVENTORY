@@ -1,9 +1,11 @@
 // lib/screens/delivery_challan/add_delivery_challan_screen.dart
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:cda_inventory/models/delivery_challan.dart';
 import 'package:cda_inventory/models/invoice_line_item.dart';
 import 'package:cda_inventory/models/customer_details.dart';
 import 'package:cda_inventory/services/delivery_challan_service.dart';
+import 'package:cda_inventory/services/delivery_challan_pdf_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 
 class AddDeliveryChallanScreen extends StatefulWidget {
@@ -130,6 +132,41 @@ class _AddDeliveryChallanScreenState extends State<AddDeliveryChallanScreen> {
   double get _preRound => _subtotal + _totalTax + _shipping;
   double get _roundOff => roundOffEnabled ? (_preRound.roundToDouble() - _preRound) : 0;
   double get _grandTotal => _preRound + _roundOff;
+
+  // ── Build a DeliveryChallan object from the current form state. Used by
+  //    _printPreview() for a live preview of unsaved changes. ─────────────
+  DeliveryChallan _buildDraftChallan() {
+    return DeliveryChallan(
+      id: widget.existing?.id,
+      challanNo: widget.existing?.challanNo ?? 'DRAFT',
+      customer: CustomerDetails(name: customerController.text.trim(), phone: phoneController.text.trim()),
+      challanDate: challanDateController.text.trim(),
+      dueDate: dueDateController.text.trim().isEmpty ? null : dueDateController.text.trim(),
+      status: selectedStatus,
+      branch: selectedBranch,
+      notes: notesController.text.trim(),
+      lineItems: _lineItems,
+      shipping: _shipping,
+      roundOffEnabled: roundOffEnabled,
+      gstEnabled: gstEnabled,
+      isInterState: isInterState,
+      vehicleNo: vehicleController.text.trim().isEmpty ? null : vehicleController.text.trim(),
+      transportName: transportController.text.trim().isEmpty ? null : transportController.text.trim(),
+      poNumber: poController.text.trim().isEmpty ? null : poController.text.trim(),
+      convertedInvoiceId: widget.existing?.convertedInvoiceId,
+      convertedInvoiceNo: widget.existing?.convertedInvoiceNo,
+      createdAt: widget.existing?.createdAt,
+    );
+  }
+
+  Future<void> _printPreview() async {
+    if (_lineItems.isEmpty) {
+      showAppSnack(context, 'Add at least one item to preview', isError: true);
+      return;
+    }
+    final draft = _buildDraftChallan();
+    await Printing.layoutPdf(onLayout: (format) => DeliveryChallanPdfService.generate(draft));
+  }
 
   Future<void> _save() async {
     if (customerController.text.trim().isEmpty) {
@@ -522,6 +559,28 @@ class _AddDeliveryChallanScreenState extends State<AddDeliveryChallanScreen> {
 
   Widget _footer() => Row(children: [
     const Spacer(),
+    OutlinedButton.icon(
+      onPressed: _printPreview,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: kTextDark,
+        side: const BorderSide(color: kBorder),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.horizontal(left: Radius.circular(6)),
+        ),
+      ),
+      icon: const Icon(Icons.print_outlined, size: 16),
+      label: const Text('Print', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+    ),
+    Container(
+      padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: kBorder),
+        borderRadius: const BorderRadius.horizontal(right: Radius.circular(6)),
+      ),
+      child: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: kTextSub),
+    ),
+    const SizedBox(width: 10),
     ElevatedButton(
       onPressed: _isLoading ? null : _save,
       style: ElevatedButton.styleFrom(backgroundColor: kBlue, foregroundColor: Colors.white, elevation: 0,

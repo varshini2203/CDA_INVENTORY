@@ -86,6 +86,50 @@ class PurchaseReturnService {
     }
   }
 
+  // ── UPDATE purchase return ──────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> updatePurchaseReturn(
+      String id, PurchaseReturn ret) async {
+    try {
+      final existing = await getPurchaseReturnById(id);
+      await _col.doc(id).update(ret.toFirestore()
+        ..['updated_at'] = FieldValue.serverTimestamp());
+      clearCache();
+      ActivityLogService.logEdit(
+        module: 'Purchase Returns',
+        itemName: ret.productName,
+        before: existing == null
+            ? {}
+            : {
+          'vendor': existing.vendorName,
+          'quantity': existing.quantity,
+          'amount': existing.amount,
+          'reason': existing.reason,
+          'reference_invoice': existing.referenceInvoice,
+          'branch': existing.branch,
+          'return_date': existing.returnDate,
+        },
+        after: {
+          'vendor': ret.vendorName,
+          'quantity': ret.quantity,
+          'amount': ret.amount,
+          'reason': ret.reason,
+          'reference_invoice': ret.referenceInvoice,
+          'branch': ret.branch,
+          'return_date': ret.returnDate,
+        },
+      );
+      return {
+        'success': true,
+        'message': 'Purchase return updated successfully',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to update purchase return: $e',
+      };
+    }
+  }
+
   // ── DELETE purchase return ──────────────────────────────────────────────────
   static Future<Map<String, dynamic>> deletePurchaseReturn(String id) async {
     try {

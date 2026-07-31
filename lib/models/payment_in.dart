@@ -45,6 +45,8 @@ class PaymentIn {
   final String notes;
   final List<PaymentInInvoiceAllocation> invoiceAllocations;
   final double advanceAmount; // portion not applied to any invoice
+  final String? attachmentName;
+  final String? attachmentBase64;
   final DateTime? createdAt;
 
   PaymentIn({
@@ -59,6 +61,8 @@ class PaymentIn {
     this.notes = '',
     this.invoiceAllocations = const [],
     this.advanceAmount = 0,
+    this.attachmentName,
+    this.attachmentBase64,
     this.createdAt,
   });
 
@@ -80,6 +84,8 @@ class PaymentIn {
           .toList() ??
           [],
       advanceAmount: (d['advance_amount'] as num?)?.toDouble() ?? 0.0,
+      attachmentName: d['attachment_name']?.toString(),
+      attachmentBase64: d['attachment_base64']?.toString(),
       createdAt:
       d['created_at'] != null ? (d['created_at'] as Timestamp).toDate() : null,
     );
@@ -96,5 +102,7 @@ class PaymentIn {
     'notes': notes,
     'invoice_allocations': invoiceAllocations.map((e) => e.toMap()).toList(),
     'advance_amount': advanceAmount,
+    'attachment_name': attachmentName,
+    'attachment_base64': attachmentBase64,
   };
 }

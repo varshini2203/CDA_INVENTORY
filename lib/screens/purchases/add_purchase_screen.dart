@@ -177,6 +177,8 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
         row.priceController.text = p.cost.toString();
         _rows.add(row);
       }
+    } else {
+      _autoGenerateBillNumber();
     }
     while (_rows.length < 2) {
       _addRow();
@@ -185,6 +187,21 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
       r.qtyController.addListener(_recalc);
       r.priceController.addListener(_recalc);
       r.discPercentController.addListener(_recalc);
+    }
+  }
+
+  // ── Auto-fill the Bill Number field for a brand-new purchase ─────────────
+  // Suggests the next sequential number (e.g. "PB-0001") based on existing
+  // purchase bills. Runs after the first frame so it never blocks opening
+  // the form; the field stays editable if the user wants to type their own.
+  Future<void> _autoGenerateBillNumber() async {
+    try {
+      final next = await PurchaseService.suggestNextBillNumber();
+      if (!mounted) return;
+      if (_billNumberController.text.trim().isNotEmpty) return;
+      setState(() => _billNumberController.text = next);
+    } catch (_) {
+      // Silently ignore — user can still type a bill number manually.
     }
   }
 

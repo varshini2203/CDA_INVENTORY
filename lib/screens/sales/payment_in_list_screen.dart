@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cda_inventory/models/payment_in.dart';
 import 'package:cda_inventory/services/payment_in_service.dart';
@@ -78,6 +79,155 @@ class _PaymentInListScreenState extends State<PaymentInListScreen> {
   }
 
   double get _totalValue => _filtered.fold(0.0, (sum, p) => sum + p.amount);
+
+  // ── Edit an existing payment ────────────────────────────────────────────
+  Future<void> _editPayment(PaymentIn p) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'Edit Payment In'),
+        builder: (_) => AddPaymentInScreen(paymentToEdit: p),
+      ),
+    );
+    if (result == true) _fetch();
+  }
+
+  // ── View full payment details ───────────────────────────────────────────
+  void _viewPayment(PaymentIn p) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.35,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              Row(children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.teal.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.payments_rounded, color: AppColors.teal, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(p.customerName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 17, color: AppColors.navy)),
+                      const SizedBox(height: 2),
+                      Text(p.paymentMode, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                Text('₹${p.amount.toStringAsFixed(0)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navy)),
+              ]),
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+              if (p.phone.trim().isNotEmpty) _detailRow('Phone', p.phone),
+              _detailRow('Reference No.', p.referenceNumber.isEmpty ? '—' : p.referenceNumber),
+              _detailRow('Branch', kBranchLabels[p.branch] ?? p.branch),
+              _detailRow('Payment Date', p.paymentDate),
+              _detailRow('Payment Mode', p.paymentMode),
+              if (p.invoiceAllocations.isNotEmpty)
+                _detailRow('Applied To', p.invoiceAllocations
+                    .map((a) => '${a.invoiceNo} (₹${a.amountApplied.toStringAsFixed(0)})')
+                    .join(', ')),
+              if (p.advanceAmount > 0)
+                _detailRow('Advance / Unused', '₹${p.advanceAmount.toStringAsFixed(2)}'),
+              if (p.notes.trim().isNotEmpty) _detailRow('Notes', p.notes),
+              if ((p.attachmentName ?? '').isNotEmpty) _detailRow('Attachment', p.attachmentName!),
+              if ((p.attachmentBase64 ?? '').isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(base64Decode(p.attachmentBase64!), fit: BoxFit.cover),
+                ),
+              ],
+              const SizedBox(height: 20),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _editPayment(p);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.navy,
+                      side: const BorderSide(color: AppColors.navy),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    label: const Text('Edit'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.navy,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+        ),
+        Expanded(
+          child: Text(value,
+              style: const TextStyle(color: AppColors.navy, fontSize: 13.5, fontWeight: FontWeight.w600)),
+        ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -344,21 +494,74 @@ class _PaymentInListScreenState extends State<PaymentInListScreen> {
               InfoChip(Icons.location_city_rounded, kBranchLabels[p.branch] ?? p.branch),
             ]),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                InfoChip(Icons.calendar_today_rounded, p.paymentDate),
-                if (p.id != null)
-                  GestureDetector(
+            Row(children: [
+              Expanded(child: InfoChip(Icons.calendar_today_rounded, p.paymentDate)),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _viewPayment(p),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.navy.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.navy.withOpacity(0.18)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.visibility_outlined, color: AppColors.navy, size: 16),
+                        SizedBox(width: 4),
+                        Text('View',
+                            style: TextStyle(
+                                color: AppColors.navy, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _editPayment(p),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.amber.withOpacity(0.35)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_outlined, color: AppColors.amber, size: 16),
+                        SizedBox(width: 4),
+                        Text('Edit',
+                            style: TextStyle(
+                                color: AppColors.amber, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (p.id != null) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
                     onTap: () => _delete(p.id!),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
                         color: AppColors.coral.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: AppColors.coral.withOpacity(0.35)),
                       ),
                       child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.delete_outline_rounded, color: AppColors.coral, size: 16),
@@ -370,8 +573,9 @@ class _PaymentInListScreenState extends State<PaymentInListScreen> {
                       ),
                     ),
                   ),
+                ),
               ],
-            ),
+            ]),
           ]),
         ),
       ]),

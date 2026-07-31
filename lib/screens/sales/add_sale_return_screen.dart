@@ -7,8 +7,10 @@
 // model, SaleReturnService, validation, branch list, success dialog).
 
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:cda_inventory/models/sale_return.dart';
 import 'package:cda_inventory/services/sale_return_service.dart';
+import 'package:cda_inventory/services/sale_return_pdf_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 
 class AddSaleReturnScreen extends StatefulWidget {
@@ -99,6 +101,28 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
       selectedBranch = kBranches.first;
       selectedReason = 'Damaged Goods';
     });
+  }
+
+  // ── Build a SaleReturn object from the current form state. Used by
+  //    _printPreview() for a live preview of unsaved changes. ─────────────
+  SaleReturn _buildDraftReturn() => SaleReturn(
+    productName: productController.text.trim(),
+    customerName: customerController.text.trim(),
+    quantity: int.tryParse(quantityController.text.trim()) ?? 0,
+    amount: double.tryParse(amountController.text.trim()) ?? 0,
+    reason: selectedReason,
+    referenceInvoice: referenceInvoiceController.text.trim(),
+    branch: selectedBranch,
+    returnDate: dateController.text.trim(),
+  );
+
+  Future<void> _printPreview() async {
+    if (productController.text.trim().isEmpty) {
+      showAppSnack(context, 'Enter a product name to preview', isError: true);
+      return;
+    }
+    final draft = _buildDraftReturn();
+    await Printing.layoutPdf(onLayout: (format) => SaleReturnPdfService.generate(draft));
   }
 
   Future<void> _save() async {
@@ -525,10 +549,32 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
     ]);
   }
 
-  // ── Footer bar: Save Return ───────────────────────────────────────────
+  // ── Footer bar: Print ▾  Save Return ───────────────────────────────────
   Widget _buildFooterBar() {
     return Row(children: [
       const Spacer(),
+      OutlinedButton.icon(
+        onPressed: _printPreview,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: kTextDark,
+          side: const BorderSide(color: kBorder),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.horizontal(left: Radius.circular(6)),
+          ),
+        ),
+        icon: const Icon(Icons.print_outlined, size: 16),
+        label: const Text('Print', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      ),
+      Container(
+        padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 6),
+        decoration: BoxDecoration(
+          border: Border.all(color: kBorder),
+          borderRadius: const BorderRadius.horizontal(right: Radius.circular(6)),
+        ),
+        child: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: kTextSub),
+      ),
+      const SizedBox(width: 10),
       ElevatedButton(
         onPressed: _isLoading ? null : _save,
         style: ElevatedButton.styleFrom(

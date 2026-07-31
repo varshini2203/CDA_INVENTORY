@@ -72,6 +72,172 @@ class _SaleOrderListScreenState extends State<SaleOrderListScreen> with SingleTi
     if (result == true) _load(forceRefresh: true);
   }
 
+  // ── Edit an existing order ──────────────────────────────────────────────
+  Future<void> _editOrder(SaleOrder o) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'Edit Sale Order'),
+        builder: (_) => AddSaleOrderScreen(orderToEdit: o),
+      ),
+    );
+    if (result == true) _load(forceRefresh: true);
+  }
+
+  // ── Delete an order ──────────────────────────────────────────────────────
+  Future<void> _deleteOrder(SaleOrder o) async {
+    if (o.id == null) return;
+    final confirm = await showConfirmDeleteDialog(
+      context,
+      title: 'Delete Sale Order',
+      message: 'Are you sure you want to delete order ${o.orderNo}?',
+    );
+    if (!confirm) return;
+    try {
+      await SaleOrderService.deleteOrder(o.id!);
+      if (!mounted) return;
+      setState(() => _orders.removeWhere((x) => x.id == o.id));
+      showAppSnack(context, 'Sale order deleted successfully');
+    } catch (e) {
+      if (!mounted) return;
+      showAppSnack(context, 'Failed to delete order: $e', isError: true);
+    }
+  }
+
+  // ── View full order details ─────────────────────────────────────────────
+  void _viewOrder(SaleOrder o) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              Row(children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: kBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded, color: kBlue, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Text(o.orderNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: kTextDark)),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: _statusColor(o.status).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                          child: Text(o.status, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _statusColor(o.status))),
+                        ),
+                      ]),
+                      const SizedBox(height: 2),
+                      Text(o.customer?.name.isNotEmpty == true ? o.customer!.name : 'Walk-in Customer',
+                          style: const TextStyle(color: kTextSub, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                Text('₹${o.grandTotal.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: kTextDark)),
+              ]),
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+              if ((o.customer?.phone ?? '').trim().isNotEmpty) _detailRow('Phone', o.customer!.phone!),
+              _detailRow('Branch', kBranchLabels[o.branch] ?? o.branch),
+              _detailRow('Order Date', o.orderDate),
+              _detailRow('Delivery Date', o.deliveryDate ?? '—'),
+              _detailRow('Items', '${o.lineItems.length}'),
+              _detailRow('Subtotal', '₹${o.subtotal.toStringAsFixed(2)}'),
+              if (o.totalTax > 0) _detailRow('Tax', '₹${o.totalTax.toStringAsFixed(2)}'),
+              if (o.shipping > 0) _detailRow('Shipping', '₹${o.shipping.toStringAsFixed(2)}'),
+              _detailRow('Grand Total', '₹${o.grandTotal.toStringAsFixed(2)}'),
+              if (o.notes.trim().isNotEmpty) _detailRow('Notes', o.notes),
+              const SizedBox(height: 20),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _editOrder(o);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kNavy,
+                      side: const BorderSide(color: kNavy),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    label: const Text('Edit'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kNavy,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+        ),
+        Expanded(
+          child: Text(value,
+              style: const TextStyle(color: kTextDark, fontSize: 13.5, fontWeight: FontWeight.w600)),
+        ),
+      ],
+    ),
+  );
+
   Color _statusColor(String s) {
     switch (s) {
       case 'Closed': return kGreen;
@@ -161,33 +327,108 @@ class _SaleOrderListScreenState extends State<SaleOrderListScreen> with SingleTi
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Row(children: [
-          Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(color: kBlue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.receipt_long_rounded, color: kBlue, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Text(o.orderNo, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: kTextDark)),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: _statusColor(o.status).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                  child: Text(o.status, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _statusColor(o.status))),
-                ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(color: kBlue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.receipt_long_rounded, color: kBlue, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Text(o.orderNo, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: kTextDark)),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: _statusColor(o.status).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                    child: Text(o.status, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _statusColor(o.status))),
+                  ),
+                ]),
+                const SizedBox(height: 3),
+                Text(o.customer?.name.isNotEmpty == true ? o.customer!.name : 'Walk-in Customer',
+                    style: const TextStyle(fontSize: 12.5, color: kTextSub)),
+                const SizedBox(height: 2),
+                Text('${o.orderDate}${o.deliveryDate != null ? '  →  Delivery: ${o.deliveryDate}' : ''}',
+                    style: const TextStyle(fontSize: 11, color: kTextMute)),
               ]),
-              const SizedBox(height: 3),
-              Text(o.customer?.name.isNotEmpty == true ? o.customer!.name : 'Walk-in Customer',
-                  style: const TextStyle(fontSize: 12.5, color: kTextSub)),
-              const SizedBox(height: 2),
-              Text('${o.orderDate}${o.deliveryDate != null ? '  →  Delivery: ${o.deliveryDate}' : ''}',
-                  style: const TextStyle(fontSize: 11, color: kTextMute)),
-            ]),
-          ),
-          Text('₹${o.grandTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: kTextDark)),
+            ),
+            Text('₹${o.grandTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: kTextDark)),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _viewOrder(o),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: kNavy.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: kNavy.withOpacity(0.18)),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.visibility_outlined, color: kNavy, size: 16),
+                      SizedBox(width: 4),
+                      Text('View', style: TextStyle(color: kNavy, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _editOrder(o),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: kOrange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: kOrange.withOpacity(0.35)),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit_outlined, color: kOrange, size: 16),
+                      SizedBox(width: 4),
+                      Text('Edit', style: TextStyle(color: kOrange, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (o.id != null) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _deleteOrder(o),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: kRed.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: kRed.withOpacity(0.35)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.delete_outline_rounded, color: kRed, size: 16),
+                        SizedBox(width: 4),
+                        Text('Delete', style: TextStyle(color: kRed, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ]),
         ]),
       ),
     );

@@ -86,6 +86,29 @@ class PaymentOutService {
     }
   }
 
+  // ── UPDATE payment out ──────────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> updatePaymentOut(String id, PaymentOut payment) async {
+    try {
+      await _col.doc(id).update(payment.toFirestore());
+      clearCache();
+      ActivityLogService.logAction(
+        'Updated payment-out for ${payment.vendorName}',
+        module: 'Payments Out',
+        details:
+        'Amount: ₹${payment.amount}, Mode: ${payment.paymentMode}, Ref: ${payment.referenceNumber}, Branch: ${payment.branch}',
+      );
+      return {
+        'success': true,
+        'message': 'Payment updated successfully',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to update payment: $e',
+      };
+    }
+  }
+
   // ── DELETE payment out ──────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> deletePaymentOut(String id) async {
     try {

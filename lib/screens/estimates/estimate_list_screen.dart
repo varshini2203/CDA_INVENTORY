@@ -12,6 +12,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cda_inventory/services/estimate_service.dart';
+import 'package:cda_inventory/services/estimate_pdf_service.dart';
 import 'package:cda_inventory/models/estimate.dart';
 import 'package:cda_inventory/screens/estimates/add_estimate_screen.dart';
 import 'package:cda_inventory/screens/invoices/add_invoice_screen.dart';
@@ -296,6 +297,19 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
       _loadEstimates(forceRefresh: true);
     } catch (e) {
       _showSnack('Failed to duplicate: $e', isError: true);
+    }
+  }
+
+  // ── Print — SkyLynk-branded PDF, same letterhead/pattern as the Tax
+  // Invoice, opened in the browser's print/preview dialog ────────────────
+  Future<void> _printEstimate(Estimate estimate) async {
+    try {
+      await Printing.layoutPdf(
+        onLayout: (format) => EstimatePdfService.generate(estimate),
+        name: 'estimate_${estimate.referenceNo}.pdf',
+      );
+    } catch (e) {
+      if (mounted) _showSnack('Failed to generate PDF: $e', isError: true);
     }
   }
 
@@ -916,6 +930,7 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
       onDelete: _showDeleteConfirmDialog,
       onConvert: _convertToInvoice,
       onDuplicate: _duplicateAsProforma,
+      onPrint: _printEstimate,
     );
   }
 
@@ -1033,6 +1048,7 @@ class _EstimateTable extends StatelessWidget {
   final void Function(Estimate) onDelete;
   final void Function(Estimate) onConvert;
   final void Function(Estimate) onDuplicate;
+  final void Function(Estimate) onPrint;
 
   const _EstimateTable({
     required this.estimates,
@@ -1042,6 +1058,7 @@ class _EstimateTable extends StatelessWidget {
     required this.onDelete,
     required this.onConvert,
     required this.onDuplicate,
+    required this.onPrint,
   });
 
   static const double wDate    = 88;
@@ -1053,8 +1070,12 @@ class _EstimateTable extends StatelessWidget {
   static const double wConvert = 100;
   static const double wActions = 60;
 
+  static const double _colGap = 8; // gap between adjacent columns
+  static const double _rowHorizontalPadding = 28; // 14px each side, added by header/data row Containers
+
   double get _totalWidth =>
-      wDate + wRefNo + wParty + wAmount + wBalance + wStatus + wConvert + wActions;
+      wDate + wRefNo + wParty + wAmount + wBalance + wStatus + wConvert + wActions +
+          (_colGap * 7) + _rowHorizontalPadding;
 
   static const Color kBorder   = Color(0xFFE7EAF0);
   static const Color kTextDark = Color(0xFF1F2937);
@@ -1107,12 +1128,19 @@ class _EstimateTable extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(children: [
         SizedBox(width: wDate, child: const Text('Date', style: style)),
+        const SizedBox(width: _colGap),
         SizedBox(width: wRefNo, child: const Text('Reference no', style: style)),
+        const SizedBox(width: _colGap),
         SizedBox(width: wParty, child: const Text('Party Name', style: style)),
+        const SizedBox(width: _colGap),
         SizedBox(width: wAmount, child: const Text('Amount', style: style, textAlign: TextAlign.right)),
+        const SizedBox(width: _colGap),
         SizedBox(width: wBalance, child: const Text('Balance', style: style, textAlign: TextAlign.right)),
+        const SizedBox(width: _colGap),
         SizedBox(width: wStatus, child: const Text('Status', style: style)),
+        const SizedBox(width: _colGap),
         SizedBox(width: wConvert, child: const Text('Actions', style: style)),
+        const SizedBox(width: _colGap),
         SizedBox(width: wActions, child: const Text('', style: style)),
       ]),
     );
@@ -1128,7 +1156,9 @@ class _EstimateTable extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(children: [
           SizedBox(width: wDate, child: Text(est.estimateDate, style: const TextStyle(fontSize: 12.5, color: kTextDark))),
+          const SizedBox(width: _colGap),
           SizedBox(width: wRefNo, child: Text(est.referenceNo, style: const TextStyle(fontSize: 12.5, color: kTextDark))),
+          const SizedBox(width: _colGap),
           SizedBox(
             width: wParty,
             child: Text(
@@ -1137,22 +1167,26 @@ class _EstimateTable extends StatelessWidget {
               style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kTextDark),
             ),
           ),
+          const SizedBox(width: _colGap),
           SizedBox(
             width: wAmount,
             child: Text(money0.format(est.grandTotal),
                 textAlign: TextAlign.right,
                 style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kTextDark)),
           ),
+          const SizedBox(width: _colGap),
           SizedBox(
             width: wBalance,
             child: Text(money0.format(est.balanceDue),
                 textAlign: TextAlign.right,
                 style: const TextStyle(fontSize: 12.5, color: kTextSub)),
           ),
+          const SizedBox(width: _colGap),
           SizedBox(
             width: wStatus,
             child: Text(status, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: color)),
           ),
+          const SizedBox(width: _colGap),
           SizedBox(
             width: wConvert,
             child: est.isConverted
@@ -1165,6 +1199,7 @@ class _EstimateTable extends StatelessWidget {
               ]),
             ),
           ),
+          const SizedBox(width: _colGap),
           SizedBox(
             width: wActions,
             child: PopupMenuButton<String>(
@@ -1173,12 +1208,14 @@ class _EstimateTable extends StatelessWidget {
               onSelected: (v) {
                 if (v == 'view') onView(est);
                 if (v == 'edit') onEdit(est);
+                if (v == 'print') onPrint(est);
                 if (v == 'duplicate') onDuplicate(est);
                 if (v == 'delete') onDelete(est);
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'view', child: Text('View')),
                 PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(value: 'print', child: Text('Print')),
                 PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
                 PopupMenuItem(value: 'delete', child: Text('Delete')),
               ],

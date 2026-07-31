@@ -9,6 +9,8 @@ class PaymentOut {
   final String branch;
   final String paymentDate;
   final String notes;
+  final String? attachmentName;
+  final String? attachmentBase64;
   final DateTime? createdAt;
 
   PaymentOut({
@@ -20,6 +22,8 @@ class PaymentOut {
     required this.branch,
     required this.paymentDate,
     this.notes = '',
+    this.attachmentName,
+    this.attachmentBase64,
     this.createdAt,
   });
 
@@ -34,6 +38,8 @@ class PaymentOut {
       branch: d['branch']?.toString() ?? '',
       paymentDate: d['payment_date']?.toString() ?? '',
       notes: d['notes']?.toString() ?? '',
+      attachmentName: d['attachment_name']?.toString(),
+      attachmentBase64: d['attachment_base64']?.toString(),
       createdAt:
       d['created_at'] != null ? (d['created_at'] as Timestamp).toDate() : null,
     );
@@ -47,5 +53,7 @@ class PaymentOut {
     'branch': branch,
     'payment_date': paymentDate,
     'notes': notes,
+    if (attachmentName != null) 'attachment_name': attachmentName,
+    if (attachmentBase64 != null) 'attachment_base64': attachmentBase64,
   };
 }

@@ -49,6 +49,7 @@ class _PurchasesMenuScreenState extends State<PurchasesMenuScreen> {
   int _totalPurchases = 0;
   double _payableToVendors = 0;
   int _pendingOrders = 0;
+  int _totalOrders = 0;
   int _totalPaymentsOut = 0;
   int _returnsThisMonth = 0;
 
@@ -90,6 +91,7 @@ class _PurchasesMenuScreenState extends State<PurchasesMenuScreen> {
         _totalPurchases = c['totalPurchases'];
         _purchasesThisMonth = c['purchasesThisMonth'];
         _pendingOrders = c['pendingOrders'];
+        _totalOrders = c['totalOrders'];
         _returnsThisMonth = c['returnsThisMonth'];
         _totalPaymentsOut = c['totalPaymentsOut'];
         _payableToVendors = c['payableToVendors'];
@@ -129,6 +131,7 @@ class _PurchasesMenuScreenState extends State<PurchasesMenuScreen> {
         _purchasesThisMonth =
             purchases.where((p) => _isThisMonth(p.purchaseDate)).length;
         _pendingOrders = orders.where((o) => o.status == 'Pending').length;
+        _totalOrders = orders.length;
         _returnsThisMonth =
             returns.where((r) => _isThisMonth(r.returnDate)).length;
         _totalPaymentsOut = payments.length;
@@ -145,6 +148,7 @@ class _PurchasesMenuScreenState extends State<PurchasesMenuScreen> {
         'totalPurchases': _totalPurchases,
         'purchasesThisMonth': _purchasesThisMonth,
         'pendingOrders': _pendingOrders,
+        'totalOrders': _totalOrders,
         'returnsThisMonth': _returnsThisMonth,
         'totalPaymentsOut': _totalPaymentsOut,
         'payableToVendors': _payableToVendors,
@@ -177,7 +181,7 @@ class _PurchasesMenuScreenState extends State<PurchasesMenuScreen> {
         subtitle: 'Orders placed with vendors',
         icon: Icons.assignment_rounded,
         color: const Color(0xFF6C63FF),
-        badgeCount: _pendingOrders,
+        badgeCount: _totalOrders,
         onTap: () => Navigator.push(context,
             MaterialPageRoute(settings: const RouteSettings(name: 'Purchase Order List'), builder: (_) => const PurchaseOrderListScreen()))
             .then((_) => _loadSummary(forceRefresh: true)),

@@ -98,6 +98,7 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => Dialog(
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.all(24),
