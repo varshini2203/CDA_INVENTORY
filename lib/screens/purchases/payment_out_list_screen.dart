@@ -1,7 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:cda_inventory/models/payment_out.dart';
 import 'package:cda_inventory/services/payment_out_service.dart';
+import 'package:cda_inventory/services/payment_out_pdf_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 import 'add_payment_out_screen.dart';
 

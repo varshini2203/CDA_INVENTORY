@@ -1,7 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:cda_inventory/models/payment_in.dart';
 import 'package:cda_inventory/services/payment_in_service.dart';
+import 'package:cda_inventory/services/payment_in_pdf_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 import 'add_payment_in_screen.dart';
 
@@ -92,6 +96,78 @@ class _PaymentInListScreenState extends State<PaymentInListScreen> {
     if (result == true) _fetch();
   }
 
+  // ── Share payment details as text ───────────────────────────────────────
+  Future<void> _sharePayment(PaymentIn p) async {
+    final buffer = StringBuffer()
+      ..writeln('Payment-In Receipt')
+      ..writeln('Customer: ${p.customerName}')
+      ..writeln('Amount: ₹${p.amount.toStringAsFixed(2)}')
+      ..writeln('Payment Date: ${p.paymentDate}')
+      ..writeln('Payment Mode: ${p.paymentMode}')
+      ..writeln('Reference No.: ${p.referenceNumber.isEmpty ? '—' : p.referenceNumber}')
+      ..writeln('Branch: ${kBranchLabels[p.branch] ?? p.branch}');
+    if (p.invoiceAllocations.isNotEmpty) {
+      buffer.writeln('Applied To: ${p.invoiceAllocations.map((a) => '${a.invoiceNo} (₹${a.amountApplied.toStringAsFixed(0)})').join(', ')}');
+    }
+    if (p.advanceAmount > 0) buffer.writeln('Advance / Unused: ₹${p.advanceAmount.toStringAsFixed(2)}');
+    if (p.notes.trim().isNotEmpty) buffer.writeln('Notes: ${p.notes}');
+    await Share.share(buffer.toString(), subject: 'Payment from ${p.customerName}');
+  }
+
+  // ── Print — SkyLynk-branded PDF receipt, opened in the browser's
+  // print/preview dialog ───────────────────────────────────────────────
+  Future<void> _printPayment(PaymentIn p) async {
+    try {
+      await Printing.layoutPdf(onLayout: (format) => PaymentInPdfService.generate(p));
+    } catch (e) {
+      if (mounted) showAppSnack(context, 'Failed to generate PDF: $e', isError: true);
+    }
+  }
+
+  // ── Share as PDF — sends the generated PDF receipt straight to
+  // WhatsApp/Email/etc via the native share sheet ────────────────────────
+  Future<void> _sharePdf(PaymentIn p) async {
+    try {
+      final bytes = await PaymentInPdfService.generate(p);
+      await Printing.sharePdf(bytes: bytes, filename: 'payment_in_${p.referenceNumber.isEmpty ? p.id ?? 'receipt' : p.referenceNumber}.pdf');
+    } catch (e) {
+      if (mounted) showAppSnack(context, 'Failed to share PDF: $e', isError: true);
+    }
+  }
+
+  // ── Bulk export — all filtered payments as a single PDF report ─────────
+  Future<void> _exportPdf() async {
+    if (_filtered.isEmpty) {
+      showAppSnack(context, 'Nothing to export', isError: true);
+      return;
+    }
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        build: (context) => [
+          pw.Header(level: 0, text: 'Payment-In Report'),
+          pw.Table.fromTextArray(
+            headers: ['Date', 'Customer', 'Mode', 'Reference', 'Branch', 'Amount'],
+            data: _filtered
+                .map((p) => [
+              p.paymentDate,
+              p.customerName,
+              p.paymentMode,
+              p.referenceNumber.isEmpty ? '-' : p.referenceNumber,
+              kBranchLabels[p.branch] ?? p.branch,
+              p.amount.toStringAsFixed(2),
+            ])
+                .toList(),
+          ),
+          pw.SizedBox(height: 16),
+          pw.Text('Total Received: Rs. ${_totalValue.toStringAsFixed(2)}',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        ],
+      ),
+    );
+    await Printing.sharePdf(bytes: await doc.save(), filename: 'payment_in_report.pdf');
+  }
+
   // ── View full payment details ───────────────────────────────────────────
   void _viewPayment(PaymentIn p) {
     showModalBottomSheet(
@@ -176,6 +252,50 @@ class _PaymentInListScreenState extends State<PaymentInListScreen> {
               Row(children: [
                 Expanded(
                   child: OutlinedButton.icon(
+                    onPressed: () => _printPayment(p),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.navy,
+                      side: const BorderSide(color: AppColors.navy),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: const Text('Print'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _sharePdf(p),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.teal,
+                      side: const BorderSide(color: AppColors.teal),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                    label: const Text('Share PDF'),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _sharePayment(p),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.teal,
+                      side: const BorderSide(color: AppColors.teal),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.ios_share_rounded, size: 18),
+                    label: const Text('Share Text'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
                       _editPayment(p);
@@ -190,7 +310,9 @@ class _PaymentInListScreenState extends State<PaymentInListScreen> {
                     label: const Text('Edit'),
                   ),
                 ),
-                const SizedBox(width: 12),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context),
@@ -243,6 +365,7 @@ class _PaymentInListScreenState extends State<PaymentInListScreen> {
         title: const Text('Payment-In',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         actions: [
+          IconButton(icon: const Icon(Icons.picture_as_pdf_outlined), tooltip: 'Print / Export PDF', onPressed: _exportPdf),
           IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _fetch),
         ],
       ),
@@ -469,6 +592,21 @@ class _PaymentInListScreenState extends State<PaymentInListScreen> {
             ),
             Text('₹${p.amount.toStringAsFixed(0)}',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: accent)),
+            PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.more_vert_rounded, color: Colors.grey, size: 20),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              onSelected: (v) {
+                switch (v) {
+                  case 'print': _printPayment(p); break;
+                  case 'pdf': _sharePdf(p); break;
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'print', child: Row(children: [Icon(Icons.print_outlined, size: 18, color: AppColors.navy), SizedBox(width: 10), Text('Print')])),
+                PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf_outlined, size: 18, color: AppColors.teal), SizedBox(width: 10), Text('Share as PDF')])),
+              ],
+            ),
           ]),
         ),
         Padding(
@@ -543,6 +681,31 @@ class _PaymentInListScreenState extends State<PaymentInListScreen> {
                         Text('Edit',
                             style: TextStyle(
                                 color: AppColors.amber, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _sharePayment(p),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.teal.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.teal.withOpacity(0.35)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.ios_share_rounded, color: AppColors.teal, size: 16),
+                        SizedBox(width: 4),
+                        Text('Share',
+                            style: TextStyle(
+                                color: AppColors.teal, fontSize: 12, fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),

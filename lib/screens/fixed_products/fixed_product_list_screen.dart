@@ -181,7 +181,10 @@ class _FixedProductListScreenState extends State<FixedProductListScreen>
 
     return allAssets.where((asset) {
       final matchesBranch = _branchFilter == 'All' ||
-          asset.branch.trim() == _branchFilter;
+          asset.branch
+              .split(RegExp(r'[,&]'))
+              .map((b) => b.trim())
+              .contains(_branchFilter);
 
       final matchesCategory = _categoryFilter == 'All' ||
           asset.category.trim() == _categoryFilter;
@@ -637,8 +640,16 @@ class _FixedProductListScreenState extends State<FixedProductListScreen>
                     (sum, asset) => sum + asset.quantity,
               );
 
+              // Some seeded items store a combined value like
+              // 'CDA Ops & CDA Admin' in a single string. Split on ',' and
+              // '&' so those count as their individual branches instead of
+              // inflating the distinct-branch total.
               final branchCount = sorted
-                  .map((asset) => asset.branch.trim())
+                  .expand(
+                    (asset) => asset.branch
+                    .split(RegExp(r'[,&]'))
+                    .map((b) => b.trim()),
+              )
                   .where((branch) => branch.isNotEmpty)
                   .toSet()
                   .length;

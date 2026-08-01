@@ -1,8 +1,10 @@
 // lib/screens/delivery_challan/delivery_challan_view_screen.dart
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cda_inventory/models/delivery_challan.dart';
 import 'package:cda_inventory/services/delivery_challan_service.dart';
+import 'package:cda_inventory/services/delivery_challan_pdf_service.dart';
 import 'package:cda_inventory/services/invoice_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 import 'add_delivery_challan_screen.dart';
@@ -131,6 +133,27 @@ class _DeliveryChallanViewScreenState extends State<DeliveryChallanViewScreen> {
     await Share.share(b.toString(), subject: 'Delivery Challan ${_challan.challanNo}');
   }
 
+  // ── Print — SkyLynk-branded PDF, opened in the browser's print/preview
+  // dialog ───────────────────────────────────────────────────────────────
+  Future<void> _print() async {
+    try {
+      await Printing.layoutPdf(onLayout: (format) => DeliveryChallanPdfService.generate(_challan));
+    } catch (e) {
+      if (mounted) showAppSnack(context, 'Failed to generate PDF: $e', isError: true);
+    }
+  }
+
+  // ── Download / Share the generated PDF straight to WhatsApp/Email/etc
+  // via the native share sheet ─────────────────────────────────────────
+  Future<void> _sharePdf() async {
+    try {
+      final bytes = await DeliveryChallanPdfService.generate(_challan);
+      await Printing.sharePdf(bytes: bytes, filename: 'delivery_challan_${_challan.challanNo}.pdf');
+    } catch (e) {
+      if (mounted) showAppSnack(context, 'Failed to share PDF: $e', isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -147,14 +170,20 @@ class _DeliveryChallanViewScreenState extends State<DeliveryChallanViewScreen> {
           leading: IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, size: 20), onPressed: () => Navigator.pop(context, _resultChanged)),
           title: Text(_challan.challanNo, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
           actions: [
-            IconButton(icon: const Icon(Icons.ios_share_rounded), onPressed: _share),
+            IconButton(icon: const Icon(Icons.print_outlined), tooltip: 'Print', onPressed: _print),
             IconButton(icon: const Icon(Icons.edit_outlined), onPressed: _editChallan),
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert_rounded),
               onSelected: (v) {
-                if (v == 'delete') _delete();
+                switch (v) {
+                  case 'pdf': _sharePdf(); break;
+                  case 'share_text': _share(); break;
+                  case 'delete': _delete(); break;
+                }
               },
               itemBuilder: (_) => const [
+                PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf_outlined, size: 18, color: kBlue), SizedBox(width: 10), Text('Share as PDF')])),
+                PopupMenuItem(value: 'share_text', child: Row(children: [Icon(Icons.ios_share_rounded, size: 18, color: kBlue), SizedBox(width: 10), Text('Share as Text')])),
                 PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 18, color: kRed), SizedBox(width: 10), Text('Delete')])),
               ],
             ),

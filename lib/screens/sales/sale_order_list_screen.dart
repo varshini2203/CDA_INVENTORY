@@ -1,7 +1,11 @@
 // lib/screens/sales/sale_order_list_screen.dart
 import 'package:flutter/material.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:cda_inventory/models/sale_order.dart';
 import 'package:cda_inventory/services/sale_order_service.dart';
+import 'package:cda_inventory/services/sale_order_pdf_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 import 'add_sale_order_screen.dart';
 
@@ -104,6 +108,79 @@ class _SaleOrderListScreenState extends State<SaleOrderListScreen> with SingleTi
     }
   }
 
+  // ── Share order details as text ─────────────────────────────────────────
+  Future<void> _shareOrder(SaleOrder o) async {
+    final buffer = StringBuffer()
+      ..writeln('Sale Order ${o.orderNo}')
+      ..writeln('Status: ${o.status}')
+      ..writeln('Customer: ${o.customer?.name.isNotEmpty == true ? o.customer!.name : 'Walk-in Customer'}')
+      ..writeln('Branch: ${kBranchLabels[o.branch] ?? o.branch}')
+      ..writeln('Order Date: ${o.orderDate}')
+      ..writeln('Delivery Date: ${o.deliveryDate ?? '—'}')
+      ..writeln('Items: ${o.lineItems.length}')
+      ..writeln('---')
+      ..writeln('Subtotal: ₹${o.subtotal.toStringAsFixed(2)}');
+    if (o.totalTax > 0) buffer.writeln('Tax: ₹${o.totalTax.toStringAsFixed(2)}');
+    if (o.shipping > 0) buffer.writeln('Shipping: ₹${o.shipping.toStringAsFixed(2)}');
+    buffer.writeln('Grand Total: ₹${o.grandTotal.toStringAsFixed(2)}');
+    if (o.notes.trim().isNotEmpty) buffer.writeln('Notes: ${o.notes}');
+    await Share.share(buffer.toString(), subject: 'Sale Order ${o.orderNo}');
+  }
+
+  // ── Print — SkyLynk-branded PDF, opened in the browser's print/preview
+  // dialog ───────────────────────────────────────────────────────────────
+  Future<void> _printOrder(SaleOrder o) async {
+    try {
+      await Printing.layoutPdf(onLayout: (format) => SaleOrderPdfService.generate(o));
+    } catch (e) {
+      if (mounted) showAppSnack(context, 'Failed to generate PDF: $e', isError: true);
+    }
+  }
+
+  // ── Share as PDF — sends the generated PDF straight to WhatsApp/Email/
+  // etc via the native share sheet ─────────────────────────────────────
+  Future<void> _sharePdf(SaleOrder o) async {
+    try {
+      final bytes = await SaleOrderPdfService.generate(o);
+      await Printing.sharePdf(bytes: bytes, filename: 'sale_order_${o.orderNo}.pdf');
+    } catch (e) {
+      if (mounted) showAppSnack(context, 'Failed to share PDF: $e', isError: true);
+    }
+  }
+
+  // ── Bulk export — all filtered orders as a single PDF report ───────────
+  Future<void> _exportPdf() async {
+    if (_filtered.isEmpty) {
+      showAppSnack(context, 'Nothing to export', isError: true);
+      return;
+    }
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        build: (context) => [
+          pw.Header(level: 0, text: 'Sale Orders Report'),
+          pw.Table.fromTextArray(
+            headers: ['Order No.', 'Customer', 'Order Date', 'Delivery Date', 'Status', 'Amount'],
+            data: _filtered
+                .map((o) => [
+              o.orderNo,
+              o.customer?.name.isNotEmpty == true ? o.customer!.name : 'Walk-in Customer',
+              o.orderDate,
+              o.deliveryDate ?? '-',
+              o.status,
+              o.grandTotal.toStringAsFixed(2),
+            ])
+                .toList(),
+          ),
+          pw.SizedBox(height: 16),
+          pw.Text('Total Orders Value: Rs. ${_filtered.fold(0.0, (s, o) => s + o.grandTotal).toStringAsFixed(2)}',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        ],
+      ),
+    );
+    await Printing.sharePdf(bytes: await doc.save(), filename: 'sale_orders_report.pdf');
+  }
+
   // ── View full order details ─────────────────────────────────────────────
   void _viewOrder(SaleOrder o) {
     showModalBottomSheet(
@@ -185,6 +262,50 @@ class _SaleOrderListScreenState extends State<SaleOrderListScreen> with SingleTi
               Row(children: [
                 Expanded(
                   child: OutlinedButton.icon(
+                    onPressed: () => _printOrder(o),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kTextDark,
+                      side: const BorderSide(color: kBorder),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: const Text('Print'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _sharePdf(o),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kBlue,
+                      side: const BorderSide(color: kBlue),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                    label: const Text('Share PDF'),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _shareOrder(o),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kBlue,
+                      side: const BorderSide(color: kBlue),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.ios_share_rounded, size: 18),
+                    label: const Text('Share Text'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
                       _editOrder(o);
@@ -199,7 +320,9 @@ class _SaleOrderListScreenState extends State<SaleOrderListScreen> with SingleTi
                     label: const Text('Edit'),
                   ),
                 ),
-                const SizedBox(width: 12),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context),
@@ -275,6 +398,11 @@ class _SaleOrderListScreenState extends State<SaleOrderListScreen> with SingleTi
               ]),
             )),
             const SizedBox(width: 10),
+            IconButton(
+              tooltip: 'Print / Export PDF',
+              icon: const Icon(Icons.print_rounded, size: 20, color: kTextSub),
+              onPressed: _exportPdf,
+            ),
             ElevatedButton.icon(
               onPressed: _addOrder,
               style: ElevatedButton.styleFrom(backgroundColor: kRed, foregroundColor: Colors.white, elevation: 0,
@@ -355,6 +483,21 @@ class _SaleOrderListScreenState extends State<SaleOrderListScreen> with SingleTi
               ]),
             ),
             Text('₹${o.grandTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: kTextDark)),
+            PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.more_vert_rounded, color: kTextMute, size: 20),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              onSelected: (v) {
+                switch (v) {
+                  case 'print': _printOrder(o); break;
+                  case 'pdf': _sharePdf(o); break;
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'print', child: Row(children: [Icon(Icons.print_outlined, size: 18, color: kTextDark), SizedBox(width: 10), Text('Print')])),
+                PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf_outlined, size: 18, color: kBlue), SizedBox(width: 10), Text('Share as PDF')])),
+              ],
+            ),
           ]),
           const SizedBox(height: 12),
           Row(children: [
@@ -398,6 +541,29 @@ class _SaleOrderListScreenState extends State<SaleOrderListScreen> with SingleTi
                       Icon(Icons.edit_outlined, color: kOrange, size: 16),
                       SizedBox(width: 4),
                       Text('Edit', style: TextStyle(color: kOrange, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _shareOrder(o),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: kBlue.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: kBlue.withOpacity(0.3)),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.ios_share_rounded, color: kBlue, size: 16),
+                      SizedBox(width: 4),
+                      Text('Share', style: TextStyle(color: kBlue, fontSize: 12, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),

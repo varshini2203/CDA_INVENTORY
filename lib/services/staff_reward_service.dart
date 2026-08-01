@@ -23,6 +23,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../constants/gamification_constants.dart';
 import '../models/staff_reward_model.dart';
 import 'achievement_service.dart';
+import 'gamification_service.dart';
 import 'mission_service.dart';
 import 'streak_service.dart';
 
@@ -74,6 +75,18 @@ class StaffRewardService {
     final rewardRef = _rewards.doc(uid);
     final ledgerRef = refId == null ? null : _xpLedger.doc(refId);
 
+    // The canonical currentStreak/longestStreak now live in
+    // gamification_profiles/{uid}, computed once by GamificationService
+    // (Firestore doesn't support nested transactions, so this has to run
+    // before/outside the staff_rewards transaction below). Previously
+    // this method computed its own, second, independent streak here —
+    // the two could silently drift apart since one only advanced when the
+    // Gamification Dashboard was opened and this one advanced on real
+    // actions. Now there's one calculation and staff_rewards just mirrors
+    // it, so every screen shows the same number.
+    final canonicalStreak =
+    await GamificationService.recordDailyActivity(uidOverride: uid);
+
     StaffRewardModel? updatedReward;
 
     await _db.runTransaction((txn) async {
@@ -89,7 +102,12 @@ class StaffRewardService {
           ? StaffRewardModel.fromDoc(rewardSnap)
           : StaffRewardModel.empty(uid);
 
-      final streak = StreakService.calculate(
+      // totalActiveDays is local bookkeeping (feeds
+      // AchievementMetric.totalActiveDays) — still counted per unique
+      // calendar day using the same StreakService rules, but the
+      // currentStreak/longestStreak below come from the canonical
+      // calculation above instead of being computed a second time.
+      final localDayInfo = StreakService.calculate(
         lastActiveDate: current.lastActiveDate,
         currentStreak: current.currentStreak,
         longestStreak: current.longestStreak,
@@ -106,10 +124,10 @@ class StaffRewardService {
       updatedReward = current.copyWith(
         xp: newXp,
         level: levelForXp(newXp),
-        currentStreak: streak.currentStreak,
-        longestStreak: streak.longestStreak,
-        totalActiveDays: streak.totalActiveDays,
-        lastActiveDate: streak.lastActiveDate,
+        currentStreak: canonicalStreak.currentStreak,
+        longestStreak: canonicalStreak.longestStreak,
+        totalActiveDays: localDayInfo.totalActiveDays,
+        lastActiveDate: localDayInfo.lastActiveDate,
         actionCounts: counts,
         createdAt: current.createdAt ?? now,
       );

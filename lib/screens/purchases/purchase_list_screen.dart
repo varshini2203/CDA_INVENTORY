@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:cda_inventory/models/purchase.dart';
 import 'package:cda_inventory/services/purchase_service.dart';
+import 'package:cda_inventory/services/purchase_pdf_service.dart';
 import 'add_purchase_screen.dart';
 
 class PurchaseListScreen extends StatefulWidget {
@@ -22,6 +26,7 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
   static const Color kTeal    = Color(0xFF00D4AA);
   static const Color kCoral   = Color(0xFFFF6B6B);
   static const Color kAmber   = Color(0xFFFFB800);
+  static const Color kBlue    = Color(0xFF2F6FE4);
   static const Color kSurface = Color(0xFFF0F4F8);
   static const Color kGreen   = Color(0xFF00B894);
 
@@ -192,6 +197,78 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
     if (result == true) _fetchPurchases();
   }
 
+  // ── Print — branded PDF opened in the native print/preview dialog ─────
+  Future<void> _printPurchase(Purchase p) async {
+    try {
+      await Printing.layoutPdf(onLayout: (format) => PurchasePdfService.generate(p));
+    } catch (e) {
+      _showSnack('Failed to generate PDF: $e', isError: true);
+    }
+  }
+
+  // ── Share as PDF — sends the generated PDF via the native share sheet ──
+  Future<void> _sharePdfPurchase(Purchase p) async {
+    try {
+      final bytes = await PurchasePdfService.generate(p);
+      final name = p.invoiceNumber.isNotEmpty ? p.invoiceNumber : (p.id ?? 'purchase');
+      await Printing.sharePdf(bytes: bytes, filename: 'purchase_$name.pdf');
+    } catch (e) {
+      _showSnack('Failed to share PDF: $e', isError: true);
+    }
+  }
+
+  // ── Share as Text ───────────────────────────────────────────────────────
+  Future<void> _sharePurchaseText(Purchase p) async {
+    final total = p.usesLineItems ? p.grandTotal : (p.cost * p.quantity);
+    final buffer = StringBuffer()
+      ..writeln('Purchase Bill ${p.invoiceNumber.isEmpty ? '' : p.invoiceNumber}')
+      ..writeln('Vendor: ${p.displayVendorName}')
+      ..writeln('Branch: ${_branchLabels[p.branch] ?? p.branch}')
+      ..writeln('Purchase Date: ${p.purchaseDate}')
+      ..writeln('Payment Type: ${p.paymentType}')
+      ..writeln('Quantity: ${p.displayQuantity}')
+      ..writeln('---')
+      ..writeln('Total Amount: ₹${total.toStringAsFixed(2)}');
+    if ((p.description ?? '').trim().isNotEmpty) {
+      buffer.writeln('Notes: ${p.description}');
+    }
+    await Share.share(buffer.toString(),
+        subject: 'Purchase Bill ${p.invoiceNumber.isEmpty ? p.id ?? '' : p.invoiceNumber}');
+  }
+
+  // ── Bulk export — all filtered purchases as a single PDF report ────────
+  Future<void> _exportPdf() async {
+    if (_filtered.isEmpty) {
+      _showSnack('Nothing to export', isError: true);
+      return;
+    }
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        build: (context) => [
+          pw.Header(level: 0, text: 'Purchases Report'),
+          pw.Table.fromTextArray(
+            headers: ['Date', 'Invoice No', 'Vendor', 'Branch', 'Qty', 'Amount'],
+            data: _filtered
+                .map((p) => [
+              p.purchaseDate,
+              p.invoiceNumber.isEmpty ? '-' : p.invoiceNumber,
+              p.displayVendorName,
+              _branchLabels[p.branch] ?? p.branch,
+              '${p.displayQuantity}',
+              (p.usesLineItems ? p.grandTotal : (p.cost * p.quantity)).toStringAsFixed(2),
+            ])
+                .toList(),
+          ),
+          pw.SizedBox(height: 16),
+          pw.Text('Total Purchases Value: Rs. ${_totalValue.toStringAsFixed(2)}',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        ],
+      ),
+    );
+    await Printing.sharePdf(bytes: await doc.save(), filename: 'purchases_report.pdf');
+  }
+
   // ── View full purchase details ─────────────────────────────────────────
   void _viewPurchase(Purchase p) {
     final total = p.cost * p.quantity;
@@ -265,13 +342,57 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
               Row(children: [
                 Expanded(
                   child: OutlinedButton.icon(
+                    onPressed: () => _printPurchase(p),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kNavy,
+                      side: const BorderSide(color: kNavy),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: const Text('Print'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _sharePdfPurchase(p),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kBlue,
+                      side: const BorderSide(color: kBlue),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                    label: const Text('Share PDF'),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _sharePurchaseText(p),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kBlue,
+                      side: const BorderSide(color: kBlue),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.ios_share_rounded, size: 18),
+                    label: const Text('Share Text'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
                       _editPurchase(p);
                     },
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: kNavy,
-                      side: const BorderSide(color: kNavy),
+                      foregroundColor: kAmber,
+                      side: const BorderSide(color: kAmber),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -279,7 +400,9 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
                     label: const Text('Edit'),
                   ),
                 ),
-                const SizedBox(width: 12),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context),
@@ -333,6 +456,11 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
         title: const Text('Purchase List',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            tooltip: 'Export PDF',
+            onPressed: _exportPdf,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Refresh',
@@ -712,6 +840,47 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
                             color: Colors.grey.shade400, fontSize: 11)),
                   ],
                 ),
+                PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  icon: Icon(Icons.more_vert_rounded, color: Colors.grey.shade500, size: 20),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  onSelected: (v) {
+                    switch (v) {
+                      case 'print':
+                        _printPurchase(p);
+                        break;
+                      case 'pdf':
+                        _sharePdfPurchase(p);
+                        break;
+                      case 'text':
+                        _sharePurchaseText(p);
+                        break;
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                        value: 'print',
+                        child: Row(children: [
+                          Icon(Icons.print_outlined, size: 18, color: kNavy),
+                          SizedBox(width: 10),
+                          Text('Print'),
+                        ])),
+                    PopupMenuItem(
+                        value: 'pdf',
+                        child: Row(children: [
+                          Icon(Icons.picture_as_pdf_outlined, size: 18, color: kBlue),
+                          SizedBox(width: 10),
+                          Text('Share as PDF'),
+                        ])),
+                    PopupMenuItem(
+                        value: 'text',
+                        child: Row(children: [
+                          Icon(Icons.ios_share_rounded, size: 18, color: kBlue),
+                          SizedBox(width: 10),
+                          Text('Share as Text'),
+                        ])),
+                  ],
+                ),
               ],
             ),
           ),
@@ -788,6 +957,33 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
                               Text('Edit',
                                   style: TextStyle(
                                       color: kAmber,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _sharePurchaseText(p),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: kBlue.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: kBlue.withOpacity(0.3)),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.ios_share_rounded, color: kBlue, size: 16),
+                              SizedBox(width: 4),
+                              Text('Share',
+                                  style: TextStyle(
+                                      color: kBlue,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600)),
                             ],

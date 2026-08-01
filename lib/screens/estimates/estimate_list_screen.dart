@@ -313,6 +313,18 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
     }
   }
 
+  // ── Share — sends the generated PDF straight to WhatsApp/Email/etc via
+  // the native share sheet (Print above just opens the print/preview
+  // dialog, which isn't the same as directly sharing the file) ───────────
+  Future<void> _shareEstimate(Estimate estimate) async {
+    try {
+      final bytes = await EstimatePdfService.generate(estimate);
+      await Printing.sharePdf(bytes: bytes, filename: 'estimate_${estimate.referenceNo}.pdf');
+    } catch (e) {
+      if (mounted) _showSnack('Failed to share estimate: $e', isError: true);
+    }
+  }
+
   // ── Export (bulk) ─────────────────────────────────────────────────────
   Future<void> _exportCsv() async {
     if (_filteredEstimates.isEmpty) {
@@ -931,6 +943,7 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
       onConvert: _convertToInvoice,
       onDuplicate: _duplicateAsProforma,
       onPrint: _printEstimate,
+      onShare: _shareEstimate,
     );
   }
 
@@ -1049,6 +1062,7 @@ class _EstimateTable extends StatelessWidget {
   final void Function(Estimate) onConvert;
   final void Function(Estimate) onDuplicate;
   final void Function(Estimate) onPrint;
+  final void Function(Estimate) onShare;
 
   const _EstimateTable({
     required this.estimates,
@@ -1059,6 +1073,7 @@ class _EstimateTable extends StatelessWidget {
     required this.onConvert,
     required this.onDuplicate,
     required this.onPrint,
+    required this.onShare,
   });
 
   static const double wDate    = 88;
@@ -1209,6 +1224,7 @@ class _EstimateTable extends StatelessWidget {
                 if (v == 'view') onView(est);
                 if (v == 'edit') onEdit(est);
                 if (v == 'print') onPrint(est);
+                if (v == 'share') onShare(est);
                 if (v == 'duplicate') onDuplicate(est);
                 if (v == 'delete') onDelete(est);
               },
@@ -1216,6 +1232,7 @@ class _EstimateTable extends StatelessWidget {
                 PopupMenuItem(value: 'view', child: Text('View')),
                 PopupMenuItem(value: 'edit', child: Text('Edit')),
                 PopupMenuItem(value: 'print', child: Text('Print')),
+                PopupMenuItem(value: 'share', child: Text('Share')),
                 PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
                 PopupMenuItem(value: 'delete', child: Text('Delete')),
               ],

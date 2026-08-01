@@ -19,12 +19,12 @@
 // works end-to-end against real Firestore data seeded by
 // ensureTodayMissions()/ensureProfile().
 
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 import '../models/gamification_models.dart';
+import 'streak_service.dart';
 
 class GamificationService {
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -154,39 +154,109 @@ class GamificationService {
     });
   }
 
+  /// Parses a "yyyy-MM-dd" key back into a DateTime, or null if empty/
+  /// unparseable (treated by StreakService as "no prior activity").
+  static DateTime? _parseDateKey(String key) {
+    if (key.isEmpty) return null;
+    final parts = key.split('-');
+    if (parts.length != 3) return null;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d);
+  }
+
+  /// Single source of truth for streak math. Delegates to the shared,
+  /// unit-tested StreakService — the exact same rules StaffRewardService
+  /// uses — so every part of the app agrees on: same calendar day ->
+  /// unchanged, exactly 1 day later -> streak+1, any bigger gap -> reset
+  /// to 1. (Previously this compared "yyyy-MM-dd" strings by hand, which
+  /// duplicated — and could drift from — the logic in StreakService.)
   static GamificationProfile _applyStreakLogic(GamificationProfile profile, String today) {
-    if (profile.lastActivityDate == today) {
-      // Already visited today — leave streak untouched.
-      return profile;
-    }
-
-    final yesterday = DateFormat('yyyy-MM-dd')
-        .format(DateTime.now().subtract(const Duration(days: 1)));
-
-    int newStreak;
-    if (profile.lastActivityDate == yesterday) {
-      newStreak = profile.currentStreak + 1; // consecutive day
-    } else if (profile.lastActivityDate.isEmpty) {
-      newStreak = 1;
-    } else {
-      newStreak = 1; // streak broken, restart
-    }
-
-    final newLongest = max(profile.longestStreak, newStreak);
+    final result = StreakService.calculate(
+      lastActiveDate: _parseDateKey(profile.lastActivityDate),
+      currentStreak: profile.currentStreak,
+      longestStreak: profile.longestStreak,
+      totalActiveDays: 0, // not tracked on GamificationProfile — ignored here
+      now: _parseDateKey(today),
+    );
 
     return GamificationProfile(
       uid: profile.uid,
       name: profile.name,
       branch: profile.branch,
       totalXP: profile.totalXP,
-      currentStreak: newStreak,
-      longestStreak: newLongest,
+      currentStreak: result.currentStreak,
+      longestStreak: result.longestStreak,
       lastActivityDate: today,
       achievementIds: profile.achievementIds,
       missionsCompletedTotal: profile.missionsCompletedTotal,
       productsAdded: profile.productsAdded,
       stockUpdates: profile.stockUpdates,
     );
+  }
+
+  /// Bumps the *one canonical* streak for [uidOverride] (or the signed-in
+  /// user) "now". Call this from real activity — StaffRewardService.
+  /// recordActivity already does — not just when the Gamification
+  /// Dashboard happens to be opened. That was the actual bug behind
+  /// streaks looking "wrong": previously the dashboard's streak only
+  /// advanced on days the user opened that specific screen, while real
+  /// work (adding stock, products, invoices...) was tracked by a second,
+  /// separate streak counter over in StaffRewardService/staff_rewards
+  /// that nothing displayed. Now there's just one number, updated by
+  /// whichever happens first each day.
+  ///
+  /// Safe to call multiple times per day — later calls the same day are
+  /// no-ops. If no profile exists yet (user has never opened the
+  /// dashboard), creates a minimal one; ensureProfile() fills in
+  /// name/branch the next time the dashboard loads.
+  static Future<({int currentStreak, int longestStreak})> recordDailyActivity({
+    String? uidOverride,
+  }) async {
+    final uid = uidOverride ?? _uid;
+    if (uid == null) return (currentStreak: 0, longestStreak: 0);
+
+    final today = _todayKey();
+    var resultStreak = 0;
+    var resultLongest = 0;
+
+    await _db.runTransaction((txn) async {
+      final ref = _profiles.doc(uid);
+      final snap = await txn.get(ref);
+
+      if (!snap.exists) {
+        resultStreak = 1;
+        resultLongest = 1;
+        txn.set(ref, GamificationProfile.empty(uid).toMap()
+          ..addAll({
+            'currentStreak': 1,
+            'longestStreak': 1,
+            'lastActivityDate': today,
+          }));
+        return;
+      }
+
+      final profile = GamificationProfile.fromMap(uid, snap.data()!);
+      final updated = _applyStreakLogic(profile, today);
+      resultStreak = updated.currentStreak;
+      resultLongest = updated.longestStreak;
+
+      if (updated.currentStreak == profile.currentStreak &&
+          updated.lastActivityDate == profile.lastActivityDate) {
+        return; // same-day repeat call — nothing changed, skip the write
+      }
+
+      txn.update(ref, {
+        'currentStreak': updated.currentStreak,
+        'longestStreak': updated.longestStreak,
+        'lastActivityDate': updated.lastActivityDate,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+
+    return (currentStreak: resultStreak, longestStreak: resultLongest);
   }
 
   // ── XP + ACHIEVEMENTS ───────────────────────────────────────────

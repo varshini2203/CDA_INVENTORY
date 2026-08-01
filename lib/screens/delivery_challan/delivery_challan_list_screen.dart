@@ -1,7 +1,11 @@
 // lib/screens/delivery_challan/delivery_challan_list_screen.dart
 import 'package:flutter/material.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:cda_inventory/models/delivery_challan.dart';
 import 'package:cda_inventory/services/delivery_challan_service.dart';
+import 'package:cda_inventory/services/delivery_challan_pdf_service.dart';
 import 'package:cda_inventory/services/invoice_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 import 'add_delivery_challan_screen.dart';
@@ -83,6 +87,85 @@ class _DeliveryChallanListScreenState extends State<DeliveryChallanListScreen> {
         settings: const RouteSettings(name: 'View Delivery Challan'),
         builder: (_) => DeliveryChallanViewScreen(challan: c)));
     if (result == true) _load(forceRefresh: true);
+  }
+
+  // ── Edit an existing challan directly from the list ─────────────────────
+  Future<void> _editChallan(DeliveryChallan c) async {
+    final result = await Navigator.push(context, MaterialPageRoute(
+        settings: const RouteSettings(name: 'Edit Delivery Challan'),
+        builder: (_) => AddDeliveryChallanScreen(existing: c)));
+    if (result == true) _load(forceRefresh: true);
+  }
+
+  // ── Share challan details as text ───────────────────────────────────────
+  Future<void> _shareChallan(DeliveryChallan c) async {
+    final b = StringBuffer();
+    b.writeln('DELIVERY CHALLAN');
+    b.writeln(c.challanNo);
+    b.writeln('Date: ${c.challanDate}');
+    if (c.customer != null) b.writeln('Customer: ${c.customer!.name}');
+    if (c.vehicleNo?.isNotEmpty == true) b.writeln('Vehicle No: ${c.vehicleNo}');
+    if (c.transportName?.isNotEmpty == true) b.writeln('Transport: ${c.transportName}');
+    b.writeln('');
+    for (final li in c.lineItems) {
+      b.writeln('${li.description}  x${li.quantity} ${li.unit}  @ ₹${li.unitPrice.toStringAsFixed(2)}  = ₹${li.lineTotal.toStringAsFixed(2)}');
+    }
+    b.writeln('');
+    b.writeln('Total: ₹${c.grandTotal.toStringAsFixed(2)}');
+    await Share.share(b.toString(), subject: 'Delivery Challan ${c.challanNo}');
+  }
+
+  // ── Print — SkyLynk-branded PDF, opened in the browser's print/preview
+  // dialog ───────────────────────────────────────────────────────────────
+  Future<void> _printChallan(DeliveryChallan c) async {
+    try {
+      await Printing.layoutPdf(onLayout: (format) => DeliveryChallanPdfService.generate(c));
+    } catch (e) {
+      if (mounted) showAppSnack(context, 'Failed to generate PDF: $e', isError: true);
+    }
+  }
+
+  // ── Share as PDF — sends the generated PDF straight to WhatsApp/Email/
+  // etc via the native share sheet ─────────────────────────────────────
+  Future<void> _sharePdf(DeliveryChallan c) async {
+    try {
+      final bytes = await DeliveryChallanPdfService.generate(c);
+      await Printing.sharePdf(bytes: bytes, filename: 'delivery_challan_${c.challanNo}.pdf');
+    } catch (e) {
+      if (mounted) showAppSnack(context, 'Failed to share PDF: $e', isError: true);
+    }
+  }
+
+  // ── Bulk export — all filtered challans as a single PDF report ─────────
+  Future<void> _exportPdf() async {
+    if (_filtered.isEmpty) {
+      showAppSnack(context, 'Nothing to export', isError: true);
+      return;
+    }
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        build: (context) => [
+          pw.Header(level: 0, text: 'Delivery Challan Report'),
+          pw.Table.fromTextArray(
+            headers: ['Challan No.', 'Customer', 'Date', 'Status', 'Amount'],
+            data: _filtered
+                .map((c) => [
+              c.challanNo,
+              c.customer?.name.isNotEmpty == true ? c.customer!.name : 'Walk-in Customer',
+              c.challanDate,
+              c.status,
+              c.grandTotal.toStringAsFixed(2),
+            ])
+                .toList(),
+          ),
+          pw.SizedBox(height: 16),
+          pw.Text('Total Value: Rs. ${_totalAmount.toStringAsFixed(2)}',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        ],
+      ),
+    );
+    await Printing.sharePdf(bytes: await doc.save(), filename: 'delivery_challan_report.pdf');
   }
 
   Future<void> _convertToInvoice(DeliveryChallan c) async {
@@ -184,7 +267,10 @@ class _DeliveryChallanListScreenState extends State<DeliveryChallanListScreen> {
           IconButton(icon: const Icon(Icons.delete_outline_rounded, color: kRed), onPressed: _bulkDelete),
           const SizedBox(width: 6),
         ]
-            : [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: () => _load(forceRefresh: true))],
+            : [
+          IconButton(icon: const Icon(Icons.picture_as_pdf_outlined), tooltip: 'Print / Export PDF', onPressed: _exportPdf),
+          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: () => _load(forceRefresh: true)),
+        ],
       ),
       body: Column(children: [
         Container(
@@ -346,12 +432,20 @@ class _DeliveryChallanListScreenState extends State<DeliveryChallanListScreen> {
                   onSelected: (v) {
                     switch (v) {
                       case 'view': _viewChallan(c); break;
+                      case 'edit': _editChallan(c); break;
+                      case 'print': _printChallan(c); break;
+                      case 'pdf': _sharePdf(c); break;
+                      case 'share': _shareChallan(c); break;
                       case 'convert': _convertToInvoice(c); break;
                       case 'delete': _deleteChallan(c); break;
                     }
                   },
                   itemBuilder: (_) => [
                     const PopupMenuItem(value: 'view', child: Row(children: [Icon(Icons.visibility_outlined, size: 18, color: kTextDark), SizedBox(width: 10), Text('View')])),
+                    const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: kOrange), SizedBox(width: 10), Text('Edit')])),
+                    const PopupMenuItem(value: 'print', child: Row(children: [Icon(Icons.print_outlined, size: 18, color: kTextDark), SizedBox(width: 10), Text('Print')])),
+                    const PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf_outlined, size: 18, color: kBlue), SizedBox(width: 10), Text('Share as PDF')])),
+                    const PopupMenuItem(value: 'share', child: Row(children: [Icon(Icons.ios_share_rounded, size: 18, color: kBlue), SizedBox(width: 10), Text('Share as Text')])),
                     PopupMenuItem(value: 'convert', enabled: c.status != 'Converted' && c.status != 'Cancelled',
                         child: const Row(children: [Icon(Icons.sync_alt_rounded, size: 18, color: kGreen), SizedBox(width: 10), Text('Convert to Sale')])),
                     const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 18, color: kRed), SizedBox(width: 10), Text('Delete')])),

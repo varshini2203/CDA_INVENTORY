@@ -1,9 +1,11 @@
 // lib/screens/sales/add_sale_order_screen.dart
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:cda_inventory/models/sale_order.dart';
 import 'package:cda_inventory/models/invoice_line_item.dart';
 import 'package:cda_inventory/models/customer_details.dart';
 import 'package:cda_inventory/services/sale_order_service.dart';
+import 'package:cda_inventory/services/sale_order_pdf_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
 
 class AddSaleOrderScreen extends StatefulWidget {
@@ -117,6 +119,36 @@ class _AddSaleOrderScreenState extends State<AddSaleOrderScreen> {
   double get _preRound => _subtotal + _totalTax + _shipping;
   double get _roundOff => roundOffEnabled ? (_preRound.roundToDouble() - _preRound) : 0;
   double get _grandTotal => _preRound + _roundOff;
+
+  // ── Build a SaleOrder object from the current form state. Used by
+  //    _printPreview() for a live preview of unsaved changes. ─────────────
+  SaleOrder _buildDraftOrder() {
+    return SaleOrder(
+      id: widget.orderToEdit?.id,
+      orderNo: widget.orderToEdit?.orderNo ?? 'DRAFT',
+      customer: CustomerDetails(name: customerController.text.trim(), phone: phoneController.text.trim()),
+      orderDate: orderDateController.text.trim(),
+      deliveryDate: deliveryDateController.text.trim().isEmpty ? null : deliveryDateController.text.trim(),
+      status: widget.orderToEdit?.status ?? 'Open',
+      branch: selectedBranch,
+      notes: notesController.text.trim(),
+      lineItems: _lineItems,
+      shipping: _shipping,
+      roundOffEnabled: roundOffEnabled,
+      gstEnabled: gstEnabled,
+      isInterState: isInterState,
+      createdAt: widget.orderToEdit?.createdAt,
+    );
+  }
+
+  Future<void> _printPreview() async {
+    if (_lineItems.isEmpty) {
+      showAppSnack(context, 'Add at least one item before printing', isError: true);
+      return;
+    }
+    final draft = _buildDraftOrder();
+    await Printing.layoutPdf(onLayout: (format) => SaleOrderPdfService.generate(draft));
+  }
 
   Future<void> _save() async {
     if (customerController.text.trim().isEmpty) {
@@ -430,6 +462,18 @@ class _AddSaleOrderScreenState extends State<AddSaleOrderScreen> {
 
   Widget _footer() => Row(children: [
     const Spacer(),
+    OutlinedButton.icon(
+      onPressed: _printPreview,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: kTextDark,
+        side: const BorderSide(color: kBorder),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+      icon: const Icon(Icons.print_outlined, size: 16),
+      label: const Text('Print', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+    ),
+    const SizedBox(width: 10),
     ElevatedButton(
       onPressed: _isLoading ? null : _save,
       style: ElevatedButton.styleFrom(backgroundColor: kBlue, foregroundColor: Colors.white, elevation: 0,
