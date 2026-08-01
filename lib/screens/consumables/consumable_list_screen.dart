@@ -32,15 +32,15 @@ class _ConsumableListScreenState extends State<ConsumableListScreen>
   static const Color kSurface = Color(0xFFF0F4F8);
   static const Color kGreen   = Color(0xFF00B894);
 
-  // Raw values kept exactly as stored in Firestore ('branch' field on each
-  // Consumable doc), since belongsToBranch() matches against these strings
-  // directly. Only the on-screen LABEL is renamed via branchLabels below —
-  // this avoids needing to touch any existing seeded data.
-  static const List<String> branches = ['All', 'Branch 1', 'Branch 2'];
+  // These now match exactly what's stored in Firestore's 'branch' field
+  // (confirmed against seed_consumables.dart: docs are seeded with
+  // 'CDA Admin' / 'CDA Ops' directly, not placeholder 'Branch 1'/'Branch 2'
+  // values). No display-label translation is needed since the stored
+  // value already is the display label.
+  static const List<String> branches = ['All', 'CDA Admin', 'CDA Ops'];
 
-  // Display-only rename: 'Branch 1' → 'CDA Admin', 'Branch 2' → 'CDA Ops'.
-  // Anything not in this map (e.g. 'All', or a future branch) just shows
-  // as-is.
+  // Kept only for backward compatibility with any older docs that might
+  // still use the legacy 'Branch 1'/'Branch 2' raw values.
   static const Map<String, String> branchLabels = {
     'Branch 1': 'CDA Admin',
     'Branch 2': 'CDA Ops',
@@ -51,7 +51,7 @@ class _ConsumableListScreenState extends State<ConsumableListScreen>
   String _branchLabel(String rawBranch) {
     if (rawBranch.isEmpty) return '';
     return rawBranch
-        .split(',')
+        .split(RegExp(r'[,&]'))
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .map((e) => branchLabels[e] ?? e)
@@ -727,12 +727,11 @@ class _ConsumableListScreenState extends State<ConsumableListScreen>
                           separatorBuilder: (_, __) =>
                           const SizedBox(width: 8),
                           itemBuilder: (_, i) {
-                            final b = branches[i]; // raw value, e.g. 'Branch 1'
+                            final b = branches[i]; // matches stored value directly
                             final selected = selectedBranch == b;
                             return _filterChip(
-                              // Display 'CDA Admin' / 'CDA Ops' while still
-                              // filtering against the raw 'Branch 1'/'Branch 2'
-                              // value stored in Firestore.
+                              // Stored value already is the display label,
+                              // so no translation needed here.
                               label: b == 'All' ? 'All' : (branchLabels[b] ?? b),
                               selected: selected,
                               activeColor: kNavy,

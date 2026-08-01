@@ -14,14 +14,14 @@ class BranchListScreen extends StatelessWidget {
       const _BranchEntry(
         id: 1,
         label: 'CDA ADMIN',
-        subtitle: 'Branch 1 inventory (1125 items)',
+        subtitle: 'Branch 1 inventory ',
         icon: Icons.location_city_rounded,
         color: Color(0xFF6C63FF),
       ),
       const _BranchEntry(
         id: 2,
         label: 'CDA OPS',
-        subtitle: 'Branch 2 inventory (492 items)',
+        subtitle: 'Branch 2 inventory ',
         icon: Icons.business_rounded,
         color: Color(0xFF00B894),
       ),

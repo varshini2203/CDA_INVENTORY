@@ -291,7 +291,7 @@ class _BranchInventoryScreenState extends State<BranchInventoryScreen>
           ],
         ),
         content: Text(
-          'This will upload the Adambakkam inventory list (1125 items) to '
+          'This will upload the Adambakkam inventory list to '
               'Firestore, tagged as Branch 1. Existing items will not be '
               'deleted, but running this more than once will create '
               'duplicates.\n\nContinue?',

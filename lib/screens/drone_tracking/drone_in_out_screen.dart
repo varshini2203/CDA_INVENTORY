@@ -110,6 +110,12 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
         icon: Icons.cloud_done_rounded,
         color: kTeal,
       );
+      // seedDrones() writes directly to Firestore via a WriteBatch, bypassing
+      // DroneService entirely, so its static _dronesCache is never
+      // invalidated by the write. Without clearing it here, _loadDrones()
+      // below would just return the stale (possibly empty) cached list
+      // instead of actually re-querying Firestore.
+      DroneService.clearCache();
       await _loadDrones();
     } catch (e) {
       if (!mounted) return;

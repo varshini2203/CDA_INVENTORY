@@ -125,45 +125,24 @@ class ConsumableService {
       final batch = _firestore.batch();
       for (final item in chunk) {
         final docRef = _collection.doc();
-        // The seed data's 'notes' field holds the branch's *display* label
-        // ("CDA Admin" / "CDA Ops"), but the 'branch' field on each document
-        // must store the raw values the list screen filters against
-        // ("Branch 1" / "Branch 2") — Consumable.belongsToBranch() and the
-        // branch chips in ConsumableListScreen both compare against the raw
-        // form. Translate the label to the raw value before writing so the
-        // branch filter actually matches.
+        // seed_consumables.dart stores the branch value directly as
+        // 'CDA Admin' / 'CDA Ops' / 'CDA Ops & CDA Admin' under the
+        // 'branch' key — write it straight through, no translation.
+        // (Previously this read item['notes']/item['minStock']/item['unit'],
+        // none of which exist on the seed maps, so every doc silently got
+        // an empty branch — that's why branch filtering returned nothing.)
         batch.set(docRef, {
           'name': item['name'],
           'category': item['category'],
           'quantity': item['quantity'],
-          'minimumStock': item['minStock'],
-          'branch': _rawBranchFromLabel(item['notes'] ?? ''),
-          'description': item['unit'].toString().isNotEmpty
-              ? 'Unit: ${item['unit']}'
-              : '',
+          'minimumStock': item['minimumStock'] ?? 0,
+          'branch': item['branch'] ?? '',
+          'description': item['description'] ?? '',
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
       await batch.commit();
     }
     clearCache();
-  }
-
-  /// Maps a seed-data branch label ("CDA Admin" / "CDA Ops", possibly
-  /// comma-joined for items in both) back to the raw branch value that
-  /// Consumable.belongsToBranch() and the branch filter chips compare
-  /// against ("Branch 1" / "Branch 2"). Anything unrecognized passes
-  /// through unchanged.
-  static String _rawBranchFromLabel(String label) {
-    const labelToRaw = {
-      'CDA Admin': 'Branch 1',
-      'CDA Ops': 'Branch 2',
-    };
-    if (label.isEmpty) return '';
-    return label
-        .split(',')
-        .map((e) => e.trim())
-        .map((e) => labelToRaw[e] ?? e)
-        .join(', ');
   }
 }

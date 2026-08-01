@@ -62,10 +62,15 @@ class Consumable {
   }
 
   /// True if this item is tagged for the given branch ("All" always matches).
-  /// Handles multi-branch values like "Branch 1, Branch 2".
+  /// Handles multi-branch values like "CDA Admin, CDA Ops" or
+  /// "CDA Ops & CDA Admin" (both ',' and '&' are used as separators in
+  /// the seeded data).
   bool belongsToBranch(String targetBranch) {
     if (targetBranch == 'All') return true;
-    return branch.split(',').map((e) => e.trim()).contains(targetBranch);
+    return branch
+        .split(RegExp(r'[,&]'))
+        .map((e) => e.trim())
+        .contains(targetBranch);
   }
 
   /// Convert to a map for writing to Firestore (no 'id' field, Firestore
