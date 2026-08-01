@@ -1,1286 +1,1144 @@
 // lib/data/seed_consumables.dart
 //
-// 722 Consumable items parsed from Consumables_CDA__1_.xlsx
-// (auto-classified from the CDA Admin / CDA Ops inventory spreadsheets).
+// 1116 Consumable items parsed from the CDA Admin / CDA Ops
+// inventory spreadsheets (cda_ops.xlsx, cda_admin.xlsx), cleaned &
+// deduplicated, then auto-classified.
 // Feed into Firestore via ConsumableService.seedConsumables()
+//
+// NOTE ON THE 'branch' FIELD:
+// Each item's 'branch' holds the *display* label ("CDA Admin", "CDA Ops",
+// or "CDA Ops & CDA Admin" for shared items). ConsumableService.seedConsumables()
+// translates this label into the raw Firestore value ("Branch 1" / "Branch 2")
+// that the branch filter chips in ConsumableListScreen compare against — see
+// ConsumableService._rawBranchFromLabel(). Do not rename this field to
+// 'notes' or anything else; the service reads item['branch'] directly.
 
 class SeedConsumables {
   SeedConsumables._();
 
-  static final List<Map<String, dynamic>> items = [
-    // ── MD ROOM ──
-    {'name': '100 Gsm A4 Sheet Bundle', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': '1000Uf35V', 'category': 'Row-3', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '100Uf10V', 'category': 'Row-3', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '10Cm 2 Pin Jst', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── GOJAN IN PRODUCTS ──
-    {'name': '15 Inch Props', 'category': 'Gojan In Products', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── CHARGING STATION ──
-    {'name': '2 Cell Battery', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': '2 Pin Usb Power Cable', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': '2.44 Ghz Ufl T -Antenna', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── DAMAGED BATTERY BOX ──
-    {'name': '2S Battery', 'category': 'Damaged Battery Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': '2S Battery Lion-2 Xt30', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── CHARGING STATION ──
-    {'name': '2S Li Ion Battery', 'category': 'Charging Station', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': '2S Lion Battery-4 Xt60', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': '3 Pin Adpter Cable', 'category': 'Md Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': '3D Print For Propeller Guard Section', 'category': 'Service Rack(Fourthrow)', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': '3S Balance Lead', 'category': 'Row-2', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': '3S Lion Battery', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': '4700Uf50V', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '470Uf 25V', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '470Uf 35V', 'category': 'Row-3', 'quantity': 18, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': '4Leaf Clover Fpv Antenna', 'category': 'Row 4', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': '4S Lion Battery', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MANAGER ROOM ──
-    {'name': '4S Charging Balance Lead', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': '5.8 Ghz Wifi Antenna', 'category': 'Row-3', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': '5.8G 2Dbi Dipole Ufl Omni Antenna', 'category': 'Row 4', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '5.8Ghz Antenna', 'category': 'Row 4', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': '5.8Ghz Fpv Antenna', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': '5.8Ghz Omni Fpv Antenna', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': '560Uf35V', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '5S Balance Lead', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '6S Balance Lead', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION, MANAGER ROOM ──
-    {'name': '6S Charging Balance Lead', 'category': 'Charging Station, Manager Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': '7S Balance Lead', 'category': 'Row-3', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': '85 Gsm A4 Sheet Bundle', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'A3 Display Book Pocket', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'A4 Bundle New', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'A4 Bundle Opened', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'A4 Bundle Used', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'A4 Display Book Pocket', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': 'A4 Sheet Bundle', 'category': 'Md Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'A4 Sheet Cotton Box', 'category': 'Md Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Accounting File 26', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'Accounts Book New', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Accounts Kaviyamam', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Accounts Peticash Note', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── EDITOR DRAWS ──
-    {'name': 'Ads Sheet', 'category': 'Editor Draws', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Aircraft E&E Book', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Aircraft Instrument Book', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Allen Hex Screws', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Alligator Clips', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Aluminium Standoff 35Mm', 'category': 'Row-3', 'quantity': 41, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── PROPELLER BOX ──
-    {'name': 'Amazon Basics Usb Type C To Micro -B 2.0 Cable', 'category': 'Propeller Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Amazon Packing Tape 48Mm', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'Anabond', 'category': 'Tools', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': 'Analog Double Antenna Googles', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MANAGER ROOM ──
-    {'name': 'Antenna', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ONFIELD, ROW 4, ROW-3 ──
-    {'name': 'Antenna Box', 'category': 'Onfield, Row 4, Row-3', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Antiskid Pad Box', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Aparasa Eraser', 'category': 'Md Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Aparasa Pencil', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'Apsara Eraser', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RPTO ──
-    {'name': 'Attendance Record Logbook', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Azima Mam Note', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'B Type Cable', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Balance Lead 4S', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Balance Lead 6S', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── INSTRUCTOR ROOM ──
-    {'name': 'Balck Marker', 'category': 'Instructor Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── CHARGING STATION ──
-    {'name': 'Balck Masking Tape', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Ballon Packet', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Baloon Pump', 'category': 'Restroom Things', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Banana Plug Or Pin Female', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Banana Plug Or Pin Male', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Banana Plug To Dc Female Dc Power Cable', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Bank Vocher Box File', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Batteries', 'category': 'Charging Station', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RPTO ──
-    {'name': 'Battery', 'category': 'Rpto', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── CHARGING STATION ──
-    {'name': 'Battery Box', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Battery Charging Cable Box', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RPTO ──
-    {'name': 'Battery Charging Logbook', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Battery Charging Logbook 79Tc', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Battery Charging Logbook 80Tc', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Battery Compartment Housiong', 'category': 'Service Rack(Fourthrow)', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Battery Plate Roll', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Battery Silicon Antiskid Pad', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Battery Sleeve Small Roll', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── RPTO ──
-    {'name': 'Battery Station Logbook Rpas', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Battery Sticker', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── GOJAN IN PRODUCTS, ROW-2 ──
-    {'name': 'Battery Strap', 'category': 'Gojan In Products, Row-2', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Battery Wirs Black&Red', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Battery With Hub', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-5 ──
-    {'name': 'Big Heat Sheink Roll Black', 'category': 'Row-5', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Big Heat Shrinkroll Blue', 'category': 'Row-5', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Big Wires', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Bill Box File', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Bills Leaf File', 'category': 'Admin Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Black Eva Pouch', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Black Marker', 'category': 'Training Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Black Pen', 'category': 'Admin Room', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Black Pen Pentonic', 'category': 'Md Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Blank Sticker Roll', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Blue Ball Point Pen', 'category': 'Tools', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── INSTRUCTOR ROOM ──
-    {'name': 'Blue Marker', 'category': 'Instructor Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM, INSTRUCTOR ROOM ──
-    {'name': 'Blue Pen', 'category': 'Admin Room, Instructor Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Bl`Ue Pen', 'category': 'Admin Room', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Bnc Male Connector', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Books-', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM, LAB ROOM, TRAINING ROOM ──
-    {'name': 'Bottle', 'category': 'Admin Room, Lab Room, Training Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── MD ROOM, STATIONARY ──
-    {'name': 'Box File', 'category': 'Md Room, Stationary', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Broom Stick', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── REST ROOM THING ──
-    {'name': 'Broomstick', 'category': 'Rest Room Thing', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': 'Brown Sheet Roll', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Brush', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Bubble Courier Bags 25.5 Mm', 'category': 'Charging Station', 'quantity': 38, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Bubble Courier Bags Large', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Bubble Mat', 'category': 'Training Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Bucket With Mug', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Bulb', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Business Team Matenote Books', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Butterfly Glue', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Button Empty File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Button File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Button File Blue', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Button File New', 'category': 'Md Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Button File Old', 'category': 'Md Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── EDITOR DRAWS ──
-    {'name': 'C To Ip Cable', 'category': 'Editor Draws', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Cable Clip', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── PROPELLER BOX ──
-    {'name': 'Cable Protector', 'category': 'Propeller Box', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Cables', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Caddx Osd Controller', 'category': 'Service Rack(Fourthrow)', 'quantity': 11, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Caddx Remote Control Board Osd', 'category': 'Service Rack(Fourthrow)', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': 'Caddx Vista Vtx Unit', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Carbon Fibre 2 Blade Propeller', 'category': 'Row-3', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK  LAST ROW ──
-    {'name': 'Cardboard', 'category': 'Service Rack  Last Row', 'quantity': 332, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Cash Pouch', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Cash Voucher Box File', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CORRIDOR THINGS ──
-    {'name': 'Cat Food Plate', 'category': 'Corridor Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Cda Accountable Manager File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Cda Certificate Of Conformity File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Cda Form D2&D3 File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Cda Form-5 File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Cda Janet File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Cda Lease Agreement File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Cda Master &Slave File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Cda Note', 'category': 'Admin Room', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Cda Organization Details File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Cda Rpto Instructor Details File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── STATIONARY ──
-    {'name': 'Cello Tape', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MANAGER ROOM ──
-    {'name': 'Ceramic Cup & Saucer', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Ceramic Plate', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MANAGER ROOM, MD ROOM ──
-    {'name': 'Certificate Bundle', 'category': 'Manager Room, Md Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Certificate File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Chrolide Safepower Battery(Wastage)', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Civil Aircraft Inspection Book', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Civil Aviation Book', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── REST ROOM THING ──
-    {'name': 'Cleaning Liquid', 'category': 'Rest Room Thing', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── CHARGING STATION ──
-    {'name': 'Clear Wrap Cover 10Mm', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Clear Wrap Cover 25Mm', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM, RESTROOM THINGS ──
-    {'name': 'Clip', 'category': 'Admin Room, Restroom Things', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Clips', 'category': 'Admin Room', 'quantity': 7, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Coauxial Antenna Cable', 'category': 'Row 4', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Cup', 'category': 'Training Room', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── EDITOR DRAWS ──
-    {'name': 'D 8K Cable', 'category': 'Editor Draws', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'Damage O3 Antenna', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Damaged Balance Lead', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Damaged Propeller Bag', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── PROPELLER BOX ──
-    {'name': 'Damaged Propellers', 'category': 'Propeller Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': 'Darwin 3S Battery', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── PROPELLER BOX ──
-    {'name': 'Desktop Power Cable (3 Pin)', 'category': 'Propeller Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Dettol', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Dettol Foaming Handwash', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'Diamond Needle File', 'category': 'Tools', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Digital Mulimeter Cable', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Diner Knife', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Display Book Pocket-', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── CHARGING STATION ──
-    {'name': 'Dji Cable Lightining To Type C', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Dji Cables', 'category': 'Md Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Dji Google Pouch', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── CHARGING STATION ──
-    {'name': 'Dji Mavic Shoulder Bag', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Dji Mavic Shoulder Bag 1', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Dji Mavic Shoulder Bag 2', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Dji Mini Bag', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Dji Phantom Propeller Grey', 'category': 'Row-3', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Dji Phantom Propeller White', 'category': 'Row-3', 'quantity': 9, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Dji Tb50 Intelligent Flight Battery', 'category': 'Charging Station', 'quantity': 9, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Document With Bag( Pie)', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Documents At Pink File', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': 'Dogcom Buldge Battery', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── STATIONARY ──
-    {'name': 'Doms Blue Ball Point Pen-4 Box', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Doms Red Pen', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── STATIONARY, TOOL KITS ──
-    {'name': 'Double Side Tape', 'category': 'Stationary, Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── CHARGING STATION ──
-    {'name': 'Duracell Aa Battery', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Duster', 'category': 'Training Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': 'Eachine Et526 5.8 Ghz Vtx', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'Electrical Liquid Tape', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Electrical Technology Book', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Electronic Cleaning Solution Ipa', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Elrs 2.4 Ghz T-Antenna', 'category': 'Row 4', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Employee Record File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Empty Cover Box', 'category': 'Row 4', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Enginering Graphics Book', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Enroll Form File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM, INSTRUCTOR ROOM ──
-    {'name': 'Eraser', 'category': 'Admin Room, Instructor Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Eva Perfume', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM, MD ROOM ──
-    {'name': 'Exam Pad', 'category': 'Admin Room, Md Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Exam Pad Hv', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'Exam Pad Transparent', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Expo Enquiry Forms', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Expo Pamplets Hyd', 'category': 'Md Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Extra Connecting Wires', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Extra Nuts And Bolds', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Feedback Card Set', 'category': 'Md Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Feedback Student File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'Fevi Kiwick', 'category': 'Tools', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'Fevicol', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── INSTRUCTOR ROOM, STATIONARY, TOOLS ──
-    {'name': 'Fevistick', 'category': 'Instructor Room, Stationary, Tools', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── REST ROOM THING ──
-    {'name': 'Fiber Brush', 'category': 'Rest Room Thing', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Field File', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'Field Water Bottle', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'File Set', 'category': 'Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': 'Flair Ball Point Pen', 'category': 'Md Room', 'quantity': 8, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Flask', 'category': 'Training Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Flim Roll', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── REST ROOM THING ──
-    {'name': 'Floor Broom', 'category': 'Rest Room Thing', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Flyfish Rc Titanium Hex Screws Driver', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CORRIDOR THINGS ──
-    {'name': 'Foam Board', 'category': 'Corridor Things', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Foam Boards', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Forexx Osd Controller', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Fork Spoon', 'category': 'Training Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Foxeer Lollipop 3 5.8 Ghz Omni Stubby Antenna', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Foxeer Oreo 5.8 Ghz Antenna', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Fpv Antenna Lolipop 4 Plus', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Fragile Handle Tape', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Furious Fpv Patch Race 5.8Ghz Antenna', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── REST ROOM THING ──
-    {'name': 'Garbage Bag Roll', 'category': 'Rest Room Thing', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── HOUSEKEEPING SUPPLIES ──
-    {'name': 'Garbage Bag Used', 'category': 'Housekeeping Supplies', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Garbage Cover', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Garbage Cover Roll', 'category': 'Restroom Things', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': 'Generic Tap Wire Connectors', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Geprc Battery Strap 20X 220', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Geprc Rad Mini 5.8 G Vtx', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── REST ROOM THING ──
-    {'name': 'Glass Cleaner Liquid', 'category': 'Rest Room Thing', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Grease Box', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Green Courier Cover', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Gstr 1&2B Box File', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Gstr 3B Leaf File', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Gstr1 Leaf File', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Half Pencil', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── REST ROOM THING ──
-    {'name': 'Handwash', 'category': 'Rest Room Thing', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Harpic Bottle', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── EDITOR DRAWS ──
-    {'name': 'Hdmi Cable With Ethernet', 'category': 'Editor Draws', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-5 ──
-    {'name': 'Heat Shrink Box', 'category': 'Row-5', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Heat Shrink Box 2', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Heat Shrink Box 3', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Heat Shrink Box1', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Heat Shrink Tubing', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'High Discharge Lipo Battery 2605Mah', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Highliter', 'category': 'Admin Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Hot Glue Gun', 'category': 'Row 4', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── PROPELLER BOX ──
-    {'name': 'Hq Prop Dt90Mm', 'category': 'Propeller Box', 'quantity': 9, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Hurricane 51466V2 Propeller Set', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Hv Personal Bag', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Id Card Cover', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Id Card Ropes', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': 'Iflight Double Antenna Googles', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Iflight Pad', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': 'Insulation Tape Black', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Insulation Yellow Tape', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Invelop Cover 15 Cmm Bundle', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Invelop Covers New Bundle 28 Cm', 'category': 'Md Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Invoice Box File', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-5 ──
-    {'name': 'J Hook Bolt', 'category': 'Row-5', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Jp Sir Bill File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Jst -Xh 2 Pin Connector', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst -Xh 6 Pin Female', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst 10 Pin Connecter', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Jst 6S Balance Lead', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Jst Micro 3 Pin', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst Sh 8 Pin Cablejst Xh 2 Pin Connecter Female', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst To Usb Cable Connector', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst Xh 3 Pin', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst Xh 4 Pin Cable', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst Xh 4 Pin Double Side', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst Xh 4 Pin One Sided With Clip', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst Xh 6 Pin Cable Femal;E', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst Xh 6 Pin Cable Female', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Jst Xh 6 Pin Connector', 'category': 'Row-3', 'quantity': 60, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Kavya Mam Note', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM, TOOL KITS, TRAINING ROOM ──
-    {'name': 'Knife', 'category': 'Admin Room, Tool Kits, Training Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'Knurled Aluminium Standoff', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'Lable Sticker-1 Roll', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── LAB ROOM ──
-    {'name': 'Landing Pad', 'category': 'Lab Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Large Nuts &Bolds', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Large Screws', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK  LAST ROW ──
-    {'name': 'Laundry Bag', 'category': 'Service Rack  Last Row', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Leaf File A4 Bundle', 'category': 'Md Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Leaf File With Documents', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Leaf Steel Plate', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Lemon Sanitizer Phenoyl', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Light Mounting Clip', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Lion Battery', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'Lipo Battery Cells', 'category': 'Row-3', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': 'Lipo Battery Pouch', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── DAMAGED BATTERY BOX ──
-    {'name': 'Lipo Damaged Battery', 'category': 'Damaged Battery Box', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Lipo Safe Fire Proof Bag', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Lizel Bottle', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'Locktite 271', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Lollipop Fpv Antenna', 'category': 'Row 4', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Long Size Note', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Long Term Pending Student Attendence File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── NAVIN KIT ──
-    {'name': 'Lower Pro Bag', 'category': 'Navin Kit', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'M1.5X10', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M1.6', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M1.6X8', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M2', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M2 Lock Nut', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M2.5X6', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'M2X1.9', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3, TOOL KITS ──
-    {'name': 'M2X12', 'category': 'Row-3, Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    {'name': 'M2X16', 'category': 'Row-3, Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'M2X18', 'category': 'Row-3', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M2X20', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M2X5', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M2X6', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3, TOOL KITS ──
-    {'name': 'M2X7', 'category': 'Row-3, Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    {'name': 'M2X8', 'category': 'Row-3, Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'M3', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3, TOOL KITS ──
-    {'name': 'M3X10', 'category': 'Row-3, Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'M3X12', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3, TOOL KITS ──
-    {'name': 'M3X16', 'category': 'Row-3, Tool Kits', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── TOOL KITS ──
-    {'name': 'M3X20', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3, TOOL KITS ──
-    {'name': 'M3X30', 'category': 'Row-3, Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── TOOL KITS ──
-    {'name': 'M3X5', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'M3X7', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'M3X8', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M5 Washer', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Manual Box', 'category': 'Row 4', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Marker Green', 'category': 'Training Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Marker Ink', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Marker Permanent Blue', 'category': 'Md Room', 'quantity': 7, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Masking Tape', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── STATIONARY ──
-    {'name': 'Masking Tape Set-12 Rolls', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── DAMAGED BATTERY BOX ──
-    {'name': 'Mavic Pro Battery', 'category': 'Damaged Battery Box', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Measuring Tape', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Medimix Handwash', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'Mini Stamp', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Mini Wire Scratch Wire Brush Set Nylon Brass', 'category': 'Tools', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Mmcz 90 Degree Linear Antenna', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RPTO ──
-    {'name': 'Model T Flight Logbook', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Mohammed Sathak Workshop File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Motherboard Spacer Standoff', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Mug', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Multi Colored Copper Wire', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Napthenel Balls Pocket', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'New Cda Notebook', 'category': 'Md Room', 'quantity': 11, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'New Notebook Long Size', 'category': 'Md Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'New Service Note', 'category': 'Md Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Nippo Aa Battery', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Nsmall Size Accounts Note', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Nylon Hex Standoff M3', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'O4 Pro Module Mounting Screw', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Odonil Box', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Office Document File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Oil Bottle', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Old Box File', 'category': 'Md Room', 'quantity': 13, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Old Button File With Documents', 'category': 'Admin Room', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Old Expo Forms File Hv', 'category': 'Md Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Old Leaf File', 'category': 'Md Room', 'quantity': 8, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RPTO ──
-    {'name': 'Old Log Book Unused', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── SERVICE RACK  LAST ROW ──
-    {'name': 'One Shoulder Bag', 'category': 'Service Rack  Last Row', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Onfield Old Bag', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Ongoing Student File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Otg Dji Data Cable', 'category': 'Service Rack(Fourthrow)', 'quantity': 8, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY, TOOL KITS ──
-    {'name': 'Packing Tape', 'category': 'Stationary, Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'Pagoda-2 5.8Ghz Omnidirctional Antenna', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM, STATIONARY ──
-    {'name': 'Pamplets', 'category': 'Md Room, Stationary', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── INSTRUCTOR ROOM ──
-    {'name': 'Paper Clip', 'category': 'Instructor Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TRAINING ROOM ──
-    {'name': 'Paper Cup', 'category': 'Training Room', 'quantity': 33, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Paper Label 160 Gsm', 'category': 'Md Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Paper Label 162 Gsm', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Paper Plate', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Paper Tape', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Parryware Solution', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── 3D PRINTER ──
-    {'name': 'Pen Driver', 'category': '3D Printer', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Pen Knife', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── INSTRUCTOR ROOM ──
-    {'name': 'Pencil', 'category': 'Instructor Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── STATIONARY ──
-    {'name': 'Pencil Box-1 (8Nos.)', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Perfora Brush Head', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Permanent Marker', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'Permanent Marker (Blue)', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Permanet Marker', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Pf&Esi File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION, DAMAGED BATTERY BOX ──
-    {'name': 'Phantom Battery', 'category': 'Charging Station, Damaged Battery Box', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Plastic 2 Blade Propeller Black &Yellow', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Plastic Brush', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Plastic Brush Red', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Plastic Eyelet Ringsd With Washer', 'category': 'Row-3', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': 'Plastic Sealinf Cover Case With Screw', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Plate', 'category': 'Training Room', 'quantity': 12, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── PROPELLER BOX ──
-    {'name': 'Portronics Konnect L 1.2 M Cable (Grey)', 'category': 'Propeller Box', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Practice Soldering Lead', 'category': 'Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Practise Soldering Lead-2 Roll', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Propeller', 'category': 'Charging Station', 'quantity': 12, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Propeller T90 Ducted', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-5 ──
-    {'name': 'Pteg Empty Roll', 'category': 'Row-5', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Pvt Expense Voucher Note', 'category': 'Md Room', 'quantity': 27, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Question Paper File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Radiomaster Pocket Pouch', 'category': 'Service Rack(Fourthrow)', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Ramraj Cover', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── LAB ROOM ──
-    {'name': 'Rc Car , Remote, Battery', 'category': 'Lab Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Receipt Note', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Receipt Note Uesed', 'category': 'Md Room', 'quantity': 12, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Receipt Voucher File', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Red Double Side Tape', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM, INSTRUCTOR ROOM ──
-    {'name': 'Red Pen', 'category': 'Admin Room, Instructor Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── STATIONARY ──
-    {'name': 'Red Tape', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': 'Refil Toners', 'category': 'Md Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── EDITOR DRAWS ──
-    {'name': 'Rgb Cable', 'category': 'Editor Draws', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Rhcp 5.8Ghz Antenna 65Mm', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Ribbon Wire', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Rin Bottle', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': 'Rock Landing Pad', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Roll', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'Rorito Pen (Black)', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RPTO ──
-    {'name': 'Rpas Logbook', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MANAGER ROOM ──
-    {'name': 'Rpto Batch 1 File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Rpto Batch 3 File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Rpto Batch2 File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── RPTO ──
-    {'name': 'Rpto Logbook', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Rpto Stamp', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Rpto Student Logbook', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Rubber Flayt Washer Box', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Sales Stock Invoice Punching File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Salt Paper', 'category': 'Row 4', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Sanitary Pad Pocket', 'category': 'Restroom Things', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── REST ROOM THING ──
-    {'name': 'Sanitizer Bottle', 'category': 'Rest Room Thing', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': 'Sarpner Doms', 'category': 'Md Room', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── PROPELLER BOX ──
-    {'name': 'Sata Data Cable Iii', 'category': 'Propeller Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Screw', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'Screw Box', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Screw Organiger 3D Print', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'Scribbling Book', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── INSTRUCTOR ROOM ──
-    {'name': 'Service Book', 'category': 'Instructor Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM, INSTRUCTOR ROOM ──
-    {'name': 'Sharpner', 'category': 'Admin Room, Instructor Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Shockproof Sponge Pad', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Shop Theory Book', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── PROPELLER BOX ──
-    {'name': 'Short Type C Cable', 'category': 'Propeller Box', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── REST ROOM THING ──
-    {'name': 'Silicon Broom', 'category': 'Rest Room Thing', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': 'Silicon Brouchers With Button File', 'category': 'Md Room', 'quantity': 7, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Silicon Brush', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Silicon Double Side Tape Green', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Silicon Oil Bottle', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Sim Card Kavya Amam Accounts', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RPTO ──
-    {'name': 'Simulation Record', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': 'Skylynk Expense Voucher Note ( Bank And Peety Cash )', 'category': 'Md Room', 'quantity': 76, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Sma Connector', 'category': 'Row 4', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Sma Connectors', 'category': 'Row 4', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Sma Female 90 Degree Cable', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Sma Female Connector', 'category': 'Service Rack(Fourthrow)', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Sma Female To Mmcx Male (Right Angle) Rf Rg316 Pigtail Jumber Cable', 'category': 'Row 4', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Sma Female To Ufl Pigtailantenna', 'category': 'Row 4', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Sma Male Connector', 'category': 'Service Rack(Fourthrow)', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Sma Plig To Sma Jack', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Small Note Cda Printed', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'Small Wire Connectors', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOL KITS ──
-    {'name': 'Small Wires', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Soft Brush', 'category': 'Tools', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': 'Soldering Flux', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Soldering Flux Paste', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MANAGER ROOM ──
-    {'name': 'Soldering Lead', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Soldering Practice Wire Small', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-2 ──
-    {'name': 'Soldering Practise Wire Box', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Soldering Practice Wire Large', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── EDITOR DRAWS ──
-    {'name': 'Sony Oem 3.5Mm Aux Audio Cable F', 'category': 'Editor Draws', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': 'Spare Propeller Box', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Spigen C To Lighting Cable', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TRAINING ROOM ──
-    {'name': 'Spoon', 'category': 'Training Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Spray Oil Bottle', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RPTO ──
-    {'name': 'Stamp', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Stapler Pin', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'Stapler Pin (Big)', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Stapler Pin (Small)- 2 Box', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── INSTRUCTOR ROOM ──
-    {'name': 'Stapler Pin Big', 'category': 'Instructor Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Stapler Pin Box', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── INSTRUCTOR ROOM ──
-    {'name': 'Stapler Pin Small', 'category': 'Instructor Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': 'Stapler Pins', 'category': 'Md Room', 'quantity': 16, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── EDITOR DRAWS ──
-    {'name': 'Steel Bottle', 'category': 'Editor Draws', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Stick File Un Used', 'category': 'Md Room', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Sticker Box', 'category': 'Row 4', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM, MD ROOM ──
-    {'name': 'Sticky Notes', 'category': 'Admin Room, Md Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Sticky Notes Pad Hv', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Student Assesment Punching File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Student Id Card Tag', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RPTO ──
-    {'name': 'Student Training Record', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Studevt Pen', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Sugar Box With Spoon', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'T Mount Race Wire', 'category': 'Row-3', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'T Plug Femaleto Dc Jack Cable', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': 'T- Motor Ft200 5.8Ghz Vtx', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'T-Dipole Antenna', 'category': 'Row 4', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'T-Plug (Female Connector) To Male Dc Barrel Plug Connector', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'T-Plug Female To Alligator Clip', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'T-Plug To Jst Connector', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Tape Tray', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Tata Salt', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': 'Tbs Solder Lead', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Tbs Unifybpro 5G8 Linear Antenna', 'category': 'Row 4', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Tbs White Noise Fpv Race Wire Mini Circuit Board', 'category': 'Row-3', 'quantity': 15, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Thankyou Cover Bindle', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': 'Thin Red&Black Wires Box', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Tiffin Box', 'category': 'Training Room', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Tissue Paper Bundle', 'category': 'Charging Station', 'quantity': 9, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM, STATIONARY ──
-    {'name': 'Tissue Set', 'category': 'Admin Room, Stationary', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── REST ROOM THING ──
-    {'name': 'Toilet Cleaning Brush', 'category': 'Rest Room Thing', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': 'Toner', 'category': 'Md Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── EDITOR DRAWS ──
-    {'name': 'Tripad Plate', 'category': 'Editor Draws', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CORRIDOR THINGS, LAB ROOM ──
-    {'name': 'Tube Light', 'category': 'Corridor Things, Lab Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── MD ROOM, REST ROOM THING, TRAINING ROOM ──
-    {'name': 'Tubelight', 'category': 'Md Room, Rest Room Thing, Training Room', 'quantity': 8, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── TRAINING ROOM ──
-    {'name': 'Tumbler', 'category': 'Training Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Turmeric And Kumkum Box', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2, SERVICE RACK(FOURTHROW) ──
-    {'name': 'Ufl Connector', 'category': 'Row-2, Service Rack(Fourthrow)', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Un Used Box File', 'category': 'Md Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Unomax Pen Blue', 'category': 'Md Room', 'quantity': 7, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Unused Receipt Notes', 'category': 'Md Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── PROPELLER BOX ──
-    {'name': 'Usb 2.0 A To Mini 5 Pin B Cable', 'category': 'Propeller Box', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Usb 2.0 A To Mini 5 Pin B Cable (Small)', 'category': 'Propeller Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── EDITOR DRAWS ──
-    {'name': 'Usb Cable 2', 'category': 'Editor Draws', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Usb To B Type Cable', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Usb To C Cable', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Usb To Dc Charging Cable', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── PROPELLER BOX ──
-    {'name': 'Usb Type B Cable (Black)', 'category': 'Propeller Box', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Usb Type B Cable (White)', 'category': 'Propeller Box', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Usb Type C Cable (Black)', 'category': 'Propeller Box', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Usb Type C Cable (White)', 'category': 'Propeller Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Velgro File', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Vim Bars', 'category': 'Restroom Things', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── REST ROOM THING, RESTROOM THINGS ──
-    {'name': 'Vim Liquid', 'category': 'Rest Room Thing, Restroom Things', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Voucher Box Files', 'category': 'Admin Room', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Vtx', 'category': 'Service Rack(Fourthrow)', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Walking Form File', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': 'Wall Anchor Screws With Mount', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Wall Anchor With Screws', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RESTROOM THINGS ──
-    {'name': 'Washing Brush', 'category': 'Restroom Things', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Watch Batteries', 'category': 'Row-3', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': 'Water Can Cover', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'White Grease', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'White Masking Tape', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MD ROOM ──
-    {'name': 'White Sticker Roll', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Whitner', 'category': 'Admin Room', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Whitner Camlin', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Wire Cuttetr', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Wire Stripper Pye-950', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── GOJAN IN PRODUCTS ──
-    {'name': 'Wires Black', 'category': 'Gojan In Products', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Wires Red', 'category': 'Gojan In Products', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── CHARGING STATION ──
-    {'name': 'Wondern Brown Tape 48Mm', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Wondern Transparent Tape 48Mm', 'category': 'Charging Station', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ONFIELD ──
-    {'name': 'Wood Landing Pad With Foam', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TRAINING ROOM ──
-    {'name': 'Wooden Fork One Cover', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── STATIONARY ──
-    {'name': 'Woody Black Ball Point Pen', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── INSTRUCTOR ROOM ──
-    {'name': 'Woody Black Pen', 'category': 'Instructor Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── STATIONARY ──
-    {'name': 'Woody Blue Ball Point Pen', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ONFIELD ──
-    {'name': 'Working Battery Lipo 6S', 'category': 'Onfield', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'Working O3 Antenna', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Writing Pad', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Xt30 Female', 'category': 'Row-3', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM, ROW-3 ──
-    {'name': 'Xt30 Male', 'category': 'Manager Room, Row-3', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'Xt30 Male With Wire', 'category': 'Row-3', 'quantity': 7, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── GOJAN IN PRODUCTS ──
-    {'name': 'Xt30 Male&Female', 'category': 'Gojan In Products', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Xt60 - Xt90 Parallel Connrctor Cable', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Xt60 Connector Box', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM, ROW-3 ──
-    {'name': 'Xt60 Female', 'category': 'Manager Room, Row-3', 'quantity': 10, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'Xt60 Female With Wire', 'category': 'Row-3', 'quantity': 10, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Xt60 Male', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── CHARGING STATION ──
-    {'name': 'Xt60 Male Bullet Connector To Male Dc', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Xt60 Male To Aux Cable', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Xt60 Male To B Type', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Xt60 Male To Female', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Xt60 Male To Xt30', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'Xt60 Male To Xt30 Female', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Xt60 Male With Wire', 'category': 'Row-3', 'quantity': 27, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Xt60 To Dcmale To Jack Cable', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Xt90Male To Xt60 Female', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MD ROOM ──
-    {'name': 'Yellow File', 'category': 'Md Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Zip Tag Large Packet', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Zip Tag Small Packet', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW 4 ──
-    {'name': 'Zip Tie 3.6X150Mm Black', 'category': 'Row 4', 'quantity': 92, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'Zip Tie Small (Pocket)', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW 4 ──
-    {'name': 'Ziptie 300M White', 'category': 'Row 4', 'quantity': 43, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Ziptie 4.8X400 Mm Black', 'category': 'Row 4', 'quantity': 42, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Ziptie 400Mmx3.6 White', 'category': 'Row 4', 'quantity': 57, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE &DELIVERY IN ──
-    {'name': 'Drawin 3S Battery', 'category': 'Service &Delivery In', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOL KITS ──
-    {'name': 'Iflight Bag', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'Skyzone Cobra Sd Fpv Googles Cable', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': '(Flat Head)Screw Driver (Black)', 'category': 'Tools', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '(Yamato)Mini Diagonal Nipper Wire Cutter', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': '18650 Battery Holder', 'category': 'Charging Station', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': '2 In 1 Screw Driver', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': '32 In 1 Screw Driver Toolset With Magnetic Holderv', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '3D Print 4S Battery Holder', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': '3S Drone Liion Battery', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': '4S Battery Holder', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Adapter With Cable', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Av Adapter Cable', 'category': 'Row-3', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Camera Lens Pouch', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'Capacitor Holder', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MANAGER ROOM ──
-    {'name': 'Cda Drone Insurance File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Cda Drone Invoice File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Cda Drone Maintenance File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Cda Simulator Details File', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── STATIONARY ──
-    {'name': 'Cutter Knife 18Mm', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Cutter Knife 9Mm', 'category': 'Stationary', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Dji Fpv V2 Goggles Antenna (Dual Band)', 'category': 'Service Rack(Fourthrow)', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Dji O3 Aoir Unit Coaxial Camera Cable', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Head Screw Driver Mini', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Hrethik Drone Kit With Shoulder Bag', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Jst To D C 2.5 Adapter Charging Cable', 'category': 'Row-3', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'Motor Wire Holder', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADMIN ROOM, EDITOR DRAWS, LAB ROOM, TRAINING ROOM ──
-    {'name': 'Mouse Pad', 'category': 'Admin Room, Editor Draws, Lab Room, Training Room', 'quantity': 10, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── ADMIN ROOM ──
-    {'name': 'Mouse Pad New', 'category': 'Admin Room', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── INSTRUCTOR ROOM ──
-    {'name': 'Mouse With Pad', 'category': 'Instructor Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOL KITS ──
-    {'name': 'O3 Camera Screw', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'O3 Vtx Damaged Antenna Holder', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Paper Cutter Knife', 'category': 'Tools', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': 'Pen Holder', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM, INSTRUCTOR ROOM, MANAGER ROOM ──
-    {'name': 'Pen Stand', 'category': 'Admin Room, Instructor Room, Manager Room', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin, CDA Ops'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Propeller Adapter', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Propeller Adapter Holder', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOL KITS ──
-    {'name': 'Propeller Wrench', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Screw Driver', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Small Vtx And Camera Box', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'Speedy Bee U Fl To Sma Female Pigtail Adapter Cable', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOL KITS ──
-    {'name': 'Star Screw Driver Black', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Star Screw Driver Red', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'Tc Drone Propeller-2 Set', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MANAGER ROOM ──
-    {'name': 'Wire Cutter', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'Wire Stripper &Cutting Plier Vcablepulling', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Wire Stripping Plier(Taparia)', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '(0#+)', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '(1#-)', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '1.5-1Yox40Mm', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '1.5Mm', 'category': 'Tools', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '1.5X40Mm', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': '15 Degree', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': '2.0Mm', 'category': 'Tools', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '2.5Mm', 'category': 'Tools', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ADMIN ROOM ──
-    {'name': '25', 'category': 'Admin Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TRAINING ROOM ──
-    {'name': '31 Small Tray', 'category': 'Training Room', 'quantity': 33, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': '3D Print Box', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': '3S', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '40 Degree', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── GOJAN IN PRODUCTS ──
-    {'name': '4214 380Kv', 'category': 'Gojan In Products', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': '470 Uf 50V', 'category': 'Row-3', 'quantity': 6, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': '4S', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── NAVIN KIT ──
-    {'name': '4S Lihv', 'category': 'Navin Kit', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── PROPELLER BOX ──
-    {'name': '5050 Bn Orange', 'category': 'Propeller Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '5050 Bn Red', 'category': 'Propeller Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': '5X4.3X3R Blue', 'category': 'Propeller Box', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-2 ──
-    {'name': '6S', 'category': 'Row-2', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── NAVIN KIT ──
-    {'name': '6S Mck Lipo', 'category': 'Navin Kit', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': '8.0 Box', 'category': 'Tools', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── FPV DRONES ──
-    {'name': 'Air 3S', 'category': 'Fpv Drones', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TRAINING ROOM ──
-    {'name': 'Bucket 1', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Bucket 2', 'category': 'Training Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── MANAGER ROOM ──
-    {'name': 'Caddx Ratel2', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── NAVIN KIT ──
-    {'name': 'Cinelog 25 V2', 'category': 'Navin Kit', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Cinelog 35 V2', 'category': 'Navin Kit', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── PROPELLER BOX ──
-    {'name': 'Dalpdrop 3528', 'category': 'Propeller Box', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Dji 5043', 'category': 'Propeller Box', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE &DELIVERY IN ──
-    {'name': 'Dji O4 Air Unit', 'category': 'Service &Delivery In', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── NAVIN KIT ──
-    {'name': 'Dji Osmo 5 Pro', 'category': 'Navin Kit', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── EDITOR DRAWS ──
-    {'name': 'Drf Iec C13', 'category': 'Editor Draws', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── GOJAN IN PRODUCTS ──
-    {'name': 'E28 2G4M27Sx', 'category': 'Gojan In Products', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── MANAGER ROOM ──
-    {'name': 'Eco 60A F405', 'category': 'Manager Room', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── GOJAN IN PRODUCTS ──
-    {'name': 'Esp32-S3', 'category': 'Gojan In Products', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── PROPELLER BOX ──
-    {'name': 'Gemfam 5152 Red', 'category': 'Propeller Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Gemfan 45Mm', 'category': 'Propeller Box', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Gemfan 5144 Red', 'category': 'Propeller Box', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Gemfan 51466', 'category': 'Propeller Box', 'quantity': 5, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Gemfan 5152', 'category': 'Propeller Box', 'quantity': 4, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Gemfan D 90', 'category': 'Propeller Box', 'quantity': 15, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Gemfan D63 Grey', 'category': 'Propeller Box', 'quantity': 7, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Geprc 1960Kv', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── GOJAN IN PRODUCTS ──
-    {'name': 'Geprc V2 Stack', 'category': 'Gojan In Products', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'Gps M10', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'H 1.5', 'category': 'Tools', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'H2.0', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'H2.5', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Hota D6 Pro', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Hota F6', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── NAVIN KIT ──
-    {'name': 'Hota F6 Pro', 'category': 'Navin Kit', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── PROPELLER BOX ──
-    {'name': 'Hq S5X4X3', 'category': 'Propeller Box', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── FPV DRONES ──
-    {'name': 'Inspire 2', 'category': 'Fpv Drones', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── REMOTE CONTROLLER ──
-    {'name': 'Jumper Mode 3', 'category': 'Remote Controller', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Jumper T15', 'category': 'Remote Controller', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOL KITS ──
-    {'name': 'M2 X6', 'category': 'Tool Kits', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ROW-3 ──
-    {'name': 'M2X 1.9', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M2X 5.5', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'M2X 8', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── FPV DRONES ──
-    {'name': 'Matrice 4E', 'category': 'Fpv Drones', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── DAMAGED BATTERY BOX ──
-    {'name': 'Mavic 2', 'category': 'Damaged Battery Box', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Mavic 3', 'category': 'Damaged Battery Box', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Mt7681 X Wifi', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── CHARGING STATION ──
-    {'name': 'Nd 16 Filter', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Nd 4 Filter', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Nd 8 Filter', 'category': 'Charging Station', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── NAVIN KIT ──
-    {'name': 'O3 Ndfilter', 'category': 'Navin Kit', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── FPV DRONES ──
-    {'name': 'Pave O4 Lite', 'category': 'Fpv Drones', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Seeker 5', 'category': 'Fpv Drones', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── ADDITIONAL DRONE SPARE ──
-    {'name': 'Seeker 5 Spare', 'category': 'Additional Drone Spare', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOLS ──
-    {'name': 'T5', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'T6', 'category': 'Tools', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── RPTO ──
-    {'name': 'Tc-82(Mgr)', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    {'name': 'Tc-83(Mgr)', 'category': 'Rpto', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── TOOL KITS ──
-    {'name': 'Tester1', 'category': 'Tool Kits', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── SIMULTION TRANSMITTER(ROW-1) ──
-    {'name': 'Tx12', 'category': 'Simultion Transmitter(Row-1)', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SERVICE RACK(FOURTHROW) ──
-    {'name': 'Wc0Hr2601 Wifi', 'category': 'Service Rack(Fourthrow)', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── TOOLS ──
-    {'name': 'Ws06', 'category': 'Tools', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Wso5', 'category': 'Tools', 'quantity': 2, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── SIMULTION TRANSMITTER(ROW-1) ──
-    {'name': 'X7 Taranis', 'category': 'Simultion Transmitter(Row-1)', 'quantity': 3, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── ROW-3 ──
-    {'name': 'Xt 60 Male', 'category': 'Row-3', 'quantity': 113, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    {'name': 'Xt60 To T-Plug', 'category': 'Row-3', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Admin'},
-    // ── GOJAN IN PRODUCTS ──
-    {'name': 'Xt60-Xt90', 'category': 'Gojan In Products', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
-    // ── SERVICE &DELIVERY IN ──
-    {'name': 'Xt60-Xt30', 'category': 'Service &Delivery In', 'quantity': 1, 'unit': '', 'minStock': 0, 'notes': 'CDA Ops'},
+  static List<Map<String, dynamic>> get allItems => [
+    // — CDA OPS —
+    {'name': '15 Inch Props', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '2S Battery Lion-2 Xt30', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '2S Lion Battery-4 Xt60', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3 Pin To Jack', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3d print smart switch', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3S Battery', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3S Lion Battery', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '4 Pin Jst Connector', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '4214 380 Kv Motors', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '4214 380Kv', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '4S Battery Holder', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '4s charging balance lead', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '4S Li Ion', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '4S Lihv', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '4S Lion Battery', 'category': 'Consumables', 'quantity': 14, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '6S Charging Balance Lead', 'category': 'Consumables', 'quantity': 16, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '6S Mck Lipo', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '79 Tc Slave', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '79Tc Master', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '80 Tc Master-2024T10A1379', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '80 Tc Slave', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '82 Tc Master-2025T12D0273', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '82Tc Slave-2025T12E0838', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '83 Tc Slave-2025T12E0880', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '83 Tc-Master-2025T12D0298', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'A3 Display Book Pocket', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'A3 Disply Blue File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'A4 Bundle New', 'category': 'Consumables', 'quantity': 9, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'A4 Bundle Used', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'A4 Display Blue File', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'A4 Display Book Pocket', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'A4 Inkjet Photo Paper 180 Gsm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'A4 Inkjet Photo Paper 240 Gsm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Accounts Book New', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Aduit Pre Flight Checklist', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Advance Warning Triangle', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Afo', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Agriculture Spare Tray-1U', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Air 3S', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Aircraft Act Bok', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Aircraft E&E Book', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Aircraft Electrical System', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Aircraft Instrument Book', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Aivation Maintenance', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'All Catelogs', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Alumini Room Foam Board', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Am Cahir', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ambrane White Adapter', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Analog Double Antenna Googles', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Araldite', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Araldite Eproxy Hardener', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Attendance Record Logbook', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Attendence Log Book', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'B To Usb Otg Black', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'B Type Cable', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'B-7000 Gum', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Balck Marker', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery', 'category': 'Consumables', 'quantity': 16, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Charging &Handling Sop', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Charging Log Book', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Charging Logbook', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Charging Logbook 79Tc', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Charging Logbook 80Tc', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Logbook', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Logs', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Plate Roll', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Sleeve Small Roll', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Starp', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Station Logbook', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Station Logbook Rpas', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Straps', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Big Cones', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Big Wires', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bill Filing File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bin 1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bin 2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Black +Decker', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Black Wiers', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Black Wire Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Black Wire Roll', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Blank Sticker Roll', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Blue Marker', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Blue Tack', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bolts And Nuts', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Books', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Broomstick', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Brother Toner New', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Brouchers', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Brown Packing Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Brown Tape Packing', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Buck Conventoe', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Butterfly Glue', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'C To Lighting Damaged', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'C To Usb Otg Black', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'C To Usb Otg White', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'C Type', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cable Clips With Screw', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cables', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Caddx Ratel2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Caddxfpv Ratel 2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Call Me Ipa', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Capacitor Holder', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Car Oil', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Catlogs', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Accountable Management File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Accountable Manager File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Certificate Conformity File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Certificate Of Conformity File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Flags', 'category': 'Consumables', 'quantity': 10, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Form D2&D3 File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Form D5 File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Form-5 File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Lease Agreement File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Master Slave File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Notebook', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Oraganisation Detail File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Organization Details File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Rpto Instructor Details File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cello Tape', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ceramic Cup & Saucer', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ceramic Plate', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Chairs', 'category': 'Consumables', 'quantity': 12, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cinelog 25 V2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cinelog 35 O4 3 Dprint', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cinelog 35 V2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cinelog 35 V2 O3', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Civil Aircraft Inspection Book', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Civil Aviation Book', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Clean Mate', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cleaning Liquid', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Clear Blue Files', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Clearmate', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Closed - End Wire Connector Pocket', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Common Logs', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Completed Documents', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cone', 'category': 'Consumables', 'quantity': 14, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cone Big', 'category': 'Consumables', 'quantity': 8, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Connectors With Wire (Xt60&Xt30)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Coolant', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Courier Green File', 'category': 'Consumables', 'quantity': 8, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Courier Green Files', 'category': 'Consumables', 'quantity': 28, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cutting Blade', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cutting Player', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Damage Meter', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Damage O3 Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Damage Xing Motor Kv 1800', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Damagegeprc Speedx Motor Kv2650', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Darwin 3S Battery', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Diamond Burr Set', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Diamond Grinding Needle Set', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Display Book Pocket', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Adapter With Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Charging Adapter Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'dji enterprise 4e', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Li Ion Battery 4S', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Mavic Props', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Mic', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Osmo 5 Pro', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dogcom Buldge Battery', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Domex Cleaner', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Doms Blue Ball Point Pen', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Doms Red Pen', 'category': 'Consumables', 'quantity': 19, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Double Antenna Adapter', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Double Side Red Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Double Side Tape', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'drawin 3s battery', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dustpan', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'E28 2G4M27Sx', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Eco 60A F405', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Electrical Casing Pipe', 'category': 'Consumables', 'quantity': 14, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Electrical Pipe Big', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Electrical Pipe Small', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Electrical Technology Book', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Electtrical Pipes Old', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Empty Foam Board', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Engine Oil', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Enginering Graphics Book', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Esp32-S3', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Exam Pad Transparent', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Extras', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fevicol', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fevicol Big', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Few', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fiber Brush', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Field Water Bottle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Filament', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Filament Heater', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'File Set', 'category': 'Consumables', 'quantity': 9, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fire Assemble Point Board', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fire Bell', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flair Woody Nlue Pen', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flat Floor Mop', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flight Manual Mk - Agro', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flim Roll', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flix Kwik', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Floor Broom', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flux Injection', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flying A&B Board', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flywoo Gm10 Nano V3', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Geprc 20X 220 Mm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Geprc Battery Strap', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Geprc M15X200 Mm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Geprc M20 X220 Mm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Geprc Taker F405 Bls 80A V2 Stack', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Geprc V2 Stack', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Glass Cleaner Liquid', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gojan Account Note', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Googles Intgra', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Googles Intgra-Navin', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gums', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gurkha Seat', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Handwash', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hdmi Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Heat Shrink Large Blue-13Cm1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Heat Shrinl 10 Cm - Black', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hot Air Gun', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hota D6 Pro', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hota F6', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hota F6 Pro', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'House Wares', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hurricane 51466V2 Propeller Set', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hurricane 52466 V2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ic Bero', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ic Surface Light', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ic Window Screen', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Iflight Double Antenna Googles', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Inkjet Photo Paper 180 Gsm', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Inkjet Photo Paper 240 Gsm', 'category': 'Consumables', 'quantity': 11, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Insert', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Inspire 2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Inspire Controller B', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Instructor Log Rpas', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Instructor Logbook', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Instructor Logbook Gk', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Instructor Logbook Mr', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Intgra Googles', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Inventory List Website', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jack To Xt 60', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jumper Mode 3', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jumper T15', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lable Sticker', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Leaf Files', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Led Light', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Left Side', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Li Hv 4S Battery', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Liion 2S Rc Car Battery', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Liion 4S Battery', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lion Battery', 'category': 'Consumables', 'quantity': 16, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lipo Checker With 6S Balance Lead', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lizel', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2 X6', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X1.9', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M3X20', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M3X5', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M3X7', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mainteance Logbook Mainteance Maual', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mainteance Manual Nai Agro Mk', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Masking Red Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Masking Tape', 'category': 'Consumables', 'quantity': 13, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Masking Tape Set-12 Rolls', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Master Controller', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Matrice 4E', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mavac 2 Controller', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Measuring Tape', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Meter Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mi Power Bank', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Model -T Flight Manual', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Model T Flight Log Book', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Model T Flight Logbook', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mop', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Motor Wire Holder', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Nose Player', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'O3 Ndfilter', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Old Bms', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Old Log Book Unused', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Omnidirectional Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Out', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Oxt60 Connecter Male', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Packing Tape', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Packing Tape 30 Mm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Paper Clip', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pave O4 Lite', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pavo And Pico Drones', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pen Driver', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pen Knife 18Mm', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pen Knife 9Mm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pencil', 'category': 'Consumables', 'quantity': 9, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Petrol Performance Oil', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pla White', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pla White New', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Polyster Ratcher Belt', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Practice Board', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Practice Lead', 'category': 'Consumables', 'quantity': 15, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Practice Soldering Lead', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Praveen Sapre Parts', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Propeller T90 Ducted', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Propeller Tool', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Propellers 51466 Huricane V2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pteg Black New', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pteg Blue', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pteg Blue New', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pteg White', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pump Casing', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Question Papers', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'R37 Hq Racing Propeller', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Race Pipes', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Race Track Pipes', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Radiomaster Boxer Crush Pink', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Radiomaster Boxer Special Edition', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Radiomaster Boxer With Case', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Radiomaster Tx15', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rapid Pla', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rat Killer', 'category': 'Consumables', 'quantity': 8, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rc Car , Remote, Battery', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Red Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Red Transparent Tape', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Red Wire Roll', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Red Wires Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Registration Form', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Remote Li Ion Battery', 'category': 'Consumables', 'quantity': 15, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Remote Li Ion Battery 18650 -26 E', 'category': 'Consumables', 'quantity': 12, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Right Side', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpas 79 Tc', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpas 80 Tc', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpas Logbook', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpas Pilot Log Bined', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpas Pilot Logbook Old', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpto Batch 1 File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpto Batch 3 File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpto Batch2 File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpto Log Book', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpto Logbook', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpto Red Button File', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rpto Student Logbook', 'category': 'Consumables', 'quantity': 119, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sanitizer Bottle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Screw', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Scribbling Book', 'category': 'Consumables', 'quantity': 10, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Seeker 5', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Seeker 5 Spare', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Service Book', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Serving Glass', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Shop Theory Book', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Silicon Broom', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Silicon Green Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Silk Pla Purple', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Simulation Logbook', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Simulation Rc', 'category': 'Consumables', 'quantity': 10, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Simulation Record', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Skyrc', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Slave Controller', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Small Wire Connectors', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Small Wires', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Smd Station', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Smoke Stopper', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Soldering Flux Paste', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Soldering Lead', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Soldering Practice Lead', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'SOLDERING Practice wire LARGE', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Soldering Practice Wire Small', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Soldering Set (New)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Speedy Bee Tx800', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Speedy Bee U Fl To Sma Female Pigtail Adapter Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Speedybee Tx800', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Spigen C To Lighting Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stapler Big', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stapler Pin Big', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stapler Pin Small', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stationaries', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stick Position Hold', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Student Training Record', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Student Waiting Hall Foam Board', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Students Forms', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T Tool', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Taranis X7 Orange', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tc Propellers-(Small)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tchil Rc', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tester1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tewwzer Curved', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Toilet Cleaning Brush', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tool Crate 1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tool Crate 2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tpu Black', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tpu Blue', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tpu Green', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tpu Purple New', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tpu Red', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tpu Skin New', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tpu White', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Transperent Exam Pad', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tray -82 Tc(Batteries And Rc)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tray 79 Tc(Rc&Batteries)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tray 80 Tc(Rc&Batteries)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tray-83 Tc(Batteries And Rc)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tyre Sealant', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Uas Flight Logbook Nai Agro Mk', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Uas Mainteance Logbook', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb Otg To C Type', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb To B Typec To Lighting', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb To Usb', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Used Air 3S Propller', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Uses Wire &Pipes Sock', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Vehile Oil', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'wd', 'category': 'Consumables', 'quantity': 60, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wd 40', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'White Masking Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wind Sock', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Window Screen', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Window Screen New', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wire Cuttetr', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wires', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wires Black', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wires Red', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wonder 555 Transparent Tape 5Cm', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wonder555 Transparent Red', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Woody Black Ball Point Pen', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Woody Black Pen', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Woody Blue Ball Point Pen', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Working Battery Lipo 6S', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Working O3 Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt 60 To C Type', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt30 Male&Female', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 Male', 'category': 'Consumables', 'quantity': 36, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 Male To Aux Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 Male To B Type', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 Male To Female', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 Male To Xt30', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'xt60-xt30', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60-Xt90', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt90 Male &Xt30 Male', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zerodrag Nexul S1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zerodrag Nexuls 1', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zerodrag Nexuuls01', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zip Tag Large Packet', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zip Tag Small Packet', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zip Tie Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zip Tie Large 400 Mm Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zip Tie Small Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops', 'location': '', 'description': '', 'status': 'In Stock'},
+    // — CDA ADMIN —
+    {'name': '1.5-1Yox40Mm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '1.5X40Mm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '100 Gsm A4 Sheet Bundle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '100+', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '10Cm 2 Pin Jst', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '15 Degree', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '18650 Battery Holder', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '2 Cell Battery', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '2 Pin Usb Power Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '2.44 Ghz Ufl T -Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '2S Battery', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '2S Li Ion Battery', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3 Blade Propller Crystal Blue', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3 Blade Propller Pink', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3 Pin Adpter Cable', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3.5 Inch With Motors', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '31 Small Tray', 'category': 'Consumables', 'quantity': 33, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3D Print 4S Battery Holder', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3D Print For Propeller Guard Section', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3D Print Tool Kit Holder Unused', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3D Print Tool Kit Holder Used', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3D Print Tool Kit Holders Bos', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3Dr Radiotelementry Kit 433Mhz', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '3S Balance Lead', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '40 Degree', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '4Leaf Clover Fpv Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '5.8 Ghz Wifi Antenna', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '5.8G 2dbi DIPOLE UFL OMNI ANTENNA', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '5.8Ghz Antenna', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '5.8Ghz Fpv Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '5.8Ghz Omni Fpv Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '5050 Bn Orange', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '5050 Bn Red', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '5S Balance Lead', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '5X4.3X3R Blue', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '6S Balance Lead', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '7S Balance Lead', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '80Props', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': '85 Gsm A4 Sheet Bundle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'A4 Bundle Opened', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'A4 Sheet Bundle', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Accounting File 26', 'category': 'Consumables', 'quantity': 27, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Accounts Kaviyamam', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Accounts Peticash Note', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Adapter With Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Adjustable Tripad Stand', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ads Sheet', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Adustable Tripop', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Agal Vilaku', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Air Tag', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Airved', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Allen Hex Screws', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Alligator Clips', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Aluminium Standoff 35Mm', 'category': 'Consumables', 'quantity': 40, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Amazon Basics Usb Type C To Micro -B 2.0 Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Amazon Packing Tape 48Mm', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ameer Desai Spare (Naked Gopro)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ansh Empire -Hand Free Operator', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Aparasa Eraser', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Aparasa Pencil', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Apsara Eraser', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Attendence', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Av Adapter Cable', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Av Male To 3Rca Female', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Azima Mam Note', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Azure Power 5150 Crystal Clear', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Balance Lead 4S', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Balance Lead 6S', 'category': 'Consumables', 'quantity': 12, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Balck Masking Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ballon Packet', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Baloon Pump', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Banana Plug Or Pin Female', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Banana Plug Or Pin Male', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Banana Plug To Dc Female Dc Power Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bang Good', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Charging Satation Cupboard1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Compartment Housiong', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Silicon Antiskid Pad', 'category': 'Consumables', 'quantity': 8, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Sticker', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Wirs Black&Red', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery With Hub', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Beta Fpv Small', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Big Heat Sheink Roll Black', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Big Heat Shrinkroll Blue', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bills Leaf File', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Black Marker', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Black Pen', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Black Pen Pentonic', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Black Velvet Bags', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Blitzz Practice Board', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Blue Ball Point Pen', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Blue Barrel', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Blue Bin', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bnc Male Connector', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Box1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Box2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Broom Stick', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Brown Sheet Roll', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bubble Courier Bags 25.5 Mm', 'category': 'Consumables', 'quantity': 38, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bubble Courier Bags Large', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bulb', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Business Team Matenote Books', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Business Team Sim Card', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bussiness Head Board', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Button Empty File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Button File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Button File Blue', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Button File New', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Button File Old', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'C To Ip Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cable Clip', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cable Draw', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cable Protector', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Caddx Remote Control Board Osd', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Caldender Hv', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Camlin Permanent Black', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Camlin Permanent Blue', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Carbon Fibre 2 Blade Propeller', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cardboard', 'category': 'Consumables', 'quantity': 332, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cat Food Plate', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Caution', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Janet File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Mobile', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Note', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cda Puzzle', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Certificate File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Chrolide Safepower Battery(Wastage)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Clear Wrap Cover 10Mm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Clear Wrap Cover 25Mm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Clip', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Clips', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Club Bollywood High School Micro Hdmi', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Coauxial Antenna Cable', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Coliner', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Connector Box1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Connector Box2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Courier Bnage 34.5X47', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cup', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Cuptray', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Custom Cda Rc', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'D 8K Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dalderop T5045 Red', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Daldrop 5045 Orange', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Daldrop 5045 Purple', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Daldrop T5040 Orange', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Daldrop T5050 Orange', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Daldropt5045 Red', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dalpdrop 3528', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Damaged Balance Lead', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Damaged Propellers', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dampler Balls', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Deburring Tool-1 With Kits', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dettol', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dettol Foaming Handwash', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Diamond Needle File', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Diatone', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Digital Mulimeter Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Diner Knife', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji 5043', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Cable Lightining To Type C', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Cables', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Inspire Proprller', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Model Gl3008', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Model Gl6D10A Inspire2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Phantom Propeller Grey', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Phantom Propeller White', 'category': 'Consumables', 'quantity': 9, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Power Adapter Ad019', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dji Tb50 Intelligent Flight Battery', 'category': 'Consumables', 'quantity': 9, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Documents At Pink File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Draw 1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Draw 2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Draw2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Drf Iec C13', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dropping Mechanism With Servo', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Duracell Aa Battery', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Duster', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Dvdr', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Eachine Half Part', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Eb Card Cda', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Elastic Welgro Starp', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Electric Soldering Ion', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Electrical Liquid Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Electronic Cleaning Solution Ipa', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Elrs 2.4 Ghz T-Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Employee Record File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Empty Boxes', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Empty Roll', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Enroll Form File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Eva Perfume', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Exam Pad Hv', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Expo Enquiry Forms', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Expo Pamplets Hyd', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Extra Connecting Wires', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Extra Nuts And Bolds', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Feedback Card Set', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Feedback Student File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fevi Kiwick', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fibre Cloth', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Field File', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flair Ball Point Pen', 'category': 'Consumables', 'quantity': 8, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flask', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flower', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flyfish Rc Titanium Hex Screws Driver', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flywoo', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Flywoo Mount', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Foam Board', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Football Gauge', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Forexx Osd Controller', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fork Spoon', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Foxeer Lollipop 3 5.8 Ghz Omni Stubby Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Foxeer Oreo 5.8 Ghz Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fpv Antenna Lolipop 4 Plus', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fpv Build & Piloting', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fpv Build Form Track', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fragile Handle Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Frsky Taranis X9Dplus', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Furious Fpv Patch Race 5.8Ghz Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Garbage Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Garbage Cover Roll', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfam 5152 Red', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan 45Mm', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan 5144 Red', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan 5144 Skyblue', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan 51466', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan 51466 Crystal Clear', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan 51499 Purple', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan 51499 Skyblue', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan 5152', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan 5152 Pink', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan 5152 Sky Blue', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan Beta Fpv Small', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan D 90', 'category': 'Consumables', 'quantity': 15, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan D63 Grey', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gemfan51499 Orange', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Generic Tap Wire Connectors', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Geprc 1960Kv', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Geprc Battery Strap 20X 220', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Geprc Gep-F722 45A Aio V2', 'category': 'Consumables', 'quantity': 8, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gl200A (Dji Mavic Pro Series)', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Glass', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Godox Led Video Light', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gopro Hero 11 Black Mini', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gopro Hero 11 Blkack Original Usb Charging Port Flex Cabel', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Green Courier Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gstr 3B Leaf File', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gstr1 Leaf File', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Gum', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'H 1.5', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'H2.0', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'H2.5', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hack Saw Blade', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Half Pencil', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hardisk', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Harpic Bottle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Harsh Bro', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hdmi Cable With Ethernet', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Head Set Hv', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Heat Shrink Box1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Heat Shrink Tubing', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'High Discharge Lipo Battery 2605Mah', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Highliter', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hit Calk', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hot Airgun Nozzle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hot Glue Gun', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hotaspare', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hq 5X 4.8X 3 V1S Skyblue', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hq 5X 4.8X 3R Green', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hq 5X4.8X3V1S Purple', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hq Prop Dt90Mm', 'category': 'Consumables', 'quantity': 9, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hq Prop5X 3.7X3 Grey', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hq S5X4X3', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Hqprop Ethixs4 Flroscent', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Id Card Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Id Card Ropes', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Iflight Pad', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'In Restroom Cooridor', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'In Row1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Inspire Broken', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Insulation Yellow Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Invelop Bundle Used', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Invelop Cover 15 Cmm Bundle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Invelop Covers New Bundle 28 Cm', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'J Hook Bolt', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jaishavi', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jp Sir Bill File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst -Xh 2 Pin Connector', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst -Xh 6 Pin Female', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst 10 Pin Connecter', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst 6S Balance Lead', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst Micro 3 Pin', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst Sh 8 Pin Cablejst Xh 2 Pin Connecter Female', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst To D C 2.5 Adapter Charging Cable', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst To Usb Cable Connector', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst Xh 3 Pin', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst Xh 4 Pin Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst Xh 4 Pin Double Side', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst Xh 4 Pin One Sided With Clip', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst Xh 6 Pin Cable Female', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Jst Xh 6 Pin Connector', 'category': 'Consumables', 'quantity': 60, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Karandi', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Kavya Mam Note', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Key', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Knee Lifter Assembly', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Knurled Aluminium Standoff', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Kuthu Vilaku', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Large Nuts &Bolds', 'category': 'Consumables', 'quantity': 12, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Large Screws', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lcd Or Led Cleaner', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Leaf Bowls', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Leaf File A4 Bundle', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Leaf File With Documents', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Leaf Steel Plate', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Led Strip', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lemon Sanitizer Phenoyl', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Letter Head Cda', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Letter Head Pvt', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Letter Head Skylynk', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Li Ion 2Cell 2000Mah Front New', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Li Ion 4 Cell 4000Mah Front Old', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Li Ion 4 Cell 4000Mahfront New', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Light Mounting Clip', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lights', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lion 4Cell 4000Mah Back Old', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lipo Battery Cells', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lipo Damaged Battery', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lithium Ion Dronebattery 16046', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lithium Ion Remotebattery 18650-25E', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lizel Bottle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lm2596 Dc Dc Buck Conventor', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Locktite 271', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Logo Light', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Loiion 4 Cell 10000Mah Front New', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lollipop Fpv Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Long Size Note', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Long Strap', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Long Term Pending Student Attendence File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M1.5X10', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M1.6', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M1.6X8', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2 Lock Nut', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2.5X6', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X 1.9', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X 5.5', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X 8', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X18', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X20', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X5', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X6', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M3', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M3X12', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M3X8', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M5 Washer', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Male Header Strip Or Berg Strip', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mango Leaf', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Manuals', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Marker Green', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Marker Ink', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Marker Permanent Blue', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Massager', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mate', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Maverick Mrx -242 2.4 Ghz', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mavic 2', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mavic 3', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mavic Pro Battery', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Medimix Handwash', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mini Wire Scratch Wire Brush Set Nylon Brass', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mmcz 90 Degree Linear Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mohammed Sathak Workshop File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Molding Clay(Gluetag)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Momento Award', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Monitors', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Motherboard Spacer Standoff', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Motor Mount Support Set', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mt7681 X Wifi', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Mug', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Multi Colored Copper Wire', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Naga Sai Spares', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Name Lables', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Napthenel Balls Pocket', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Neck Straps', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Neutron Rc At32F435 5 In 1 Aio', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'New Cda Notebook', 'category': 'Consumables', 'quantity': 11, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'New Notebook Long Size', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'New Service Note', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Nippo Aa Battery', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Notes Small', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Nsmall Size Accounts Note', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Nylon Hex Standoff M3', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Nyon Yarn Thin Thread', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Office Document File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Oil Bottle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Old Button File With Documents', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Old Drones', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Old Expo Forms File Hv', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Old Leaf File', 'category': 'Consumables', 'quantity': 8, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'One Plus Wrap Charge Type C (Red)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ongoing Student File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Otg Dji Data Cable', 'category': 'Consumables', 'quantity': 8, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Other Pooja Things', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pagoda-2 5.8Ghz Omnidirctional Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Paper Cup', 'category': 'Consumables', 'quantity': 33, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Paper Label 160 Gsm', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Paper Label 162 Gsm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Paper Plate', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Parryware Solution', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pen Holder', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pendrive', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Perfora Brush Head', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Permanent Marker', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Permanent Marker (Blue)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Permanet Marker', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pf&Esi File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Phantom Battery', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Photo Frames Official', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pizzacutter 5037', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Plastic 2 Blade Propeller Black &Yellow', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Plastic Brush', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Plastic Brush Red', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Plastic Eyelet Ringsd With Washer', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Plastic Pust Pan', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Plastic Sealinf Cover Case With Screw', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Plate', 'category': 'Consumables', 'quantity': 12, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Plywood', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Poojai Self With Poojai Saman', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Portronics Konnect L 1.2 M Cable (Grey)', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Power Board Circuit(Hota)', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Powerbank', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Practise Soldering Lead', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Printed Papers', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Propeller', 'category': 'Consumables', 'quantity': 12, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Propeller Adapter Holder', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pteg Empty Roll', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pvt Expense Voucher Note', 'category': 'Consumables', 'quantity': 27, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Qr Code', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Quadkart', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Question Paper File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Radiomaster Boxer (Transparent)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Radiomaster Boxer(Black)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Radiomaster Neck Strap', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ramraj Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Razer Pay', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rc Car', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rc Car And Controller', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rc Stick', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rchuper', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Receipt Note', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Receipt Note Uesed', 'category': 'Consumables', 'quantity': 12, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Receipt Voucher File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Red Double Side Tape', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Refil Toners', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rgb Adapter', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rgb Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rhcp 5.8Ghz Antenna 65Mm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ribbon Wire', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ribbons', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rin Bottle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ring Light', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Roll', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Room Freshner', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rorito Pen (Black)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Rough Papers', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Saftey Battery Charging Instructions', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sales Stock Invoice Punching File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Salt Paper', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sanddisk Driver', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sanitary Pad Pocket', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sarpner Doms', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sata Data Cable Iii', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Scerwdrivers(Baku Bk-8600 Series)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Screw Organiger 3D Print', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Scruber New', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Serial Ata 6G 26Aw 4 Pin Xlr', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Shelf1', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Shockproof Sponge Pad', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Short Type C Cable', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Shoulder Strap', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Silicon Brouchers With Button File', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Silicon Brush', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Silicon Double Side Tape Green', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Silicon Oil Bottle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Silicon Vibration Dample', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sim Card Kavya Amam Accounts', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Simcard', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Skylynk Expense Voucher Note ( Bank And Peety Cash )', 'category': 'Consumables', 'quantity': 76, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'skyzone cobra sd fpv googles cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sma Connector', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sma Connectors', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sma Female 90 Degree Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sma Female Connector', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sma Female To Mmcx Male (Right Angle) Rf Rg316 Pigtail Jumber Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sma Female To Ufl Pigtailantenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sma Male Connector', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sma Plig To Sma Jack', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Small', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Small Note Cda Printed', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Small Surface Light', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Soft Brush', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Solder Paste', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Soldering Flux', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Soldering Glass', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Soldering Ion', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sony Oem 3.5Mm Aux Audio Cable F', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Spare Tray', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Speedybeef405 Mini Bls 35A', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Spoon', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Spray Oil Bottle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Springe With Soldering Fkux', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stabler', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stainless Steel Fulter Blade', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stapler Pin', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stapler Pins', 'category': 'Consumables', 'quantity': 16, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Steel Bottle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stick File Un Used', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sticky Notes', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sticky Notes Pad Hv', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sticy Notes', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stop Watch', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Straight', 'category': 'Consumables', 'quantity': 11, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Student Assesment Punching File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Student Id Card Tag', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Student Photos Bin', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Studevt Pen', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Surface Mounted Led Spot Light', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Surfexel', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Switch', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Switching Power Adapter 2 Pronged Us Type', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T Mount Race Wire', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T Plug Femaleto Dc Jack Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T Shape Sign Boards', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T-Dipole Antenna', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T-Motor 5143S Orange', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T-Plug (Female Connector) To Male Dc Barrel Plug Connector', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T-Plug Female To Alligator Clip', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T-Plug To Jst Connector', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T5', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'T6', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tape Tray', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tata Salt', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tbs Cross Fire Immotral T Antennba', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tbs Crossfire Nano Rx', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tbs Solder Lead', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tbs Unifybpro 5G8 Linear Antenna', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Thankyou Cover Bindle', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Theerinool', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tissue Paper Bundle', 'category': 'Consumables', 'quantity': 9, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Toner', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Toolkitrc Adjustable Powersupply', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tower Pro Sg90 Sevo Motot Blue', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tp Link Driver', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tray-7(Theory Session Items)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tripad Plate', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tumbler', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Turnable Anti Skating Set', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tx12', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Type C To Headphone Jack Adapter', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tyre Rubber', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ufl Connector', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ultra Soft (Toothbrush)', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Umberalaa', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Umberlla', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Unomax Pen Blue', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Unused Receipt Notes', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb 2.0 A To Mini 5 Pin B Cable', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb 2.0 A To Mini 5 Pin B Cable (Small)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb C Type', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb Cable 2', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb To B Type', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb To B Type Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb To C Cable', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb To C Sm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb To C Type', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb To C Type Sm', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb To Dc Charging Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb To Uart Adapter', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb Type A To Type A (Male To Male-White', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb Type B Cable (Black)', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb Type B Cable (White)', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb Type C Cable (Black)', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb Type C Cable (White)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Usb Type C Small (Black)', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Used Notepad', 'category': 'Consumables', 'quantity': 12, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Uv Protector Lens', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Vaccum Cleaner', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Velgro File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Velox V2207 2250 Kv', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Vifly Short Saver V2 Smart Smoke Stopper', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Vim Bars', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Visiting Card', 'category': 'Consumables', 'quantity': 13, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Visiting Cards', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Visting Card Cda', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Visting Cardskylynk', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Walking Form File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wall Anchor Screws With Mount', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wall Anchor With Screws', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Washing Brush', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Watch Batteries', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Water Bottles', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Water Can Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wc0Hr2601 Wifi', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'White Grease', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'White Sticker Roll', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Whitner Camlin', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wondern Brown Tape 48Mm', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wondern Transparent Tape 48Mm', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wood Karandi', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wooden Fork One Cover', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Writing Pad', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ws06', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wso5', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'X7 Taranis', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt 60 Male', 'category': 'Consumables', 'quantity': 113, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt30 Female', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt30 Male With Wire', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 - Xt90 Parallel Connrctor Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 Female With Wire', 'category': 'Consumables', 'quantity': 10, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 Male Bullet Connector To Male Dc', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 Male To Xt30 Female', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 Male With Wire', 'category': 'Consumables', 'quantity': 27, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 To Dcmale To Jack Cable', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 To T-Plug', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60Male To Xt 60 Female', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt90Male To Xt60 Female', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Yellow File', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zero Watts Bulp', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zerodrag Aurora Race-X Led', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zip Tie 3.6X150Mm Black', 'category': 'Consumables', 'quantity': 92, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Zip Tie Small (Pocket)', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ziptie 300M White', 'category': 'Consumables', 'quantity': 43, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ziptie 4.8X400 Mm Black', 'category': 'Consumables', 'quantity': 42, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Ziptie 400Mmx3.6 White', 'category': 'Consumables', 'quantity': 57, 'branch': 'CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    // — CDA OPS & CDA ADMIN —
+    {'name': 'Anabond', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Batteries', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Battery Strap', 'category': 'Consumables', 'quantity': 8, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bero', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Blue Pen', 'category': 'Consumables', 'quantity': 20, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Bottle', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Brush', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Caddx Osd Controller', 'category': 'Consumables', 'quantity': 12, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Certificate Bundle', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Eraser', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Exam Pad', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fevistick', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fire Extingher', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Foam Boards', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Fpv Direct', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Insulation Tape Black', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Knife', 'category': 'Consumables', 'quantity': 6, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Lipo Checker', 'category': 'Consumables', 'quantity': 7, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X12', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X16', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X7', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M2X8', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M3X10', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M3X16', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'M3X30', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pamplets', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Paper Tape', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pen Knife', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Pen Stand', 'category': 'Consumables', 'quantity': 4, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Propeller Adapter', 'category': 'Consumables', 'quantity': 1, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Red Pen', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Screen', 'category': 'Consumables', 'quantity': 15, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Sharpner', 'category': 'Consumables', 'quantity': 2, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stablizer', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Stapler', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Surface Light', 'category': 'Consumables', 'quantity': 14, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tissue Set', 'category': 'Consumables', 'quantity': 26, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tube Light', 'category': 'Consumables', 'quantity': 10, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Tubelight', 'category': 'Consumables', 'quantity': 9, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Vim Liquid', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Whitner', 'category': 'Consumables', 'quantity': 5, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Wifi Dongle', 'category': 'Consumables', 'quantity': 3, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt30 Male', 'category': 'Consumables', 'quantity': 20, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
+    {'name': 'Xt60 Female', 'category': 'Consumables', 'quantity': 23, 'branch': 'CDA Ops & CDA Admin', 'location': '', 'description': '', 'status': 'In Stock'},
   ];
+
+  // Backward-compatible alias — some services/screens may still reference
+  // SeedConsumables.items instead of .allItems.
+  static List<Map<String, dynamic>> get items => allItems;
 }

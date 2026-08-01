@@ -79,6 +79,48 @@ class SaleReturnService {
     }
   }
 
+  // ── UPDATE sale return ──────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> updateSaleReturn(String id, SaleReturn ret) async {
+    try {
+      final before = await getSaleReturnById(id);
+      await _col.doc(id).update(ret.toFirestore());
+      clearCache();
+      if (before != null) {
+        ActivityLogService.logEdit(
+          module: 'Sale Returns',
+          itemName: ret.productName,
+          before: {
+            'customer': before.customerName,
+            'quantity': before.quantity,
+            'amount': before.amount,
+            'reason': before.reason,
+            'reference_invoice': before.referenceInvoice,
+            'branch': before.branch,
+            'return_date': before.returnDate,
+          },
+          after: {
+            'customer': ret.customerName,
+            'quantity': ret.quantity,
+            'amount': ret.amount,
+            'reason': ret.reason,
+            'reference_invoice': ret.referenceInvoice,
+            'branch': ret.branch,
+            'return_date': ret.returnDate,
+          },
+        );
+      }
+      return {
+        'success': true,
+        'message': 'Sale return / credit note updated successfully',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to update sale return: $e',
+      };
+    }
+  }
+
   // ── DELETE sale return ──────────────────────────────────────────────────
   static Future<Map<String, dynamic>> deleteSaleReturn(String id) async {
     try {

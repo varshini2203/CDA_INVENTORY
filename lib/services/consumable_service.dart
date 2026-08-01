@@ -113,7 +113,7 @@ class ConsumableService {
   /// Bulk-upload the master inventory list from the CDA spreadsheet.
   /// Splits writes into batches to stay under Firestore's 500-write limit.
   static Future<void> seedConsumables() async {
-    final items = SeedConsumables.items;
+    final items = SeedConsumables.allItems;
 
     const chunkSize = 450;
     for (var i = 0; i < items.length; i += chunkSize) {
