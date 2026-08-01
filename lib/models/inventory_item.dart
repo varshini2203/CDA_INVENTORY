@@ -230,6 +230,12 @@ class BranchSummary {
   });
 
   /// Compute summary client-side from a list of Firestore items.
+  ///
+  /// NOTE: totalItems / droneCount / inServiceCount / categoryBreakdown are
+  /// now COUNTS OF INVENTORY RECORDS (rows), not sums of the `quantity`
+  /// field. A row like {item_name: "ZIP TIE", quantity: 92} counts as 1
+  /// item record, not 92. This matches "how many distinct things are
+  /// tracked in inventory" rather than "how many physical units exist".
   factory BranchSummary.fromItems(
       String branchLabel, List<InventoryItem> items) {
     final breakdown = <String, int>{};
@@ -237,14 +243,12 @@ class BranchSummary {
     int inService = 0;
 
     for (final item in items) {
-      breakdown[item.category] =
-          (breakdown[item.category] ?? 0) + item.quantity;
-      if (item.category == 'drone')      drones    += item.quantity;
-      if (item.status   == 'in_service') inService += item.quantity;
+      breakdown[item.category] = (breakdown[item.category] ?? 0) + 1;
+      if (item.category == 'drone')      drones++;
+      if (item.status   == 'in_service') inService++;
     }
 
-    final total =
-    items.fold<int>(0, (sum, i) => sum + i.quantity);
+    final total = items.length;
 
     return BranchSummary(
       branch:            branchLabel,
