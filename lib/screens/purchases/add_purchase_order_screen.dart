@@ -498,8 +498,8 @@ class _AddPurchaseOrderScreenState extends State<AddPurchaseOrderScreen> {
         Expanded(
           flex: 3,
           child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            _metaRow('PO Number', SizedBox(
-              width: 200,
+            _metaRow('PO Number', ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
               child: TextFormField(
                 controller: _poNumberController,
                 textAlign: TextAlign.right,
@@ -508,8 +508,8 @@ class _AddPurchaseOrderScreenState extends State<AddPurchaseOrderScreen> {
               ),
             )),
             const SizedBox(height: 8),
-            _metaRow('Order Date', SizedBox(
-              width: 200,
+            _metaRow('Order Date', ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
               child: InkWell(
                 onTap: _pickOrderDate,
                 child: InputDecorator(
@@ -523,8 +523,8 @@ class _AddPurchaseOrderScreenState extends State<AddPurchaseOrderScreen> {
               ),
             )),
             const SizedBox(height: 8),
-            _metaRow('Expected Delivery', SizedBox(
-              width: 200,
+            _metaRow('Expected Delivery', ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
               child: InkWell(
                 onTap: _pickDeliveryDate,
                 child: InputDecorator(
@@ -539,8 +539,8 @@ class _AddPurchaseOrderScreenState extends State<AddPurchaseOrderScreen> {
               ),
             )),
             const SizedBox(height: 8),
-            _metaRow('State of supply', SizedBox(
-              width: 200,
+            _metaRow('State of supply', ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
               child: DropdownButtonFormField<String>(
                 initialValue: _stateOfSupply,
                 isExpanded: true,
@@ -554,8 +554,8 @@ class _AddPurchaseOrderScreenState extends State<AddPurchaseOrderScreen> {
               ),
             )),
             const SizedBox(height: 8),
-            _metaRow('Order Status', SizedBox(
-              width: 200,
+            _metaRow('Order Status', ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
               child: DropdownButtonFormField<String>(
                 initialValue: _status,
                 isExpanded: true,
@@ -576,8 +576,8 @@ class _AddPurchaseOrderScreenState extends State<AddPurchaseOrderScreen> {
               ),
             )),
             const SizedBox(height: 8),
-            _metaRow('Firm / Branch', SizedBox(
-              width: 200,
+            _metaRow('Firm / Branch', ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
               child: DropdownButtonFormField<String>(
                 initialValue: _selectedBranch,
                 isExpanded: true,
@@ -606,7 +606,7 @@ class _AddPurchaseOrderScreenState extends State<AddPurchaseOrderScreen> {
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       Text(label, style: const TextStyle(fontSize: 12.5, color: kTextSub, fontWeight: FontWeight.w500)),
       const SizedBox(width: 14),
-      field,
+      Flexible(child: field),
     ]);
   }
 

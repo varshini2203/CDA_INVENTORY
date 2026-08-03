@@ -375,7 +375,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
       case 'Card':
         return 'Card / Auth Ref';
       default:
-        return 'Reference No. (optional)';
+        return 'Reference No.';
     }
   }
 
@@ -760,8 +760,8 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
       ]);
 
       final metaBlock = Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        _metaRow('Payment Date', SizedBox(
-          width: 200,
+        _metaRow('Payment Date', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: InkWell(
             onTap: _pickDate,
             child: InputDecorator(
@@ -776,8 +776,8 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
           ),
         )),
         const SizedBox(height: 8),
-        _metaRow('Payment Mode', SizedBox(
-          width: 200,
+        _metaRow('Payment Mode', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: DropdownButtonFormField<String>(
             initialValue: selectedMode,
             isExpanded: true,
@@ -791,8 +791,8 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
           ),
         )),
         const SizedBox(height: 8),
-        _metaRow(_refLabel(), SizedBox(
-          width: 200,
+        _metaRow(_refLabel(), ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: TextFormField(
             controller: referenceController,
             textAlign: TextAlign.right,
@@ -801,8 +801,8 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
           ),
         )),
         const SizedBox(height: 8),
-        _metaRow('Branch', SizedBox(
-          width: 200,
+        _metaRow('Branch', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: DropdownButtonFormField<String>(
             initialValue: selectedBranch,
             isExpanded: true,
@@ -838,7 +838,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       Text(label, style: const TextStyle(fontSize: 12.5, color: kTextSub, fontWeight: FontWeight.w500)),
       const SizedBox(width: 14),
-      field,
+      Flexible(child: field),
     ]);
   }
 

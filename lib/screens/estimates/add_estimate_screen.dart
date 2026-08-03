@@ -453,11 +453,33 @@ class _AddEstimateScreenState extends State<AddEstimateScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: Row(children: [
-              Checkbox(value: _gstEnabled, activeColor: kBlue, onChanged: (v) => setState(() => _gstEnabled = v ?? false)),
+              Transform.scale(
+                scale: 0.85,
+                child: Checkbox(
+                  value: _gstEnabled,
+                  activeColor: kBlue,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (v) => setState(() => _gstEnabled = v ?? false),
+                ),
+              ),
               const Text('GST', style: TextStyle(fontSize: 13, color: kTextDark)),
-              const SizedBox(width: 10),
-              Checkbox(value: _isInterState, activeColor: kBlue, onChanged: (v) => setState(() => _isInterState = v ?? false)),
-              const Text('Inter-state', style: TextStyle(fontSize: 13, color: kTextDark)),
+              const SizedBox(width: 6),
+              Transform.scale(
+                scale: 0.85,
+                child: Checkbox(
+                  value: _isInterState,
+                  activeColor: kBlue,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (v) => setState(() => _isInterState = v ?? false),
+                ),
+              ),
+              const Flexible(
+                child: Text('Inter-state',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: kTextDark)),
+              ),
             ]),
           ),
         ]),

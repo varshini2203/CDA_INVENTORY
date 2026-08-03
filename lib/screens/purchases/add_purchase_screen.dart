@@ -655,8 +655,8 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
         Expanded(
           flex: 3,
           child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            _metaRow('Bill Number', SizedBox(
-              width: 200,
+            _metaRow('Bill Number', ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
               child: TextFormField(
                 controller: _billNumberController,
                 textAlign: TextAlign.right,
@@ -665,8 +665,8 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
               ),
             )),
             const SizedBox(height: 8),
-            _metaRow('Bill Date', SizedBox(
-              width: 200,
+            _metaRow('Bill Date', ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
               child: InkWell(
                 onTap: _pickBillDate,
                 child: InputDecorator(
@@ -680,8 +680,8 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
               ),
             )),
             const SizedBox(height: 8),
-            _metaRow('State of supply', SizedBox(
-              width: 200,
+            _metaRow('State of supply', ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
               child: DropdownButtonFormField<String>(
                 initialValue: _stateOfSupply,
                 isExpanded: true,
@@ -695,8 +695,8 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
               ),
             )),
             const SizedBox(height: 8),
-            _metaRow('Firm / Branch', SizedBox(
-              width: 200,
+            _metaRow('Firm / Branch', ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
               child: DropdownButtonFormField<String>(
                 initialValue: _selectedBranch,
                 isExpanded: true,
@@ -719,7 +719,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       Text(label, style: const TextStyle(fontSize: 12.5, color: kTextSub, fontWeight: FontWeight.w500)),
       const SizedBox(width: 14),
-      field,
+      Flexible(child: field),
     ]);
   }
 

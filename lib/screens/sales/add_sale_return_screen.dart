@@ -427,8 +427,8 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
       ]);
 
       final metaBlock = Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        _metaRow('Return Date', SizedBox(
-          width: 200,
+        _metaRow('Return Date', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: InkWell(
             onTap: _pickDate,
             child: InputDecorator(
@@ -443,8 +443,8 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
           ),
         )),
         const SizedBox(height: 8),
-        _metaRow('Reason for Return', SizedBox(
-          width: 200,
+        _metaRow('Reason for Return', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: DropdownButtonFormField<String>(
             initialValue: selectedReason,
             isExpanded: true,
@@ -465,8 +465,8 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
           ),
         )),
         const SizedBox(height: 8),
-        _metaRow('Reference Invoice', SizedBox(
-          width: 200,
+        _metaRow('Reference Invoice', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: TextFormField(
             controller: referenceInvoiceController,
             textAlign: TextAlign.right,
@@ -475,8 +475,8 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
           ),
         )),
         const SizedBox(height: 8),
-        _metaRow('Branch', SizedBox(
-          width: 200,
+        _metaRow('Branch', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: DropdownButtonFormField<String>(
             initialValue: selectedBranch,
             isExpanded: true,
@@ -512,7 +512,7 @@ class _AddSaleReturnScreenState extends State<AddSaleReturnScreen> {
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       Text(label, style: const TextStyle(fontSize: 12.5, color: kTextSub, fontWeight: FontWeight.w500)),
       const SizedBox(width: 14),
-      field,
+      Flexible(child: field),
     ]);
   }
 

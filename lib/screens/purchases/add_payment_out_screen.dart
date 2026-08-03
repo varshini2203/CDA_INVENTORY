@@ -454,8 +454,8 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
       ]);
 
       final metaBlock = Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        _metaRow('Payment Date', SizedBox(
-          width: 200,
+        _metaRow('Payment Date', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: InkWell(
             onTap: _pickDate,
             child: InputDecorator(
@@ -470,8 +470,8 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
           ),
         )),
         const SizedBox(height: 8),
-        _metaRow('Payment Mode', SizedBox(
-          width: 200,
+        _metaRow('Payment Mode', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: DropdownButtonFormField<String>(
             initialValue: selectedMode,
             isExpanded: true,
@@ -485,8 +485,8 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
           ),
         )),
         const SizedBox(height: 8),
-        _metaRow('Reference No.', SizedBox(
-          width: 200,
+        _metaRow('Reference No.', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: TextFormField(
             controller: referenceController,
             textAlign: TextAlign.right,
@@ -495,8 +495,8 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
           ),
         )),
         const SizedBox(height: 8),
-        _metaRow('Branch', SizedBox(
-          width: 200,
+        _metaRow('Branch', ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
           child: DropdownButtonFormField<String>(
             initialValue: selectedBranch,
             isExpanded: true,
@@ -532,7 +532,7 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       Text(label, style: const TextStyle(fontSize: 12.5, color: kTextSub, fontWeight: FontWeight.w500)),
       const SizedBox(width: 14),
-      field,
+      Flexible(child: field),
     ]);
   }
 

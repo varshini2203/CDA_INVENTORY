@@ -127,12 +127,16 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
   }
 
   void _applySortAndFilter() {
-    final query = _searchController.text.toLowerCase();
+    final query = _searchController.text.trim().toLowerCase();
     final filtered = _allInvoices.where((inv) {
       final partyName = _partyName(inv).toLowerCase();
+      final phone = (inv.customer?.phone ?? '').toLowerCase();
+      final amountStr = inv.displayAmount.toStringAsFixed(2);
       final matchesQuery = query.isEmpty ||
           inv.invoiceNo.toLowerCase().contains(query) ||
-          partyName.contains(query);
+          partyName.contains(query) ||
+          phone.contains(query) ||
+          amountStr.contains(query);
       final matchesStatus =
           _statusFilter == 'All' || inv.effectiveStatus == _statusFilter;
       final matchesBranch =
@@ -443,6 +447,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
           child: _showSearchBar
               ? Container(
             height: 42,
+            width: double.infinity,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
@@ -451,12 +456,25 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
             child: TextField(
               controller: _searchController,
               focusNode: _searchFocusNode,
-              style: const TextStyle(fontSize: 14, color: kTextDark),
+              autofocus: true,
+              cursorColor: kTextDark,
+              showCursor: true,
+              enableInteractiveSelection: true,
+              style: const TextStyle(
+                fontSize: 14,
+                color: kTextDark,
+                fontWeight: FontWeight.w500,
+              ),
               decoration: InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: Colors.white,
                 hintText: 'Search Transactions',
-                hintStyle: TextStyle(color: kTextMute, fontSize: 14),
+                hintStyle: const TextStyle(color: kTextMute, fontSize: 14),
                 prefixIcon: const Icon(Icons.search_rounded, color: kTextMute, size: 20),
-                suffixIcon: IconButton(
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
                   icon: const Icon(Icons.close_rounded, color: kTextMute, size: 18),
                   onPressed: () {
                     _searchController.clear();
@@ -464,7 +482,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                   },
                 ),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
               ),
             ),
           )
@@ -484,7 +502,12 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
               child: const Row(children: [
                 Icon(Icons.search_rounded, color: kTextMute, size: 20),
                 SizedBox(width: 8),
-                Text('Search Transactions', style: TextStyle(color: kTextMute, fontSize: 14)),
+                Expanded(
+                  child: Text('Search Transactions',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: kTextMute, fontSize: 14)),
+                ),
               ]),
             ),
           ),

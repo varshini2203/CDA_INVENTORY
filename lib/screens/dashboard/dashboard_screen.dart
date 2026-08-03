@@ -574,15 +574,22 @@ class _CDAAppBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+                mainAxisSize: MainAxisSize.min,
+                children: const [
                   Text('Chennai Drone Academy',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
                           color: _textPrimary, letterSpacing: 0.2)),
                   Text('Inventory Management',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 9, color: _textMuted,
                           letterSpacing: 0.6, fontWeight: FontWeight.w500)),
                 ],

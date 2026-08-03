@@ -708,24 +708,31 @@ class _NewProductListScreenState extends State<NewProductListScreen>
                   style:
                   TextStyle(fontWeight: FontWeight.w600, color: Colors.black54)),
               const SizedBox(width: 8),
-              ..._branches.map((b) => Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(b),
-                  selected: _branchFilter == b,
-                  selectedColor: _accent,
-                  backgroundColor: _accent.withOpacity(0.10),
-                  side: BorderSide(
-                    color: _branchFilter == b ? _accent : _accent.withOpacity(0.35),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _branches.map((b) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(b),
+                        selected: _branchFilter == b,
+                        selectedColor: _accent,
+                        backgroundColor: _accent.withOpacity(0.10),
+                        side: BorderSide(
+                          color: _branchFilter == b ? _accent : _accent.withOpacity(0.35),
+                        ),
+                        labelStyle: TextStyle(
+                          color: _branchFilter == b ? Colors.white : _accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        onSelected: (_) => setState(() => _branchFilter = b),
+                      ),
+                    )).toList(),
                   ),
-                  labelStyle: TextStyle(
-                    color: _branchFilter == b ? Colors.white : _accent,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  onSelected: (_) => setState(() => _branchFilter = b),
                 ),
-              )),
-              const Spacer(),
+              ),
+              const SizedBox(width: 4),
               InkWell(
                 onTap: () => _openMoreFiltersSheet(_products ?? []),
                 borderRadius: BorderRadius.circular(20),

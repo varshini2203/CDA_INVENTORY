@@ -374,7 +374,7 @@ class _AddDeliveryChallanScreenState extends State<AddDeliveryChallanScreen> {
 
   Widget _metaRow(String label, Widget field) => Row(mainAxisAlignment: MainAxisAlignment.end, children: [
     Text(label, style: const TextStyle(fontSize: 12.5, color: kTextSub, fontWeight: FontWeight.w500)),
-    const SizedBox(width: 14), field,
+    const SizedBox(width: 14), Flexible(child: field),
   ]);
 
   Widget _transportCard() {

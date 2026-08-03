@@ -527,7 +527,12 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
               child: const Row(children: [
                 Icon(Icons.search_rounded, color: kTextMute, size: 20),
                 SizedBox(width: 8),
-                Text('Search Transactions', style: TextStyle(color: kTextMute, fontSize: 14)),
+                Expanded(
+                  child: Text('Search Transactions',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: kTextMute, fontSize: 14)),
+                ),
               ]),
             ),
           ),

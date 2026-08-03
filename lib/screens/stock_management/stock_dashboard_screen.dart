@@ -88,16 +88,20 @@ class _StockDashboardScreenState extends State<StockDashboardScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kSurface,
-      body: CustomScrollView(
-        slivers: [
-          _buildSliverAppBar(),
-          if (_loading)
-            const SliverFillRemaining(child: Center(child: _LoadingWidget()))
-          else if (_error != null)
-            SliverFillRemaining(child: _buildError())
-          else
-            SliverToBoxAdapter(child: _buildBody()),
-        ],
+      body: RefreshIndicator(
+        onRefresh: () => _loadDashboard(forceRefresh: true),
+        color: kTeal,
+        child: CustomScrollView(
+          slivers: [
+            _buildSliverAppBar(),
+            if (_loading)
+              const SliverFillRemaining(child: Center(child: _LoadingWidget()))
+            else if (_error != null)
+              SliverFillRemaining(child: _buildError())
+            else
+              SliverToBoxAdapter(child: _buildBody()),
+          ],
+        ),
       ),
       floatingActionButton: _buildFAB(),
     );
@@ -391,173 +395,168 @@ class _StockDashboardScreenState extends State<StockDashboardScreen>
     final d = _data!;
     return FadeTransition(
       opacity: _fadeAnim,
-      child: RefreshIndicator(
-        onRefresh: () => _loadDashboard(forceRefresh: true),
-        color: kTeal,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (d.totalProducts == 0) ...[
-                _buildSeedBanner(),
-                const SizedBox(height: 20),
-              ],
-              // ── KPI Cards ─────────────────────────────────────────────────
-              _sectionLabel('OVERVIEW'),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: _kpiCard('Total Products', '${d.totalProducts}',
-                    Icons.inventory_2_rounded, kTeal, 'Items tracked')),
-                const SizedBox(width: 12),
-                Expanded(child: _kpiCard('Low Stock', '${d.lowStockCount}',
-                    Icons.warning_amber_rounded, kAmber, 'Need attention',
-                    urgent: d.lowStockCount > 0)),
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                Expanded(child: _kpiCard('Fixed Assets', '${d.fixedAssets}',
-                    Icons.business_center_rounded,
-                    const Color(0xFF6C63FF), 'Equipment')),
-                const SizedBox(width: 12),
-                Expanded(child: _kpiCard('Consumables', '${d.consumables}',
-                    Icons.category_rounded, kCoral, 'Supplies')),
-              ]),
-
-              const SizedBox(height: 28),
-
-              // ── Quick Actions ──────────────────────────────────────────────
-              _sectionLabel('QUICK ACTIONS'),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: _actionTile(
-                  label: 'Stock IN',
-                  sub: 'Add inventory',
-                  icon: Icons.arrow_downward_rounded,
-                  color: const Color(0xFF00B894),
-                  onTap: () async {
-                    await Navigator.push(context,
-                        MaterialPageRoute(settings: const RouteSettings(name: 'Stock In'),
-                            builder: (_) => const StockInScreen()));
-                    _loadDashboard();
-                  },
-                )),
-                const SizedBox(width: 12),
-                Expanded(child: _actionTile(
-                  label: 'Stock OUT',
-                  sub: 'Issue items',
-                  icon: Icons.arrow_upward_rounded,
-                  color: kCoral,
-                  onTap: () async {
-                    await Navigator.push(context,
-                        MaterialPageRoute(settings: const RouteSettings(name: 'Stock Out'),
-                            builder: (_) => const StockOutScreen()));
-                    _loadDashboard();
-                  },
-                )),
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                Expanded(child: _actionTile(
-                  label: 'History',
-                  sub: 'View transactions',
-                  icon: Icons.history_rounded,
-                  color: const Color(0xFF6C63FF),
-                  onTap: () => Navigator.push(context,
-                      MaterialPageRoute(settings: const RouteSettings(name: 'Stock History'),
-                          builder: (_) => const StockHistoryScreen())),
-                )),
-                const SizedBox(width: 12),
-                Expanded(child: _actionTile(
-                  label: 'All Items',
-                  sub: 'Browse stock',
-                  icon: Icons.list_alt_rounded,
-                  color: kAmber,
-                  onTap: () => Navigator.push(context,
-                      MaterialPageRoute(settings: const RouteSettings(name: 'Stock Items'),
-                          builder: (_) => const StockItemsScreen())),
-                )),
-              ]),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: _actionTile(
-                  label: 'Bulk Import',
-                  sub: 'Add 50–100+ products at once from an Excel or PDF file',
-                  icon: Icons.upload_file_rounded,
-                  color: kNavy,
-                  onTap: () async {
-                    await Navigator.push(context,
-                        MaterialPageRoute(settings: const RouteSettings(name: 'Bulk Import Stock'),
-                            builder: (_) => const BulkImportScreen(target: BulkImportTarget.stockManagement)));
-                    _loadDashboard();
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 28),
-
-              // ── Branch Stocks ──────────────────────────────────────────────
-              _sectionLabel('BRANCH WISE STOCK'),
-              const SizedBox(height: 10),
-              _buildBranchSection(d),
-
-              const SizedBox(height: 28),
-
-              // ── Low Stock Alerts ───────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _sectionLabel('LOW STOCK ALERTS'),
-                  if (d.lowStockCount > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: kCoral,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text('${d.lowStockCount} items',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              _buildLowStockSection(d),
-
-              const SizedBox(height: 28),
-
-              // ── Recent Activity ──────────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _sectionLabel('RECENT ACTIVITY'),
-                  if (d.recentActivity.isNotEmpty)
-                    GestureDetector(
-                      onTap: () => Navigator.push(context,
-                          MaterialPageRoute(settings: const RouteSettings(name: 'Stock History'),
-                              builder: (_) => const StockHistoryScreen())),
-                      child: Row(children: const [
-                        Text('View All',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: kTeal)),
-                        SizedBox(width: 2),
-                        Icon(Icons.chevron_right_rounded,
-                            size: 16, color: kTeal),
-                      ]),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              _buildRecentActivitySection(d),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (d.totalProducts == 0) ...[
+              _buildSeedBanner(),
+              const SizedBox(height: 20),
             ],
-          ),
+            // ── KPI Cards ─────────────────────────────────────────────────
+            _sectionLabel('OVERVIEW'),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: _kpiCard('Total Products', '${d.totalProducts}',
+                  Icons.inventory_2_rounded, kTeal, 'Items tracked')),
+              const SizedBox(width: 12),
+              Expanded(child: _kpiCard('Low Stock', '${d.lowStockCount}',
+                  Icons.warning_amber_rounded, kAmber, 'Need attention',
+                  urgent: d.lowStockCount > 0)),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: _kpiCard('Fixed Assets', '${d.fixedAssets}',
+                  Icons.business_center_rounded,
+                  const Color(0xFF6C63FF), 'Equipment')),
+              const SizedBox(width: 12),
+              Expanded(child: _kpiCard('Consumables', '${d.consumables}',
+                  Icons.category_rounded, kCoral, 'Supplies')),
+            ]),
+
+            const SizedBox(height: 28),
+
+            // ── Quick Actions ──────────────────────────────────────────────
+            _sectionLabel('QUICK ACTIONS'),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: _actionTile(
+                label: 'Stock IN',
+                sub: 'Add inventory',
+                icon: Icons.arrow_downward_rounded,
+                color: const Color(0xFF00B894),
+                onTap: () async {
+                  await Navigator.push(context,
+                      MaterialPageRoute(settings: const RouteSettings(name: 'Stock In'),
+                          builder: (_) => const StockInScreen()));
+                  _loadDashboard();
+                },
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: _actionTile(
+                label: 'Stock OUT',
+                sub: 'Issue items',
+                icon: Icons.arrow_upward_rounded,
+                color: kCoral,
+                onTap: () async {
+                  await Navigator.push(context,
+                      MaterialPageRoute(settings: const RouteSettings(name: 'Stock Out'),
+                          builder: (_) => const StockOutScreen()));
+                  _loadDashboard();
+                },
+              )),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: _actionTile(
+                label: 'History',
+                sub: 'View transactions',
+                icon: Icons.history_rounded,
+                color: const Color(0xFF6C63FF),
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(settings: const RouteSettings(name: 'Stock History'),
+                        builder: (_) => const StockHistoryScreen())),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: _actionTile(
+                label: 'All Items',
+                sub: 'Browse stock',
+                icon: Icons.list_alt_rounded,
+                color: kAmber,
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(settings: const RouteSettings(name: 'Stock Items'),
+                        builder: (_) => const StockItemsScreen())),
+              )),
+            ]),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: _actionTile(
+                label: 'Bulk Import',
+                sub: 'Add 50–100+ products at once from an Excel or PDF file',
+                icon: Icons.upload_file_rounded,
+                color: kNavy,
+                onTap: () async {
+                  await Navigator.push(context,
+                      MaterialPageRoute(settings: const RouteSettings(name: 'Bulk Import Stock'),
+                          builder: (_) => const BulkImportScreen(target: BulkImportTarget.stockManagement)));
+                  _loadDashboard();
+                },
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
+            // ── Branch Stocks ──────────────────────────────────────────────
+            _sectionLabel('BRANCH WISE STOCK'),
+            const SizedBox(height: 10),
+            _buildBranchSection(d),
+
+            const SizedBox(height: 28),
+
+            // ── Low Stock Alerts ───────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _sectionLabel('LOW STOCK ALERTS'),
+                if (d.lowStockCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: kCoral,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('${d.lowStockCount} items',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _buildLowStockSection(d),
+
+            const SizedBox(height: 28),
+
+            // ── Recent Activity ──────────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _sectionLabel('RECENT ACTIVITY'),
+                if (d.recentActivity.isNotEmpty)
+                  GestureDetector(
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(settings: const RouteSettings(name: 'Stock History'),
+                            builder: (_) => const StockHistoryScreen())),
+                    child: Row(children: const [
+                      Text('View All',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: kTeal)),
+                      SizedBox(width: 2),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 16, color: kTeal),
+                    ]),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _buildRecentActivitySection(d),
+          ],
         ),
       ),
     );

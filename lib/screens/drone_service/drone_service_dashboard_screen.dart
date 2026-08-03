@@ -305,7 +305,9 @@ class _DroneServiceDashboardScreenState
           ],
         ),
       ),
-      floatingActionButton: EditGuard(
+      floatingActionButton: MediaQuery.of(context).viewInsets.bottom > 0
+          ? null
+          : EditGuard(
         child: FloatingActionButton.extended(
           onPressed: _openAdd,
           backgroundColor: kTeal,
