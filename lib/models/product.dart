@@ -9,9 +9,16 @@ class Product {
   final int quantity;
   final double price;
   final String? notes;
-  // ── Physical storage location (rack room layout) ──────────────────────
+  // ── Physical storage location (branch / room / rack layout) ───────────
   // Free-text so any existing labeling scheme (e.g. "R1", "Rack-3",
   // "Tray B") keeps working without a migration.
+  // branch = which physical site ('Branch 1' / 'Branch 2' — see
+  //          kBranchLabels in shared/inventory_ui.dart for the friendly
+  //          'CDA Admin' / 'CDA Ops' display names).
+  // room   = the storage area within that branch (a shelf group, a named
+  //          room, a rack, etc.).
+  final String? branch;
+  final String? room;
   final String? row;
   final String? rack;
   final String? tray;
@@ -25,6 +32,8 @@ class Product {
     required this.quantity,
     required this.price,
     this.notes,
+    this.branch,
+    this.room,
     this.row,
     this.rack,
     this.tray,
@@ -42,6 +51,8 @@ class Product {
       quantity: (data['quantity'] as num?)?.toInt() ?? 0,
       price: (data['price'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
+      branch: data['branch'] as String?,
+      room: data['room'] as String?,
       row: data['row'] as String?,
       rack: data['rack'] as String?,
       tray: data['tray'] as String?,
@@ -58,6 +69,8 @@ class Product {
       'quantity': quantity,
       'price': price,
       'notes': notes ?? '',
+      'branch': branch ?? '',
+      'room': room ?? '',
       'row': row ?? '',
       'rack': rack ?? '',
       'tray': tray ?? '',
@@ -81,6 +94,8 @@ class Product {
     int? quantity,
     double? price,
     String? notes,
+    String? branch,
+    String? room,
     String? row,
     String? rack,
     String? tray,
@@ -94,6 +109,8 @@ class Product {
       quantity: quantity ?? this.quantity,
       price: price ?? this.price,
       notes: notes ?? this.notes,
+      branch: branch ?? this.branch,
+      room: room ?? this.room,
       row: row ?? this.row,
       rack: rack ?? this.rack,
       tray: tray ?? this.tray,
@@ -102,14 +119,28 @@ class Product {
     );
   }
 
-  // ── Location helper ───────────────────────────────────────────────────────
-  /// Human-readable combined location, e.g. "Row 2 · Rack 3 · Tray B".
-  /// Skips any part that hasn't been set instead of showing empty labels.
+  // ── Location helpers ────────────────────────────────────────────────────
+  /// Human-readable combined shelf location, e.g. "Row 2 · Rack 3 · Tray B"
+  /// (branch/room are shown separately by the UI as the two coarser
+  /// levels above this). Skips any part that hasn't been set.
   String get locationLabel {
     final parts = <String>[
       if ((row ?? '').trim().isNotEmpty) 'Row ${row!.trim()}',
       if ((rack ?? '').trim().isNotEmpty) 'Rack ${rack!.trim()}',
       if ((tray ?? '').trim().isNotEmpty) 'Tray ${tray!.trim()}',
+    ];
+    return parts.join(' · ');
+  }
+
+  /// Full location including branch/room, e.g.
+  /// "Branch 1 · Tools · Row 2 · Tray 4".
+  String get fullLocationLabel {
+    final parts = <String>[
+      if ((branch ?? '').trim().isNotEmpty) branch!.trim(),
+      if ((room ?? '').trim().isNotEmpty) room!.trim(),
+      if ((row ?? '').trim().isNotEmpty) row!.trim(),
+      if ((rack ?? '').trim().isNotEmpty) rack!.trim(),
+      if ((tray ?? '').trim().isNotEmpty) tray!.trim(),
     ];
     return parts.join(' · ');
   }

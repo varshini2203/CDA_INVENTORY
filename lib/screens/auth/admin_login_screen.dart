@@ -85,7 +85,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
           existingDataFound: result['docExists'] as bool?,
         );
         if (!mounted) return;
-        context.read<CurrentAccess>().listenTo(user.uid);
+        context.read<CurrentAccess>().listenTo(
+          user.uid,
+          knownName: user.displayName ?? _emailCtrl.text.trim(),
+          knownRole: 'admin',
+        );
       }
 
       if (!mounted) return;

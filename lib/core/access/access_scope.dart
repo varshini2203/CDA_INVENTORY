@@ -29,8 +29,22 @@ class CurrentAccess extends ChangeNotifier {
   bool get canView => _access?.canView ?? false;
   AccessStatus get status => _access?.accessStatus ?? AccessStatus.pending;
 
-  void listenTo(String uid) {
+  /// [knownName]/[knownRole] let the caller (a login screen that already
+  /// just fetched the user's access doc) attribute activity correctly
+  /// from the very first frame, instead of waiting for this stream's
+  /// first snapshot to arrive. Every login screen navigates to the
+  /// dashboard on the line right after calling listenTo() — without this,
+  /// the dashboard's own "viewed /dashboard" visit gets logged before the
+  /// stream below has emitted anything, so it fell back to the service's
+  /// hardcoded defaults ('Unknown' / 'employee') instead of the real user.
+  /// The stream subscription below still takes over as the live source of
+  /// truth for every log after that first one (so role/permission changes
+  /// made mid-session are still picked up as before).
+  void listenTo(String uid, {String? knownName, String? knownRole}) {
     _sub?.cancel();
+    if (knownName != null && knownName.isNotEmpty && knownRole != null) {
+      ActivityLogService.setCurrentUser(uid: uid, name: knownName, role: knownRole);
+    }
     _sub = AccessControlService.streamUser(uid).listen((value) {
       _access = value;
       ActivityLogService.setCurrentUser(

@@ -13,6 +13,7 @@ import 'package:intl/intl.dart';
 import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/models/stock.dart';
 import 'package:cda_inventory/models/purchase.dart';
+import 'package:cda_inventory/models/new_product.dart';
 import 'package:cda_inventory/services/report_service.dart';
 
 import 'excel_export_io.dart'
@@ -26,9 +27,6 @@ class ExcelExportService {
 
   // ── DOWNLOAD / SAVE ───────────────────────────────────────────────────────
 
-  /// On Web: triggers a browser file download.
-  /// On Android/iOS/Desktop: saves to a temp file and opens the share sheet
-  /// (see excel_export_io.dart).
   static Future<void> download(List<int> bytes, String filename) {
     return platform.saveOrDownload(bytes, filename);
   }
@@ -49,8 +47,6 @@ class ExcelExportService {
     _writeStockSheet(excel, month, stock);
     _writeInvoiceSheet(excel, month, invoices);
 
-    // The excel package creates a default 'Sheet1' — remove it once our
-    // named sheets exist.
     if (excel.sheets.containsKey('Sheet1')) {
       excel.delete('Sheet1');
     }
@@ -91,6 +87,24 @@ class ExcelExportService {
   static List<int> buildPurchaseReport(List<Purchase> rows, DateTime month) {
     final excel = Excel.createExcel();
     _writePurchaseSheet(excel, month, rows);
+    if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
+    return excel.encode() ?? <int>[];
+  }
+
+  // ── NEW PRODUCTS REPORT ───────────────────────────────────────────────────
+
+  static List<int> buildNewProductsReport(List<NewProduct> rows, DateTime month) {
+    final excel = Excel.createExcel();
+    _writeNewProductsSheet(excel, month, rows);
+    if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
+    return excel.encode() ?? <int>[];
+  }
+
+  // ── STOCK MANAGEMENT REPORT (current stock position snapshot) ────────────
+
+  static List<int> buildStockItemsReport(List<StockItem> rows, DateTime asOf) {
+    final excel = Excel.createExcel();
+    _writeStockItemsSheet(excel, asOf, rows);
     if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
     return excel.encode() ?? <int>[];
   }
@@ -192,15 +206,7 @@ class ExcelExportService {
     final sheet = excel['Stock History'];
     _writeTitleRow(sheet, 'Stock / Inventory History Report', month);
     _writeHeaderRow(sheet, 2, [
-      'Product',
-      'Type',
-      'Qty',
-      'Branch',
-      'Person',
-      'Department / Purpose',
-      'Date',
-      'Time',
-      'Remarks',
+      'Product', 'Type', 'Qty', 'Branch', 'Person', 'Department / Purpose', 'Date', 'Time', 'Remarks',
     ]);
 
     var r = 3;
@@ -273,14 +279,7 @@ class ExcelExportService {
     final sheet = excel['Purchases'];
     _writeTitleRow(sheet, 'Purchase Report', month);
     _writeHeaderRow(sheet, 2, [
-      'Product',
-      'Vendor',
-      'Invoice #',
-      'Branch',
-      'Qty',
-      'Cost (Rs.)',
-      'Total (Rs.)',
-      'Purchase Date',
+      'Product', 'Vendor', 'Invoice #', 'Branch', 'Qty', 'Cost (Rs.)', 'Total (Rs.)', 'Purchase Date',
     ]);
 
     var r = 3;
@@ -311,6 +310,94 @@ class ExcelExportService {
     sheet
         .cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: totalRow))
         .value = DoubleCellValue(total);
+
+    for (var c = 0; c < 8; c++) {
+      sheet.setColumnWidth(c, 20);
+    }
+  }
+
+  static void _writeNewProductsSheet(
+      Excel excel, DateTime month, List<NewProduct> rows) {
+    final sheet = excel['New Products'];
+    _writeTitleRow(sheet, 'New Products Report', month);
+    _writeHeaderRow(sheet, 2, [
+      'Product', 'Category', 'Brand', 'Vendor', 'Branch', 'Qty',
+      'Purchase Cost (Rs.)', 'Sale Price (Rs.)', 'Stock Value (Rs.)', 'Status', 'Purchase Date',
+    ]);
+
+    var r = 3;
+    for (final p in rows) {
+      final cells = <CellValue?>[
+        TextCellValue(p.productName),
+        TextCellValue(p.category),
+        TextCellValue(p.brand),
+        TextCellValue(p.vendorName),
+        TextCellValue(p.branch),
+        IntCellValue(p.quantity),
+        DoubleCellValue(p.purchaseCost),
+        DoubleCellValue(p.salePrice),
+        DoubleCellValue(p.stockValue),
+        TextCellValue(p.status),
+        TextCellValue(DateFormat('dd-MM-yyyy').format(p.purchaseDate)),
+      ];
+      for (var c = 0; c < cells.length; c++) {
+        sheet
+            .cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r))
+            .value = cells[c];
+      }
+      r++;
+    }
+
+    final totalValue = rows.fold<double>(0, (s, p) => s + p.stockValue);
+    final totalRow = r + 1;
+    sheet
+        .cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: totalRow))
+        .value = TextCellValue('TOTAL STOCK VALUE');
+    sheet
+        .cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: totalRow))
+        .value = DoubleCellValue(totalValue);
+
+    for (var c = 0; c < 11; c++) {
+      sheet.setColumnWidth(c, 20);
+    }
+  }
+
+  static void _writeStockItemsSheet(
+      Excel excel, DateTime asOf, List<StockItem> rows) {
+    final sheet = excel['Stock Management'];
+    _writeTitleRow(sheet, 'Stock Management Report', asOf);
+    _writeHeaderRow(sheet, 2, [
+      'Product', 'Category', 'Branch', 'Qty', 'Min Stock', 'Unit', 'Location', 'Status',
+    ]);
+
+    var r = 3;
+    for (final i in rows) {
+      final cells = <CellValue?>[
+        TextCellValue(i.productName),
+        TextCellValue(i.category == 'fixed_asset' ? 'Fixed Asset' : 'Consumable'),
+        TextCellValue(i.branch),
+        IntCellValue(i.quantity),
+        IntCellValue(i.minStock),
+        TextCellValue(i.unit),
+        TextCellValue(i.location ?? ''),
+        TextCellValue(i.isLowStock ? 'LOW STOCK' : 'OK'),
+      ];
+      for (var c = 0; c < cells.length; c++) {
+        sheet
+            .cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r))
+            .value = cells[c];
+      }
+      r++;
+    }
+
+    final lowCount = rows.where((i) => i.isLowStock).length;
+    final totalRow = r + 1;
+    sheet
+        .cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: totalRow))
+        .value = TextCellValue('LOW STOCK ITEMS');
+    sheet
+        .cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: totalRow))
+        .value = IntCellValue(lowCount);
 
     for (var c = 0; c < 8; c++) {
       sheet.setColumnWidth(c, 20);

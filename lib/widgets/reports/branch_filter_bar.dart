@@ -19,13 +19,15 @@
 // stored form resolves to the same canonical branch.
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cda_inventory/core/access/access_scope.dart';
 
 const String kBranch1 = 'Branch 1';
 const String kBranch2 = 'Branch 2';
 
 const Map<String?, String> kBranchOptions = {
   null: 'All Branches',
-  kBranch1: 'CDA ADMIN',
+  kBranch1: 'CDA Admin',
   kBranch2: 'CDA Ops',
 };
 
@@ -69,6 +71,27 @@ List<T> filterByBranch<T>(
       .toList();
 }
 
+/// Returns the branch a NON-ADMIN user is locked to on every report screen,
+/// or null for admins (who may view/export any single branch or all
+/// branches combined, unrestricted).
+///
+/// Call this from build() — it uses context.watch<CurrentAccess>() so the
+/// screen rebuilds and re-locks itself the instant the access-control
+/// stream resolves after login, instead of leaving all-branch data visible
+/// for a frame while the access doc is still loading.
+///
+/// Returns null if the access doc hasn't loaded yet — callers pair this
+/// with the auto-correct block in each screen's build() (see
+/// InvoiceReportScreen for the reference implementation) so the lock snaps
+/// into place the moment `access` arrives, without a setState-during-build
+/// error.
+String? lockedReportBranch(BuildContext context) {
+  final access = context.watch<CurrentAccess>().access;
+  if (access == null) return null; // still loading
+  if (access.isAdmin) return null; // admins are never branch-locked
+  return normalizeBranch(access.branch);
+}
+
 class BranchFilterBar extends StatelessWidget {
   final String? selected; // null = All Branches
   final ValueChanged<String?> onChanged;
@@ -78,12 +101,19 @@ class BranchFilterBar extends StatelessWidget {
   /// false when placed on a white card background.
   final bool dark;
 
+  /// Non-null for a branch-locked (non-admin) user: only that branch's chip
+  /// is rendered, it's always shown selected, and it can't be tapped away
+  /// from. Pass the value returned by [lockedReportBranch]. Null (the
+  /// default) means unrestricted — every chip renders and behaves as before.
+  final String? lockedBranch;
+
   const BranchFilterBar({
     super.key,
     required this.selected,
     required this.onChanged,
     this.accent = const Color(0xFF00D4AA),
     this.dark = true,
+    this.lockedBranch,
   });
 
   @override
@@ -91,18 +121,24 @@ class BranchFilterBar extends StatelessWidget {
     final unselectedBg = dark ? Colors.white.withOpacity(0.12) : Colors.grey.shade100;
     final unselectedFg = dark ? Colors.white.withOpacity(0.85) : Colors.grey.shade700;
     final unselectedSide = dark ? Colors.white.withOpacity(0.2) : Colors.grey.shade300;
+    final locked = lockedBranch != null;
+
+    final entries = locked
+        ? kBranchOptions.entries.where((e) => e.key == lockedBranch).toList()
+        : kBranchOptions.entries.toList();
+    final effectiveSelected = locked ? lockedBranch : selected;
 
     return SizedBox(
       height: 32,
       child: ListView(
         scrollDirection: Axis.horizontal,
         shrinkWrap: true,
-        children: kBranchOptions.entries.map((e) {
-          final isSelected = selected == e.key;
+        children: entries.map((e) {
+          final isSelected = effectiveSelected == e.key;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: GestureDetector(
-              onTap: () => onChanged(e.key),
+              onTap: locked ? null : () => onChanged(e.key),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -111,14 +147,21 @@ class BranchFilterBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: isSelected ? accent : unselectedSide),
                 ),
-                child: Text(
-                  e.value,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : unselectedFg,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (locked) ...[
+                    Icon(Icons.lock_rounded,
+                        size: 11, color: isSelected ? Colors.white : unselectedFg),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    e.value,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : unselectedFg,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
                   ),
-                ),
+                ]),
               ),
             ),
           );

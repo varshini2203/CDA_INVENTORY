@@ -1,18 +1,25 @@
 // lib/screens/search/search_screen.dart
 //
 // Search Products screen — browses the shared `products` Firestore
-// collection with three ways to slice it, matching how items are actually
-// found on the shelf rather than just by name:
+// collection the way the shelves are actually organised, as a drill-down:
 //
-//   • By Category — the column headers from each source sheet (Tools,
-//     Charging Station, Row 2, Service Rack, Admin Room, etc.)
-//   • By Row      — Row 1 .. Row 5 (Branch 1 shelving)
-//   • By Tray     — every distinct Tray/Draw/Table-Draw marker seen in the
-//     data (Tray 1..16, Draw 1, Draw 2, Table 2 - Draw 1, ...)
+//   Branch  ->  Room  ->  Row  ->  Tray
 //
-// Chip lists for all three modes are computed FROM the loaded data (not
-// hardcoded), so newly added branches/rooms/rows show up automatically
-// without another code change here.
+//   • Branch — which physical site ('Branch 1' / 'Branch 2', shown with
+//     their friendly names 'CDA Admin' / 'CDA Ops' from kBranchLabels).
+//   • Room   — the storage area within that branch (Tools, Row 2, Service
+//     Rack, Admin Room, Charging Station, Storage Facility · Row 9, etc.)
+//   • Row    — the shelf row within that room, when the source data has one.
+//   • Tray   — the tray / draw / sub-box within that row, when the source
+//     data has one.
+//
+// Each facet is scoped by whatever is selected above it — pick a branch and
+// the Room chips narrow to that branch's rooms; pick a room and the Row
+// chips narrow to that room's rows; pick a row and the Tray chips narrow to
+// that row's trays. Picking a new value at any level clears every level
+// below it. Every facet list is computed FROM the loaded data (not
+// hardcoded), so newly added branches/rooms/rows/trays show up
+// automatically without another code change here.
 //
 // Auto-seed is guarded exactly like every other module in this app
 // (SeedGuardService, keyed 'products'): fires at most once per install,
@@ -25,9 +32,7 @@ import 'package:cda_inventory/models/product.dart';
 import 'package:cda_inventory/services/product_service.dart';
 import 'package:cda_inventory/services/seed_guard_service.dart';
 import 'package:cda_inventory/data/seed_search_products.dart';
-import 'package:cda_inventory/data/seed_branch1_products.dart';
-
-enum _FilterMode { all, category, row, tray }
+import 'package:cda_inventory/shared/inventory_ui.dart' show kBranches, kBranchLabels;
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -38,8 +43,7 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   // ── Design tokens (matches Search Products' established look: off-white
-  //    page, white cards, dark navy app bar, solid-black selected chip —
-  //    see activity_feed_screen.dart's notes on matching this screen). ──
+  //    page, white cards, dark navy app bar, solid-black selected chip). ──
   static const Color kNavy = Color(0xFF0A1628);
   static const Color kSurface = Color(0xFFF5F7FA);
   static const Color kChipSelected = Color(0xFF111318);
@@ -50,6 +54,7 @@ class _SearchScreenState extends State<SearchScreen> {
   static const Color kAmber = Color(0xFFFFB800);
   static const Color kRed = Color(0xFFE5484D);
   static const Color kBlue = Color(0xFF1565C0);
+  static const Color kPurple = Color(0xFF6C63FF);
 
   // ── Data state ────────────────────────────────────────────────────────
   List<Product> _all = [];
@@ -58,15 +63,16 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _isSeeding = false;
   String? _error;
 
-  // ── Filter state ──────────────────────────────────────────────────────
-  _FilterMode _mode = _FilterMode.all;
-  String? _selectedValue; // selected category / row / tray, null = none
+  // ── Drill-down filter state: Branch -> Room -> Row -> Tray ─────────────
+  String? _selectedBranch;
+  String? _selectedRoom;
+  String? _selectedRow;
+  String? _selectedTray;
   String _query = '';
   final TextEditingController _searchController = TextEditingController();
 
   // In-memory guard so a re-seed check never fires more than once per
-  // app session even if this screen is opened repeatedly (mirrors the
-  // pattern in InventoryDashboard's _branchMigrationDoneCache).
+  // app session even if this screen is opened repeatedly.
   static bool _seedCheckedThisSession = false;
 
   @override
@@ -82,9 +88,6 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   // ── Firestore fetch ───────────────────────────────────────────────────
-  // forceRefresh: false on initState (reuse ProductService's shared
-  // cache if another screen already warmed it up this session). Pull-to-
-  // refresh and the manual Refresh button always pass true.
   Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
@@ -109,11 +112,11 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   // ── Guarded auto-seed ─────────────────────────────────────────────────
-  // Only runs once per install (SeedGuardService key 'products'), and
-  // only when the collection is genuinely empty. Seeds the general
-  // catalogue (On Field / RPTO / etc.) plus the rebuilt Branch 1
-  // (Adambakkam) inventory — the one with correct Row/Rack/Tray grouping
-  // — so Search Products has real Row/Tray chips out of the box.
+  // Only runs once per install (SeedGuardService key 'products'), and only
+  // when the collection is genuinely empty. Seeds the full physical
+  // inventory (Branch 1 + Branch 2, every room/row/tray) from
+  // seed_search_products.dart so Search Products has real Branch/Room/Row/
+  // Tray chips out of the box.
   Future<void> _autoSeedIfNeeded(List<Product> existing) async {
     if (existing.isNotEmpty) return;
     if (_seedCheckedThisSession) return;
@@ -136,7 +139,6 @@ class _SearchScreenState extends State<SearchScreen> {
     setState(() => _isSeeding = true);
     try {
       await ProductService.seedProducts(SeedSearchProducts.allItems);
-      await ProductService.seedProducts(SeedBranch1Products.allItems);
       if (mounted) await _load(forceRefresh: true);
     } finally {
       if (mounted) setState(() => _isSeeding = false);
@@ -149,10 +151,9 @@ class _SearchScreenState extends State<SearchScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Re-seed Search Products?'),
         content: const Text(
-          'This adds the full catalogue (On Field, RPTO, etc.) and the '
-              'Branch 1 (Adambakkam) inventory — including Row/Rack/Tray '
-              'locations — to the products collection. Existing items are '
-              'left untouched; this only ever adds new documents.',
+          'This adds the full physical inventory — both branches, every '
+              'room, row, and tray — to the products collection. Existing '
+              'items are left untouched; this only ever adds new documents.',
         ),
         actions: [
           TextButton(
@@ -170,21 +171,59 @@ class _SearchScreenState extends State<SearchScreen> {
     if (confirmed == true) await _runSeed();
   }
 
-  // ── Derived chip lists (computed from loaded data, not hardcoded) ────
-  List<String> get _categories {
-    final set = <String>{for (final p in _all) if (p.category.trim().isNotEmpty) p.category.trim()};
+  // ── Branch display helper ─────────────────────────────────────────────
+  String _branchLabel(String raw) => kBranchLabels[raw] ?? raw;
+
+  // ── Derived facet lists (computed from loaded data, scoped by whatever
+  //    is selected above each level; not hardcoded) ──────────────────────
+  List<Product> get _branchScope => _all;
+
+  List<Product> get _roomScope => _selectedBranch == null
+      ? _all
+      : _all.where((p) => (p.branch ?? '').trim() == _selectedBranch).toList();
+
+  List<Product> get _rowScope => _roomScope.where((p) {
+    if (_selectedRoom == null) return true;
+    return (p.room ?? '').trim() == _selectedRoom;
+  }).toList();
+
+  List<Product> get _trayScope => _rowScope.where((p) {
+    if (_selectedRow == null) return true;
+    return (p.row ?? '').trim() == _selectedRow;
+  }).toList();
+
+  List<String> get _branches {
+    final set = <String>{
+      for (final p in _branchScope)
+        if ((p.branch ?? '').trim().isNotEmpty) p.branch!.trim(),
+    };
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  List<String> get _rooms {
+    final set = <String>{
+      for (final p in _roomScope)
+        if ((p.room ?? '').trim().isNotEmpty) p.room!.trim(),
+    };
     final list = set.toList()..sort();
     return list;
   }
 
   List<String> get _rows {
-    final set = <String>{for (final p in _all) if ((p.row ?? '').trim().isNotEmpty) p.row!.trim()};
+    final set = <String>{
+      for (final p in _rowScope)
+        if ((p.row ?? '').trim().isNotEmpty) p.row!.trim(),
+    };
     final list = set.toList()..sort(_naturalCompare);
     return list;
   }
 
   List<String> get _trays {
-    final set = <String>{for (final p in _all) if ((p.tray ?? '').trim().isNotEmpty) p.tray!.trim()};
+    final set = <String>{
+      for (final p in _trayScope)
+        if ((p.tray ?? '').trim().isNotEmpty) p.tray!.trim(),
+    };
     final list = set.toList()..sort(_naturalCompare);
     return list;
   }
@@ -204,21 +243,20 @@ class _SearchScreenState extends State<SearchScreen> {
     return a.compareTo(b);
   }
 
-  // ── Apply filters locally (mode + selected value + free-text query) ──
+  // ── Apply filters locally (branch + room + row + tray + free-text) ────
   void _applyFilters() {
     setState(() {
       _filtered = _all.where((p) {
-        final matchesMode = switch (_mode) {
-          _FilterMode.all => true,
-          _FilterMode.category => _selectedValue == null || p.category.trim() == _selectedValue,
-          _FilterMode.row => _selectedValue == null || (p.row ?? '').trim() == _selectedValue,
-          _FilterMode.tray => _selectedValue == null || (p.tray ?? '').trim() == _selectedValue,
-        };
-        if (!matchesMode) return false;
+        if (_selectedBranch != null && (p.branch ?? '').trim() != _selectedBranch) return false;
+        if (_selectedRoom != null && (p.room ?? '').trim() != _selectedRoom) return false;
+        if (_selectedRow != null && (p.row ?? '').trim() != _selectedRow) return false;
+        if (_selectedTray != null && (p.tray ?? '').trim() != _selectedTray) return false;
         if (_query.trim().isEmpty) return true;
         final q = _query.trim().toLowerCase();
         return p.name.toLowerCase().contains(q) ||
             p.category.toLowerCase().contains(q) ||
+            (p.branch ?? '').toLowerCase().contains(q) ||
+            (p.room ?? '').toLowerCase().contains(q) ||
             (p.row ?? '').toLowerCase().contains(q) ||
             (p.rack ?? '').toLowerCase().contains(q) ||
             (p.tray ?? '').toLowerCase().contains(q) ||
@@ -228,16 +266,45 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  void _selectMode(_FilterMode mode) {
+  void _selectBranch(String? value) {
     setState(() {
-      _mode = mode;
-      _selectedValue = null;
+      _selectedBranch = value;
+      _selectedRoom = null;
+      _selectedRow = null;
+      _selectedTray = null;
     });
     _applyFilters();
   }
 
-  void _selectValue(String? value) {
-    setState(() => _selectedValue = value);
+  void _selectRoom(String? value) {
+    setState(() {
+      _selectedRoom = value;
+      _selectedRow = null;
+      _selectedTray = null;
+    });
+    _applyFilters();
+  }
+
+  void _selectRow(String? value) {
+    setState(() {
+      _selectedRow = value;
+      _selectedTray = null;
+    });
+    _applyFilters();
+  }
+
+  void _selectTray(String? value) {
+    setState(() => _selectedTray = value);
+    _applyFilters();
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _selectedBranch = null;
+      _selectedRoom = null;
+      _selectedRow = null;
+      _selectedTray = null;
+    });
     _applyFilters();
   }
 
@@ -246,12 +313,15 @@ class _SearchScreenState extends State<SearchScreen> {
     _applyFilters();
   }
 
-  // ── Location text — the raw row/rack/tray values already read like
-  //    "Row 2", "Fourth Row", "Tray 4", "Draw 1" on their own, so this
-  //    just joins whichever are present rather than adding another
-  //    "Row "/"Tray " prefix on top (that would print "Row Row 2"). ────
+  bool get _hasActiveFilters =>
+      _selectedBranch != null || _selectedRoom != null || _selectedRow != null || _selectedTray != null;
+
+  // ── Location text — combines branch/room/row/rack/tray into a single
+  //    breadcrumb, e.g. "CDA Admin · Tools · Row 2 · Tray 4". ────────────
   String _locationText(Product p) {
     final parts = <String>[
+      if ((p.branch ?? '').trim().isNotEmpty) _branchLabel(p.branch!.trim()),
+      if ((p.room ?? '').trim().isNotEmpty) p.room!.trim(),
       if ((p.row ?? '').trim().isNotEmpty) p.row!.trim(),
       if ((p.rack ?? '').trim().isNotEmpty) p.rack!.trim(),
       if ((p.tray ?? '').trim().isNotEmpty) p.tray!.trim(),
@@ -264,14 +334,6 @@ class _SearchScreenState extends State<SearchScreen> {
   // ═══════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
-    // Forced light theme for this whole screen. The app's ambient theme
-    // defaults to dark (see ThemeProvider), and every card/surface here is
-    // hardcoded white — any Text/Icon that didn't set an explicit color
-    // (product names, stat values, quantity numbers, search hint) was
-    // inheriting the dark theme's default WHITE text color and rendering
-    // invisible on these white cards. Same root cause already documented
-    // in item_form_sheet.dart, just needed applying here too since this
-    // bug affects the whole screen body, not only the bottom sheets.
     return Theme(
       data: ThemeData.light().copyWith(
         scaffoldBackgroundColor: kSurface,
@@ -372,7 +434,7 @@ class _SearchScreenState extends State<SearchScreen> {
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Seeding product catalogue…', style: TextStyle(color: kTextSecondary)),
+            Text('Seeding full inventory…', style: TextStyle(color: kTextSecondary)),
           ],
         ),
       );
@@ -383,8 +445,43 @@ class _SearchScreenState extends State<SearchScreen> {
       slivers: [
         SliverToBoxAdapter(child: _buildStatsStrip()),
         SliverToBoxAdapter(child: _buildSearchBar()),
-        SliverToBoxAdapter(child: _buildModeSelector()),
-        SliverToBoxAdapter(child: _buildValueChips()),
+        SliverToBoxAdapter(child: _buildFacetRow(
+          title: 'Branch',
+          icon: Icons.apartment_rounded,
+          values: _branches,
+          selected: _selectedBranch,
+          onSelect: _selectBranch,
+          displayLabel: _branchLabel,
+          emptyText: 'No branches yet.',
+        )),
+        SliverToBoxAdapter(child: _buildFacetRow(
+          title: 'Room',
+          icon: Icons.meeting_room_outlined,
+          values: _rooms,
+          selected: _selectedRoom,
+          onSelect: _selectRoom,
+          emptyText: _selectedBranch == null
+              ? 'No rooms yet.'
+              : 'No rooms recorded for ${_branchLabel(_selectedBranch!)}.',
+        )),
+        SliverToBoxAdapter(child: _buildFacetRow(
+          title: 'Row',
+          icon: Icons.view_week_outlined,
+          values: _rows,
+          selected: _selectedRow,
+          onSelect: _selectRow,
+          emptyText: 'No rows recorded for this room.',
+          hideWhenEmpty: true,
+        )),
+        SliverToBoxAdapter(child: _buildFacetRow(
+          title: 'Tray',
+          icon: Icons.inbox_outlined,
+          values: _trays,
+          selected: _selectedTray,
+          onSelect: _selectTray,
+          emptyText: 'No trays recorded for this row.',
+          hideWhenEmpty: true,
+        )),
         SliverToBoxAdapter(child: _buildResultCountBadge()),
         _all.isEmpty
             ? SliverFillRemaining(hasScrollBody: false, child: _buildEmptyCollection())
@@ -444,7 +541,7 @@ class _SearchScreenState extends State<SearchScreen> {
         controller: _searchController,
         onChanged: _onSearchChanged,
         decoration: InputDecoration(
-          hintText: 'Search by name, category, row, rack, or tray…',
+          hintText: 'Search by name, branch, room, row, or tray…',
           hintStyle: const TextStyle(fontSize: 13.5),
           prefixIcon: const Icon(Icons.search_rounded, size: 20),
           suffixIcon: _query.isEmpty
@@ -476,117 +573,109 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  // ── Mode selector: All / Category / Row / Tray ─────────────────────────
-  Widget _buildModeSelector() {
-    Widget modeChip(String label, IconData icon, _FilterMode mode) {
-      final selected = _mode == mode;
+  // ── One facet row: title, an "All" chip, and every distinct value in
+  //    scope, each with a live count. Reused for Branch/Room/Row/Tray. ──
+  Widget _buildFacetRow({
+    required String title,
+    required IconData icon,
+    required List<String> values,
+    required String? selected,
+    required ValueChanged<String?> onSelect,
+    String Function(String)? displayLabel,
+    String emptyText = 'Nothing here yet.',
+    bool hideWhenEmpty = false,
+  }) {
+    if (values.isEmpty) {
+      if (hideWhenEmpty) return const SizedBox.shrink();
       return Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: ChoiceChip(
-          avatar: Icon(icon, size: 15, color: selected ? Colors.white : kTextSecondary),
-          label: Text(label),
-          labelStyle: TextStyle(
-            color: selected ? Colors.white : kTextSecondary,
-            fontSize: 12.5,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          ),
-          selected: selected,
-          onSelected: (_) => _selectMode(mode),
-          selectedColor: kChipSelected,
-          backgroundColor: kChipFill,
-          showCheckmark: false,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: selected ? kChipSelected : kBorder),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: VisualDensity.compact,
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
         child: Row(
           children: [
-            modeChip('All', Icons.apps_rounded, _FilterMode.all),
-            modeChip('By Category', Icons.category_outlined, _FilterMode.category),
-            modeChip('By Row', Icons.view_week_outlined, _FilterMode.row),
-            modeChip('By Tray', Icons.inbox_outlined, _FilterMode.tray),
+            Icon(icon, size: 14, color: kTextSecondary),
+            const SizedBox(width: 6),
+            Text(title,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, color: kTextSecondary)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(emptyText,
+                  style: const TextStyle(color: kTextSecondary, fontSize: 12), overflow: TextOverflow.ellipsis),
+            ),
           ],
-        ),
-      ),
-    );
-  }
-
-  // ── Value chips for the active mode (Category / Row / Tray lists) ────
-  Widget _buildValueChips() {
-    if (_mode == _FilterMode.all) return const SizedBox.shrink();
-
-    final values = switch (_mode) {
-      _FilterMode.category => _categories,
-      _FilterMode.row => _rows,
-      _FilterMode.tray => _trays,
-      _FilterMode.all => <String>[],
-    };
-
-    if (values.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-        child: Text(
-          _mode == _FilterMode.row
-              ? 'No items have a Row assigned yet.'
-              : _mode == _FilterMode.tray
-              ? 'No items have a Tray assigned yet.'
-              : 'No categories yet.',
-          style: const TextStyle(color: kTextSecondary, fontSize: 12.5),
         ),
       );
     }
 
+    int countFor(String? value) {
+      final scoped = switch (title) {
+        'Branch' => _branchScope,
+        'Room' => _roomScope,
+        'Row' => _rowScope,
+        'Tray' => _trayScope,
+        _ => _all,
+      };
+      if (value == null) return scoped.length;
+      return scoped.where((p) {
+        final field = switch (title) {
+          'Branch' => p.branch,
+          'Room' => p.room,
+          'Row' => p.row,
+          'Tray' => p.tray,
+          _ => null,
+        };
+        return (field ?? '').trim() == value;
+      }).length;
+    }
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _valueChip('All', null, _countFor(null)),
-          ...values.map((v) => _valueChip(v, v, _countFor(v))),
+          Row(
+            children: [
+              Icon(icon, size: 14, color: kTextSecondary),
+              const SizedBox(width: 6),
+              Text(title,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, color: kTextSecondary)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _facetChip('All', null, selected, countFor(null), onSelect),
+                ...values.map(
+                      (v) => Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: _facetChip(displayLabel?.call(v) ?? v, v, selected, countFor(v), onSelect),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  int _countFor(String? value) {
-    if (value == null) return _all.length;
-    return switch (_mode) {
-      _FilterMode.category => _all.where((p) => p.category.trim() == value).length,
-      _FilterMode.row => _all.where((p) => (p.row ?? '').trim() == value).length,
-      _FilterMode.tray => _all.where((p) => (p.tray ?? '').trim() == value).length,
-      _FilterMode.all => _all.length,
-    };
-  }
-
-  Widget _valueChip(String label, String? value, int count) {
-    final selected = _selectedValue == value;
+  Widget _facetChip(String label, String? value, String? selected, int count, ValueChanged<String?> onSelect) {
+    final isSelected = selected == value;
     return ChoiceChip(
       label: Text('$label · $count'),
       labelStyle: TextStyle(
-        color: selected ? Colors.white : kTextSecondary,
+        color: isSelected ? Colors.white : kTextSecondary,
         fontSize: 12,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
       ),
-      selected: selected,
-      onSelected: (_) => _selectValue(value),
+      selected: isSelected,
+      onSelected: (_) => onSelect(value),
       selectedColor: kChipSelected,
       backgroundColor: kChipFill,
       showCheckmark: false,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: selected ? kChipSelected : kBorder),
+        side: BorderSide(color: isSelected ? kChipSelected : kBorder),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -619,6 +708,29 @@ class _SearchScreenState extends State<SearchScreen> {
               ],
             ),
           ),
+          if (_hasActiveFilters) ...[
+            const SizedBox(width: 8),
+            InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: _clearAllFilters,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: kChipFill,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: kBorder),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.close_rounded, size: 13, color: kTextSecondary),
+                    SizedBox(width: 4),
+                    Text('Clear', style: TextStyle(fontSize: 12, color: kTextSecondary, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -682,7 +794,7 @@ class _SearchScreenState extends State<SearchScreen> {
             const Text('No matching products', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             const Text(
-              'Try a different search term or clear the filter.',
+              'Try a different search term or clear the filters.',
               style: TextStyle(color: kTextSecondary, fontSize: 12.5),
             ),
             const SizedBox(height: 16),
@@ -690,7 +802,7 @@ class _SearchScreenState extends State<SearchScreen> {
               onPressed: () {
                 _searchController.clear();
                 _query = '';
-                _selectMode(_FilterMode.all);
+                _clearAllFilters();
               },
               icon: const Icon(Icons.clear_rounded, size: 18),
               label: const Text('Clear filters'),
@@ -708,7 +820,8 @@ class _SearchScreenState extends State<SearchScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _ProductFormSheet(
-        categories: _categories,
+        categories: const [],
+        rooms: _rooms,
         onSaved: () => _load(forceRefresh: true),
       ),
     );
@@ -720,7 +833,8 @@ class _SearchScreenState extends State<SearchScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _ProductFormSheet(
-        categories: _categories,
+        categories: const [],
+        rooms: _rooms,
         existing: product,
         onSaved: () => _load(forceRefresh: true),
       ),
@@ -1000,11 +1114,13 @@ class _ProductDetailSheet extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════
 class _ProductFormSheet extends StatefulWidget {
   final List<String> categories;
+  final List<String> rooms;
   final Product? existing; // null = add mode
   final VoidCallback onSaved;
 
   const _ProductFormSheet({
     required this.categories,
+    required this.rooms,
     this.existing,
     required this.onSaved,
   });
@@ -1019,10 +1135,12 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   late TextEditingController _categoryController;
   late TextEditingController _qtyController;
   late TextEditingController _priceController;
+  late TextEditingController _roomController;
   late TextEditingController _rowController;
   late TextEditingController _rackController;
   late TextEditingController _trayController;
   late TextEditingController _notesController;
+  String? _branch;
   bool _saving = false;
   String? _error;
 
@@ -1036,6 +1154,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _categoryController = TextEditingController(text: p?.category ?? '');
     _qtyController = TextEditingController(text: (p?.quantity ?? 1).toString());
     _priceController = TextEditingController(text: (p?.price ?? 0.0) == 0.0 ? '' : p!.price.toString());
+    _branch = (p?.branch ?? '').trim().isEmpty ? null : p!.branch;
+    _roomController = TextEditingController(text: p?.room ?? '');
     _rowController = TextEditingController(text: p?.row ?? '');
     _rackController = TextEditingController(text: p?.rack ?? '');
     _trayController = TextEditingController(text: p?.tray ?? '');
@@ -1048,6 +1168,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _categoryController.dispose();
     _qtyController.dispose();
     _priceController.dispose();
+    _roomController.dispose();
     _rowController.dispose();
     _rackController.dispose();
     _trayController.dispose();
@@ -1062,12 +1183,20 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       _error = null;
     });
 
+    final room = _roomController.text.trim();
     final data = <String, dynamic>{
       'name': _nameController.text.trim(),
-      'category': _categoryController.text.trim(),
+      // A dedicated category isn't required for physical-inventory items —
+      // fall back to the room so every product still has *something* to
+      // group by even if the category field is left blank.
+      'category': _categoryController.text.trim().isEmpty
+          ? (room.isEmpty ? 'Uncategorised' : room)
+          : _categoryController.text.trim(),
       'quantity': int.tryParse(_qtyController.text.trim()) ?? 0,
       'price': double.tryParse(_priceController.text.trim()) ?? 0.0,
       'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      'branch': _branch,
+      'room': room.isEmpty ? null : room,
       'row': _rowController.text.trim().isEmpty ? null : _rowController.text.trim(),
       'rack': _rackController.text.trim().isEmpty ? null : _rackController.text.trim(),
       'tray': _trayController.text.trim().isEmpty ? null : _trayController.text.trim(),
@@ -1096,9 +1225,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     final viewInsets = MediaQuery.of(context).viewInsets;
 
     // Forced light theme for this subtree — the ambient app theme may be
-    // dark (see ThemeProvider), and this sheet's background is hardcoded
-    // white, so labels/borders need to stay dark regardless of app theme
-    // (same fix already applied in item_form_sheet.dart).
+    // dark, and this sheet's background is hardcoded white, so labels/
+    // borders need to stay dark regardless of app theme.
     return Theme(
       data: ThemeData.light().copyWith(
         inputDecorationTheme: const InputDecorationTheme(
@@ -1147,30 +1275,13 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null,
                     ),
                     const SizedBox(height: 12),
-                    Autocomplete<String>(
-                      initialValue: TextEditingValue(text: _categoryController.text),
-                      optionsBuilder: (v) {
-                        if (v.text.isEmpty) return widget.categories;
-                        return widget.categories
-                            .where((c) => c.toLowerCase().contains(v.text.toLowerCase()));
-                      },
-                      onSelected: (v) => _categoryController.text = v,
-                      fieldViewBuilder: (ctx, controller, focusNode, onSubmit) {
-                        // Keep our own controller in sync with Autocomplete's
-                        // internal one so free-typed (new) categories save too.
-                        controller.text = _categoryController.text;
-                        controller.addListener(() => _categoryController.text = controller.text);
-                        return TextFormField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          decoration: const InputDecoration(
-                            labelText: 'Category',
-                            hintText: 'Pick existing or type a new one',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Category is required' : null,
-                        );
-                      },
+                    TextFormField(
+                      controller: _categoryController,
+                      decoration: const InputDecoration(
+                        labelText: 'Category (optional)',
+                        hintText: 'Defaults to the room if left blank',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -1207,6 +1318,40 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: Colors.black54)),
                     ),
                     const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      initialValue: _branch,
+                      decoration: const InputDecoration(labelText: 'Branch', border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<String>(value: null, child: Text('Not set')),
+                        ...kBranches.map(
+                              (b) => DropdownMenuItem<String>(value: b, child: Text(kBranchLabels[b] ?? b)),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => _branch = v),
+                    ),
+                    const SizedBox(height: 10),
+                    Autocomplete<String>(
+                      initialValue: TextEditingValue(text: _roomController.text),
+                      optionsBuilder: (v) {
+                        if (v.text.isEmpty) return widget.rooms;
+                        return widget.rooms.where((r) => r.toLowerCase().contains(v.text.toLowerCase()));
+                      },
+                      onSelected: (v) => _roomController.text = v,
+                      fieldViewBuilder: (ctx, controller, focusNode, onSubmit) {
+                        controller.text = _roomController.text;
+                        controller.addListener(() => _roomController.text = controller.text);
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            labelText: 'Room',
+                            hintText: 'e.g. Tools, Row 2, Admin Room',
+                            border: OutlineInputBorder(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(

@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:cda_inventory/core/access/access_scope.dart';
 import 'package:cda_inventory/models/stock.dart';
 import 'package:cda_inventory/services/report_service.dart';
 import 'package:cda_inventory/services/excel_export_service.dart'
@@ -155,6 +157,16 @@ class _StockHistoryReportScreenState extends State<StockHistoryReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Non-admins (e.g. a CDA Ops employee) are pinned to their own branch
+    // on this screen too — reached either from the dashboard or by direct
+    // navigation, so the lock is enforced independently here as well.
+    final lockedBranch = lockedReportBranch(context);
+    if (lockedBranch != null && _selectedBranch != lockedBranch) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _selectedBranch = lockedBranch);
+      });
+    }
+
     return Scaffold(
       backgroundColor: kSurface,
       appBar: AppBar(
@@ -224,6 +236,7 @@ class _StockHistoryReportScreenState extends State<StockHistoryReportScreen> {
     child: BranchFilterBar(
       selected: _selectedBranch,
       accent: kTeal,
+      lockedBranch: lockedReportBranch(context),
       onChanged: (branch) => setState(() => _selectedBranch = branch),
     ),
   );

@@ -98,7 +98,7 @@ class _EmployeeLoginScreenState extends State<EmployeeLoginScreen>
       if (!mounted) return;
 
       if (access != null && access.canView) {
-        context.read<CurrentAccess>().listenTo(user!.uid);
+        context.read<CurrentAccess>().listenTo(user!.uid, knownName: access.name, knownRole: access.role);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(settings: const RouteSettings(name: 'Dashboard'),

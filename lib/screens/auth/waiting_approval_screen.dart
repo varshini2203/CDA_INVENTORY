@@ -176,7 +176,7 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen>
                 if (access.canView) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!context.mounted) return;
-                    context.read<CurrentAccess>().listenTo(uid);
+                    context.read<CurrentAccess>().listenTo(uid, knownName: access.name, knownRole: access.role);
                     Navigator.pushReplacementNamed(context, '/dashboard',
                         arguments: access.role);
                   });

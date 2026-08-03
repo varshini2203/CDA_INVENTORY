@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:cda_inventory/core/access/access_scope.dart';
 import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/services/report_service.dart';
 import 'package:cda_inventory/services/excel_export_service.dart'
@@ -157,6 +159,17 @@ class _InvoiceReportScreenState extends State<InvoiceReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Non-admins (e.g. a CDA Ops employee) are pinned to their own branch —
+    // they can never view or export the other branch's invoices, even by
+    // navigating here directly with a different initialBranch. Admins are
+    // unaffected (lockedBranch stays null).
+    final lockedBranch = lockedReportBranch(context);
+    if (lockedBranch != null && _selectedBranch != lockedBranch) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _selectedBranch = lockedBranch);
+      });
+    }
+
     final total = _rows.fold<double>(0, (s, i) => s + i.amount);
     return Scaffold(
       backgroundColor: kSurface,
@@ -227,6 +240,7 @@ class _InvoiceReportScreenState extends State<InvoiceReportScreen> {
     child: BranchFilterBar(
       selected: _selectedBranch,
       accent: kTeal,
+      lockedBranch: lockedReportBranch(context),
       onChanged: (branch) => setState(() => _selectedBranch = branch),
     ),
   );

@@ -2,12 +2,20 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:cda_inventory/core/access/access_scope.dart';
 import 'drone_inout_report_screen.dart';
 import 'invoice_report_screen.dart';
 import 'stock_history_report_screen.dart';
 import 'purchase_report_screen.dart';
+import 'new_products_report_screen.dart';
+import 'stock_management_report_screen.dart';
 import 'package:cda_inventory/models/purchase.dart';
+import 'package:cda_inventory/models/new_product.dart';
+import 'package:cda_inventory/models/stock.dart';
 import 'package:cda_inventory/services/purchase_service.dart';
+import 'package:cda_inventory/services/new_product_service.dart';
+import 'package:cda_inventory/services/stock_service.dart';
 import 'package:cda_inventory/services/report_service.dart';
 import 'package:cda_inventory/services/excel_export_service.dart'
     hide MonthlySummary, DroneReportRow, ReportService;
@@ -34,6 +42,8 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
   List<dynamic> _stockRowsAll = []; // StockTransaction, kept dynamic to avoid extra import churn
   List<dynamic> _invoiceRowsAll = []; // Invoice
   List<Purchase> _purchasesAll = [];
+  List<NewProduct> _newProductsAll = []; // date-filtered, before branch filtering
+  List<StockItem> _stockItemsAll = []; // current position, NOT date-filtered (live snapshot)
 
   // Which branch the dashboard is currently scoped to. null = All Branches
   // (both Branch 1 / CDA Admin and Branch 2 / CDA Ops combined).
@@ -48,6 +58,10 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
       filterByBranch(_invoiceRowsAll, _selectedBranch, (r) => (r.branch as String?));
   List<Purchase> get _purchasesInRange =>
       filterByBranch(_purchasesAll, _selectedBranch, (p) => p.branch);
+  List<NewProduct> get _newProductsInRange =>
+      filterByBranch(_newProductsAll, _selectedBranch, (p) => p.branch);
+  List<StockItem> get _stockItems =>
+      filterByBranch(_stockItemsAll, _selectedBranch, (i) => i.branch);
 
   bool _loading = true;
   String? _exportingType;
@@ -64,6 +78,8 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
   static const Color kSurface = Color(0xFFF0F4F8);
   static const Color kGreen = Color(0xFF00B894);
   static const Color kPurple = Color(0xFF6C63FF);
+  static const Color kIndigo = Color(0xFF6366F1);
+  static const Color kPink = Color(0xFFEC4899);
 
   @override
   void initState() {
@@ -124,6 +140,13 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
     }).toList();
   }
 
+  // NewProduct.purchaseDate is already a DateTime (unlike Purchase/Invoice,
+  // which store 'dd-MM-yyyy' strings), so no parsing is needed here.
+  List<NewProduct> _filterNewProductsByRange(
+      List<NewProduct> source, DateTimeRange range) {
+    return source.where((p) => _dateInRange(p.purchaseDate, range)).toList();
+  }
+
   Future<void> _loadSummary() async {
     setState(() {
       _loading = true;
@@ -171,11 +194,22 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
       final allPurchases = await PurchaseService.getAllPurchases();
       final purchasesFiltered = _filterPurchasesByRange(allPurchases, _range);
 
+      // New Products — date-ranged like Purchases/Invoices above.
+      final allNewProducts = await NewProductService.getNewProducts();
+      final newProductsFiltered = _filterNewProductsByRange(allNewProducts, _range);
+
+      // Stock Management — a live position snapshot (current quantity vs.
+      // minimum threshold per item), not a date-ranged transaction list,
+      // so it's fetched in full regardless of the selected report range.
+      final stockItems = await StockService.fetchItems();
+
       setState(() {
         _droneRowsAll = droneFiltered;
         _stockRowsAll = stockFiltered;
         _invoiceRowsAll = invoiceFiltered;
         _purchasesAll = purchasesFiltered;
+        _newProductsAll = newProductsFiltered;
+        _stockItemsAll = stockItems;
         _loading = false;
       });
       _animController.forward(from: 0);
@@ -292,6 +326,18 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Non-admins (e.g. a CDA Ops employee) are pinned to their own branch
+    // across the whole dashboard — summary tiles, the consolidated export,
+    // and every detail report screen it links to (each of which re-checks
+    // this independently, so a locked user still can't escape it by
+    // navigating directly). Admins are unaffected (lockedBranch stays null).
+    final lockedBranch = lockedReportBranch(context);
+    if (lockedBranch != null && _selectedBranch != lockedBranch) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _selectedBranch = lockedBranch);
+      });
+    }
+
     return Scaffold(
       backgroundColor: kSurface,
       body: RefreshIndicator(
@@ -429,6 +475,31 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
                                 initialRange: _range, initialBranch: _selectedBranch)),
                       ),
                     ),
+                    _ReportListTile(
+                      icon: Icons.inventory_2_rounded,
+                      title: 'New Products',
+                      subtitle: '${_newProductsInRange.length} products added',
+                      color: kIndigo,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(settings: const RouteSettings(name: 'New Products Report'),
+                            builder: (_) => NewProductsReportScreen(
+                                initialRange: _range, initialBranch: _selectedBranch)),
+                      ),
+                    ),
+                    _ReportListTile(
+                      icon: Icons.warehouse_rounded,
+                      title: 'Stock Management',
+                      subtitle:
+                      '${_stockItems.length} items  ·  ${_stockItems.where((i) => i.isLowStock).length} low stock',
+                      color: kPink,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(settings: const RouteSettings(name: 'Stock Management Report'),
+                            builder: (_) => StockManagementReportScreen(
+                                initialBranch: _selectedBranch)),
+                      ),
+                    ),
                   ]),
                 ),
               ),
@@ -502,6 +573,7 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
             selected: _selectedBranch,
             dark: false,
             accent: kTeal,
+            lockedBranch: lockedReportBranch(context),
             onChanged: (branch) => setState(() => _selectedBranch = branch),
           ),
         ),
@@ -534,6 +606,9 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
       ('Invoice Total', currency.format(invoiceTotal), kTeal, Icons.currency_rupee_rounded),
       ('Purchases', '${_purchasesInRange.length}', kAmber, Icons.shopping_cart_rounded),
       ('Purchase Total', currency.format(purchaseTotal), kAmber, Icons.currency_rupee_rounded),
+      ('New Products', '${_newProductsInRange.length}', kIndigo, Icons.inventory_2_rounded),
+      ('Low Stock Items', '${_stockItems.where((i) => i.isLowStock).length}',
+      _stockItems.any((i) => i.isLowStock) ? kCoral : kGreen, Icons.warehouse_rounded),
     ];
     return GridView.builder(
       shrinkWrap: true,

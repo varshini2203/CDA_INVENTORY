@@ -188,6 +188,13 @@ class AuthService {
         };
       }
 
+      // Login succeeded and the role check above passed — this is a real,
+      // verified login, distinct from just "reached the dashboard" (an
+      // employee waiting on admin approval logs in successfully here but
+      // may not reach the dashboard for a while yet, so this event is
+      // still worth capturing on its own).
+      AccessControlService.logLogin(uid: uid, email: email.trim());
+
       // Hand back the doc data/existence we already paid for above so
       // callers can pass it straight into AccessControlService.onUserLoggedIn()
       // via existingData/existingDataFound instead of triggering a second

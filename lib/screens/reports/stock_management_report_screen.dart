@@ -1,82 +1,75 @@
-// lib/screens/reports/purchase_report_screen.dart
+// lib/screens/reports/stock_management_report_screen.dart
+//
+// "Stock Management" report — unlike the Stock / Inventory History report
+// (which lists IN/OUT/ADJUST/TRANSFER transactions over a date range),
+// this shows the CURRENT stock position: every item in `stock_items`
+// with its live quantity, minimum threshold, and low-stock flag. It's a
+// point-in-time snapshot, not date-ranged, so there's no date picker —
+// just branch + category filters and a low-stock-only toggle.
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:cda_inventory/core/access/access_scope.dart';
-import 'package:cda_inventory/models/purchase.dart';
-import 'package:cda_inventory/services/purchase_service.dart';
+import 'package:cda_inventory/models/stock.dart';
+import 'package:cda_inventory/services/stock_service.dart';
 import 'package:cda_inventory/services/excel_export_service.dart'
     hide MonthlySummary, DroneReportRow, ReportService;
 import 'package:cda_inventory/services/pdf_export_service.dart';
-import 'package:cda_inventory/widgets/reports/report_date_range_picker.dart';
 import 'package:cda_inventory/widgets/reports/branch_filter_bar.dart';
 
-class PurchaseReportScreen extends StatefulWidget {
-  final DateTimeRange initialRange;
+class StockManagementReportScreen extends StatefulWidget {
   final String? initialBranch; // null = All Branches
-  const PurchaseReportScreen({super.key, required this.initialRange, this.initialBranch});
+  const StockManagementReportScreen({super.key, this.initialBranch});
 
   @override
-  State<PurchaseReportScreen> createState() => _PurchaseReportScreenState();
+  State<StockManagementReportScreen> createState() => _StockManagementReportScreenState();
 }
 
-class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
-  late DateTimeRange _range;
-  List<Purchase> _allPurchases = [];
-  List<Purchase> _rowsAll = []; // date-filtered, before branch filtering
+class _StockManagementReportScreenState extends State<StockManagementReportScreen> {
+  List<StockItem> _allItems = [];
   String? _selectedBranch;
-  List<Purchase> get _rows =>
-      filterByBranch(_rowsAll, _selectedBranch, (r) => r.branch);
+  String? _selectedCategory; // null = All, 'consumable', 'fixed_asset'
+  bool _lowStockOnly = false;
   bool _loading = true;
   bool _busy = false;
   String? _error;
 
-  final _currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
+  List<StockItem> get _rows {
+    var list = filterByBranch(_allItems, _selectedBranch, (r) => r.branch);
+    if (_selectedCategory != null) {
+      list = list.where((i) => i.category == _selectedCategory).toList();
+    }
+    if (_lowStockOnly) {
+      list = list.where((i) => i.isLowStock).toList();
+    }
+    return list;
+  }
 
-  // ── Design tokens (matches Invoice Report screen theme) ────────────────────
+  // ── Design tokens (matches other Report screens' theme) ────────────────────
   static const Color kNavy = Color(0xFF0A1628);
   static const Color kTeal = Color(0xFF00D4AA);
   static const Color kCoral = Color(0xFFFF6B6B);
   static const Color kSurface = Color(0xFFF0F4F8);
   static const Color kGreen = Color(0xFF00B894);
+  static const Color kPink = Color(0xFFEC4899);
 
   @override
   void initState() {
     super.initState();
-    _range = widget.initialRange;
     _selectedBranch = widget.initialBranch;
     _load();
   }
 
-  // purchaseDate is stored as 'dd-MM-yyyy' (see AddPurchaseScreen._pickDate)
-  DateTime? _parsePurchaseDate(String raw) {
-    final parts = raw.split('-');
-    if (parts.length != 3) return null;
-    final d = int.tryParse(parts[0]);
-    final m = int.tryParse(parts[1]);
-    final y = int.tryParse(parts[2]);
-    if (d == null || m == null || y == null) return null;
-    return DateTime(y, m, d);
-  }
-
-  bool _dateInRange(DateTime d, DateTimeRange range) {
-    final day = DateTime(d.year, d.month, d.day);
-    final start = DateTime(range.start.year, range.start.month, range.start.day);
-    final end = DateTime(range.end.year, range.end.month, range.end.day);
-    return !day.isBefore(start) && !day.isAfter(end);
-  }
-
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final all = await PurchaseService.getAllPurchases();
+      final items = await StockService.fetchItems(forceRefresh: forceRefresh);
       setState(() {
-        _allPurchases = all;
-        _rowsAll = _filterByRange(all, _range);
+        _allItems = items;
         _loading = false;
       });
     } catch (e) {
@@ -87,47 +80,19 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
     }
   }
 
-  List<Purchase> _filterByRange(List<Purchase> source, DateTimeRange range) {
-    return source.where((p) {
-      final d = _parsePurchaseDate(p.purchaseDate);
-      if (d == null) return false;
-      return _dateInRange(d, range);
-    }).toList()
-      ..sort((a, b) => (_parsePurchaseDate(b.purchaseDate) ?? DateTime(0))
-          .compareTo(_parsePurchaseDate(a.purchaseDate) ?? DateTime(0)));
-  }
-
-  Future<void> _pickRange() async {
-    final now = DateTime.now();
-    final picked = await ReportDateRangePicker.show(
-      context,
-      initialRange: _range,
-      firstDate: DateTime(now.year - 5),
-      lastDate: DateTime(now.year + 1),
-      title: 'Select Report Range',
-      accent: kTeal,
-    );
-    if (picked != null) {
-      setState(() {
-        _range = picked;
-        _rowsAll = _filterByRange(_allPurchases, _range);
-      });
-    }
-  }
-
   Future<void> _export({required bool pdf}) async {
     setState(() => _busy = true);
     try {
+      final now = DateTime.now();
       final branchSuffix =
       _selectedBranch == null ? '' : '_${branchDisplayName(_selectedBranch).replaceAll(' ', '')}';
-      final label =
-          '${DateFormat('ddMMMyyyy').format(_range.start)}_to_${DateFormat('ddMMMyyyy').format(_range.end)}$branchSuffix';
+      final label = '${DateFormat('ddMMMyyyy_HHmm').format(now)}$branchSuffix';
       if (pdf) {
-        final bytes = await PdfExportService.buildPurchaseReport(_rows, _range.start);
-        await PdfExportService.download(bytes, 'Purchase_Report_$label.pdf');
+        final bytes = await PdfExportService.buildStockItemsReport(_rows, now);
+        await PdfExportService.download(bytes, 'Stock_Management_Report_$label.pdf');
       } else {
-        final bytes = ExcelExportService.buildPurchaseReport(_rows, _range.start);
-        ExcelExportService.download(bytes, 'Purchase_Report_$label.xlsx');
+        final bytes = ExcelExportService.buildStockItemsReport(_rows, now);
+        ExcelExportService.download(bytes, 'Stock_Management_Report_$label.xlsx');
       }
     } catch (e) {
       if (mounted) {
@@ -142,8 +107,8 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
   Future<void> _previewPdf() async {
     setState(() => _busy = true);
     try {
-      final bytes = await PdfExportService.buildPurchaseReport(_rows, _range.start);
-      await PdfExportService.preview(bytes, 'Purchase_Report');
+      final bytes = await PdfExportService.buildStockItemsReport(_rows, DateTime.now());
+      await PdfExportService.preview(bytes, 'Stock_Management_Report');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -161,24 +126,28 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
       });
     }
 
-    final total = _rows.fold<double>(0, (s, p) => s + (p.cost * p.quantity));
+    final lowCount = _rows.where((i) => i.isLowStock).length;
     return Scaffold(
       backgroundColor: kSurface,
       appBar: AppBar(
         backgroundColor: kNavy,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Purchase Report',
+        title: const Text('Stock Management Report',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-        actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => _load(forceRefresh: true),
+          ),
+        ],
       ),
       body: Column(children: [
-        _rangeBar(),
-        _branchBar(),
-        if (!_loading && _error == null) _statsBar(total),
+        _filterHeader(),
+        if (!_loading && _error == null) _statsBar(lowCount),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator(color: kTeal))
+              ? const Center(child: CircularProgressIndicator(color: kPink))
               : _error != null
               ? _errorState()
               : _rows.isEmpty
@@ -194,7 +163,7 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
     );
   }
 
-  Widget _rangeBar() => Container(
+  Widget _filterHeader() => Container(
     decoration: const BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topLeft,
@@ -202,48 +171,83 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
         colors: [Color(0xFF0A1628), Color(0xFF162944)],
       ),
     ),
-    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-    child: GestureDetector(
-      onTap: _pickRange,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-        child: Row(children: [
-          const Icon(Icons.date_range_rounded, color: kTeal, size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '${DateFormat('dd MMM yyyy').format(_range.start)}  →  ${DateFormat('dd MMM yyyy').format(_range.end)}',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Icon(Icons.expand_more_rounded, color: Colors.white.withOpacity(0.6), size: 18),
-        ]),
-      ),
-    ),
-  );
-
-  Widget _branchBar() => Container(
-    color: kNavy,
     padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-    child: BranchFilterBar(
-      selected: _selectedBranch,
-      accent: kTeal,
-      lockedBranch: lockedReportBranch(context),
-      onChanged: (branch) => setState(() => _selectedBranch = branch),
-    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.today_rounded, color: kPink, size: 14),
+        const SizedBox(width: 6),
+        Text('Live snapshot — ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
+            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11.5)),
+      ]),
+      const SizedBox(height: 10),
+      BranchFilterBar(
+        selected: _selectedBranch,
+        accent: kPink,
+        lockedBranch: lockedReportBranch(context),
+        onChanged: (branch) => setState(() => _selectedBranch = branch),
+      ),
+      const SizedBox(height: 8),
+      Row(children: [
+        _categoryChip('All', null),
+        const SizedBox(width: 8),
+        _categoryChip('Consumables', 'consumable'),
+        const SizedBox(width: 8),
+        _categoryChip('Fixed Assets', 'fixed_asset'),
+        const Spacer(),
+        GestureDetector(
+          onTap: () => setState(() => _lowStockOnly = !_lowStockOnly),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: _lowStockOnly ? kCoral : Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _lowStockOnly ? kCoral : Colors.white.withOpacity(0.2)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.warning_amber_rounded,
+                  size: 13, color: _lowStockOnly ? Colors.white : Colors.white.withOpacity(0.85)),
+              const SizedBox(width: 4),
+              Text('Low Stock',
+                  style: TextStyle(
+                      color: _lowStockOnly ? Colors.white : Colors.white.withOpacity(0.85),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        ),
+      ]),
+    ]),
   );
 
-  Widget _statsBar(double total) {
+  Widget _categoryChip(String label, String? value) {
+    final isSelected = _selectedCategory == value;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedCategory = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? kPink : Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? kPink : Colors.white.withOpacity(0.2)),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white.withOpacity(0.85),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
+  Widget _statsBar(int lowCount) {
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(children: [
-        _pill('${_rows.length} Purchases', Colors.grey.shade600, kSurface),
+        _pill('${_rows.length} Items', Colors.grey.shade600, kSurface),
         const SizedBox(width: 8),
-        _pill(_currency.format(total), kTeal, kTeal.withOpacity(0.14)),
+        _pill('$lowCount Low Stock', lowCount > 0 ? kCoral : kGreen,
+            (lowCount > 0 ? kCoral : kGreen).withOpacity(0.14)),
       ]),
     );
   }
@@ -254,14 +258,15 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
     child: Text(label, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w700)),
   );
 
-  Widget _card(Purchase p) {
-    final total = p.cost * p.quantity;
+  Widget _card(StockItem item) {
+    final low = item.isLowStock;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
+        border: low ? Border.all(color: kCoral.withOpacity(0.4)) : null,
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
         ],
@@ -270,27 +275,36 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
         Container(
           width: 40,
           height: 40,
-          decoration:
-          BoxDecoration(color: kNavy.withOpacity(0.06), borderRadius: BorderRadius.circular(10)),
-          child: const Icon(Icons.shopping_cart_rounded, color: kNavy, size: 20),
+          decoration: BoxDecoration(
+              color: (low ? kCoral : kPink).withOpacity(0.10), borderRadius: BorderRadius.circular(10)),
+          child: Icon(Icons.warehouse_rounded, color: low ? kCoral : kPink, size: 20),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(p.productName,
+            Text(item.productName,
                 style: const TextStyle(color: kNavy, fontWeight: FontWeight.w700, fontSize: 14),
                 overflow: TextOverflow.ellipsis),
-            Text(p.vendorName,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                overflow: TextOverflow.ellipsis),
-            Text('${p.invoiceNumber}  •  ${branchDisplayName(p.branch)}  •  ${p.purchaseDate}',
+            Text(item.category == 'fixed_asset' ? 'Fixed Asset' : 'Consumable',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+            Text('${branchDisplayName(item.branch)}${item.location != null && item.location!.isNotEmpty ? '  •  ${item.location}' : ''}',
                 style: TextStyle(color: Colors.grey.shade400, fontSize: 10.5)),
           ]),
         ),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(_currency.format(total),
-              style: const TextStyle(color: kGreen, fontWeight: FontWeight.w800, fontSize: 14)),
-          Text('Qty ${p.quantity}', style: TextStyle(color: Colors.grey.shade400, fontSize: 10.5)),
+          Text('${item.quantity} ${item.unit}',
+              style: TextStyle(
+                  color: low ? kCoral : kGreen, fontWeight: FontWeight.w800, fontSize: 14)),
+          Text('Min ${item.minStock}', style: TextStyle(color: Colors.grey.shade400, fontSize: 10.5)),
+          if (low)
+            Container(
+              margin: const EdgeInsets.only(top: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration:
+              BoxDecoration(color: kCoral.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+              child: const Text('LOW',
+                  style: TextStyle(color: kCoral, fontSize: 9.5, fontWeight: FontWeight.w700)),
+            ),
         ]),
       ]),
     );
@@ -320,7 +334,7 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
             icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
             label: const Text('PDF'),
             style: ElevatedButton.styleFrom(
-                backgroundColor: kTeal,
+                backgroundColor: kPink,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 12)),
@@ -352,7 +366,7 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
         Text(_error!, style: TextStyle(color: Colors.grey.shade600), textAlign: TextAlign.center),
         const SizedBox(height: 12),
         ElevatedButton(
-          onPressed: _load,
+          onPressed: () => _load(forceRefresh: true),
           style: ElevatedButton.styleFrom(
               backgroundColor: kNavy,
               foregroundColor: Colors.white,
@@ -365,10 +379,10 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
 
   Widget _emptyState() => Center(
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.shopping_bag_outlined, size: 56, color: Colors.grey.shade300),
+      Icon(Icons.warehouse_outlined, size: 56, color: Colors.grey.shade300),
       const SizedBox(height: 10),
       Text(
-        'No purchases from ${DateFormat('dd MMM yyyy').format(_range.start)} to ${DateFormat('dd MMM yyyy').format(_range.end)}',
+        _lowStockOnly ? 'No low-stock items match these filters' : 'No stock items match these filters',
         textAlign: TextAlign.center,
         style: TextStyle(color: Colors.grey.shade500),
       ),

@@ -131,7 +131,7 @@ class _LoginScreenState extends State<LoginScreen>
       );
 
       if (!mounted) return;
-      context.read<CurrentAccess>().listenTo(user.uid);
+      context.read<CurrentAccess>().listenTo(user.uid, knownName: access.name, knownRole: access.role);
 
       if (access.isAdmin || access.canView) {
         Navigator.pushReplacementNamed(context, '/dashboard', arguments: role);

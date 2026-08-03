@@ -62,6 +62,8 @@ class ProductService {
       quantity: (data['quantity'] as num).toInt(),
       price: (data['price'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
+      branch: data['branch'] as String?,
+      room: data['room'] as String?,
       row: data['row'] as String?,
       rack: data['rack'] as String?,
       tray: data['tray'] as String?,
@@ -78,6 +80,8 @@ class ProductService {
         'Quantity': product.quantity,
         'Price': product.price,
         if ((product.notes ?? '').isNotEmpty) 'Notes': product.notes,
+        if ((product.branch ?? '').isNotEmpty) 'Branch': product.branch,
+        if ((product.room ?? '').isNotEmpty) 'Room': product.room,
         if ((product.row ?? '').isNotEmpty) 'Row': product.row,
         if ((product.rack ?? '').isNotEmpty) 'Rack': product.rack,
         if ((product.tray ?? '').isNotEmpty) 'Tray': product.tray,
@@ -118,6 +122,8 @@ class ProductService {
       quantity: (data['quantity'] as num).toInt(),
       price: (data['price'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
+      branch: data['branch'] as String?,
+      room: data['room'] as String?,
       row: data['row'] as String?,
       rack: data['rack'] as String?,
       tray: data['tray'] as String?,
@@ -135,6 +141,8 @@ class ProductService {
         'Quantity': beforeData['quantity'],
         'Price': beforeData['price'],
         'Notes': beforeData['notes'],
+        'Branch': beforeData['branch'],
+        'Room': beforeData['room'],
         'Row': beforeData['row'],
         'Rack': beforeData['rack'],
         'Tray': beforeData['tray'],
@@ -145,6 +153,8 @@ class ProductService {
         'Quantity': product.quantity,
         'Price': product.price,
         'Notes': product.notes,
+        'Branch': product.branch,
+        'Room': product.room,
         'Row': product.row,
         'Rack': product.rack,
         'Tray': product.tray,
@@ -212,6 +222,18 @@ class ProductService {
         .map((s) => s.docs.map(Product.fromDoc).toList());
   }
 
+  /// Exact-match lookup by branch (server-side).
+  static Future<List<Product>> getByBranch(String branch) async {
+    final snapshot = await _col.where('branch', isEqualTo: branch).get();
+    return snapshot.docs.map(Product.fromDoc).toList();
+  }
+
+  /// Exact-match lookup by room (server-side).
+  static Future<List<Product>> getByRoom(String room) async {
+    final snapshot = await _col.where('room', isEqualTo: room).get();
+    return snapshot.docs.map(Product.fromDoc).toList();
+  }
+
   /// Exact-match lookup by shelf row (server-side).
   static Future<List<Product>> getByRow(String row) async {
     final snapshot = await _col.where('row', isEqualTo: row).get();
@@ -260,10 +282,15 @@ class ProductService {
           final product = Product(
             id: '',
             name: (p['name'] as String).trim(),
-            category: p['category'] as String,
+            // Some seed sources (e.g. the physical-inventory sheets) don't
+            // set a separate 'category' — the room they were found in
+            // doubles as the category in that case.
+            category: (p['category'] as String?) ?? (p['room'] as String?) ?? 'Uncategorised',
             quantity: (p['quantity'] as num).toInt(),
             price: (p['price'] as num?)?.toDouble() ?? 0.0,
             notes: p['notes'] as String?,
+            branch: p['branch'] as String?,
+            room: p['room'] as String?,
             row: p['row'] as String?,
             rack: p['rack'] as String?,
             tray: p['tray'] as String?,
