@@ -7,6 +7,35 @@ import '../../services/drone_service.dart';
 import '../../models/drone.dart';
 import '../../constants/drone_categories.dart';
 
+// ── Additional-products & condition option lists ──────────────────────────
+// TODO: move these into lib/constants/drone_categories.dart alongside
+// kDroneCategories / kBranchOptions if you'd rather keep all the constant
+// lists in one place.
+const List<String> kAdditionalDroneProducts = [
+  'Extra Battery',
+  'Propellers Set',
+  'Charger',
+  'Remote Controller',
+  'Carrying Case',
+  'Camera Gimbal',
+  'Landing Gear',
+  'Memory Card',
+  'ND Filters',
+];
+
+const List<String> kDroneConditions = ['Good', 'Damaged'];
+
+// Quick-tap suggestions shown only when condition == 'Damaged', so the
+// person filling the form doesn't have to type the common fixes by hand.
+const List<String> kDamageFixSuggestions = [
+  'Replace propeller',
+  'Recalibrate gimbal',
+  'Repair frame/body',
+  'Replace battery',
+  'Fix motor',
+  'Send for service',
+];
+
 class AddDroneEntryScreen extends StatefulWidget {
   final DroneService service;
   const AddDroneEntryScreen({super.key, required this.service});
@@ -24,6 +53,8 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
   final _pilotCtrl = TextEditingController();
   final _hoursCtrl = TextEditingController(text: '0');
   final _notesCtrl = TextEditingController();
+  final _customProductCtrl = TextEditingController();
+  final _fixSuggestionCtrl = TextEditingController();
   String _status = 'IN';
   String _category = kDroneCategories.first;
   // Raw value stored/filtered on ('Branch 1' / 'Branch 2'); dropdown shows
@@ -32,6 +63,15 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
   double _battery = 100;
   DateTime? _maintenanceDue;
   bool _saving = false;
+
+  // Additional accessories bundled with this drone (predefined chips +
+  // any free-typed custom ones the user adds).
+  final Set<String> _selectedProducts = {};
+  final List<String> _customProducts = [];
+
+  // Condition of the drone right now, and — only when it's damaged — the
+  // suggested fix/repair notes.
+  String _condition = kDroneConditions.first;
 
   late AnimationController _droneAnim;
 
@@ -61,6 +101,8 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
     _pilotCtrl.dispose();
     _hoursCtrl.dispose();
     _notesCtrl.dispose();
+    _customProductCtrl.dispose();
+    _fixSuggestionCtrl.dispose();
     _droneAnim.dispose();
     super.dispose();
   }
@@ -85,9 +127,46 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
     if (picked != null) setState(() => _maintenanceDue = picked);
   }
 
+  void _addCustomProduct() {
+    final text = _customProductCtrl.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      if (!_customProducts.contains(text)) _customProducts.add(text);
+      _selectedProducts.add(text);
+      _customProductCtrl.clear();
+    });
+  }
+
+  void _appendFixSuggestion(String suggestion) {
+    final current = _fixSuggestionCtrl.text.trim();
+    if (current.isEmpty) {
+      _fixSuggestionCtrl.text = suggestion;
+    } else if (!current.contains(suggestion)) {
+      _fixSuggestionCtrl.text = '$current, $suggestion';
+    }
+    _fixSuggestionCtrl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _fixSuggestionCtrl.text.length),
+    );
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+
+    // Fold the extra fields into notes so nothing is lost even before the
+    // Drone model gains dedicated columns for them (see TODO below).
+    final extraParts = <String>[];
+    if (_selectedProducts.isNotEmpty) {
+      extraParts.add('Included accessories: ${_selectedProducts.join(', ')}');
+    }
+    extraParts.add('Condition: $_condition');
+    if (_condition == 'Damaged' && _fixSuggestionCtrl.text.trim().isNotEmpty) {
+      extraParts.add('Suggested fix: ${_fixSuggestionCtrl.text.trim()}');
+    }
+    final combinedNotes = [
+      if (_notesCtrl.text.trim().isNotEmpty) _notesCtrl.text.trim(),
+      ...extraParts,
+    ].join('\n');
 
     final drone = Drone(
       id: '', // Firestore will assign the real ID
@@ -101,9 +180,10 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
       category: _category,
       batteryLevel: _battery.round(),
       flightHours: double.tryParse(_hoursCtrl.text.trim()) ?? 0,
-      notes: _notesCtrl.text.trim().isEmpty
-          ? null
-          : _notesCtrl.text.trim(),
+      // TODO: once your Drone model has dedicated `additionalProducts`,
+      // `condition`, and `conditionFixSuggestion` fields, pass those
+      // directly instead of folding everything into `notes` here.
+      notes: combinedNotes.trim().isEmpty ? null : combinedNotes.trim(),
       maintenanceDue: _maintenanceDue,
       branch: _branch,
     );
@@ -149,6 +229,9 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
     if (_battery <= 50) return kAmber;
     return kGreen;
   }
+
+  Color get _conditionColor =>
+      _condition == 'Damaged' ? kCoral : kGreen;
 
   @override
   Widget build(BuildContext context) {
@@ -210,7 +293,11 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
                     _buildBranchDropdown(),
                     const SizedBox(height: 24),
                     _buildSectionHeader(
-                        'Metrics', Icons.monitor_heart_outlined),
+                        'Additional Products', Icons.inventory_2_outlined),
+                    const SizedBox(height: 12),
+                    _buildAdditionalProductsPicker(),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader('Metrics', Icons.monitor_heart_outlined),
                     const SizedBox(height: 12),
                     _buildField(
                         controller: _hoursCtrl,
@@ -221,6 +308,11 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
                             decimal: true)),
                     const SizedBox(height: 14),
                     _buildBatterySlider(),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader(
+                        'Condition', Icons.health_and_safety_outlined),
+                    const SizedBox(height: 12),
+                    _buildConditionSection(),
                     const SizedBox(height: 24),
                     _buildSectionHeader('Schedule', Icons.event_outlined),
                     const SizedBox(height: 12),
@@ -402,6 +494,130 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
     );
   }
 
+  /// Card listing common drone accessories as toggle-able chips, plus a
+  /// small text field to add anything not on the predefined list.
+  Widget _buildAdditionalProductsPicker() {
+    final allOptions = [
+      ...kAdditionalDroneProducts,
+      ..._customProducts.where((p) => !kAdditionalDroneProducts.contains(p)),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.checklist_rtl_outlined,
+                  color: Colors.grey.shade600, size: 16),
+              const SizedBox(width: 8),
+              Text('Included accessories (optional)',
+                  style:
+                  TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: allOptions.map((product) {
+              final selected = _selectedProducts.contains(product);
+              return FilterChip(
+                label: Text(product),
+                selected: selected,
+                showCheckmark: false,
+                labelStyle: TextStyle(
+                    color: selected ? kTeal : Colors.grey.shade600,
+                    fontWeight:
+                    selected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 12.5),
+                backgroundColor: const Color(0xFFF7F9FB),
+                selectedColor: kTeal.withOpacity(0.12),
+                side: BorderSide(
+                    color: selected
+                        ? kTeal.withOpacity(0.5)
+                        : Colors.grey.shade200),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                onSelected: (v) => setState(() {
+                  if (v) {
+                    _selectedProducts.add(product);
+                  } else {
+                    _selectedProducts.remove(product);
+                  }
+                }),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customProductCtrl,
+                  style: const TextStyle(color: kNavy, fontSize: 14),
+                  onSubmitted: (_) => _addCustomProduct(),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Add another product…',
+                    hintStyle: TextStyle(color: Colors.grey.shade400),
+                    filled: true,
+                    fillColor: const Color(0xFFF7F9FB),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: kTeal, width: 1.5),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: _addCustomProduct,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: kTeal,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.add, color: Colors.white, size: 20),
+                ),
+              ),
+            ],
+          ),
+          if (_selectedProducts.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              '${_selectedProducts.length} item${_selectedProducts.length == 1 ? '' : 's'} selected',
+              style: TextStyle(color: kTeal, fontSize: 11.5, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildBatterySlider() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -473,6 +689,146 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
           ),
         ],
       ),
+    );
+  }
+
+  /// Condition dropdown (Good / Damaged) plus, only when Damaged is picked,
+  /// a "suggested fix" field with quick-tap common-repair chips.
+  Widget _buildConditionSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: _condition == 'Damaged'
+                    ? kCoral.withOpacity(0.4)
+                    : Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2)),
+            ],
+          ),
+          child: DropdownButtonFormField<String>(
+            value: _condition,
+            dropdownColor: Colors.white,
+            style: const TextStyle(color: kNavy, fontSize: 15),
+            decoration: InputDecoration(
+              labelText: 'Condition',
+              labelStyle:
+              TextStyle(color: Colors.grey.shade600, fontSize: 14),
+              prefixIcon: Icon(
+                  _condition == 'Damaged'
+                      ? Icons.error_outline
+                      : Icons.check_circle_outline,
+                  color: _conditionColor,
+                  size: 20),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.only(right: 16),
+            ),
+            items: kDroneConditions
+                .map((c) => DropdownMenuItem(
+                value: c,
+                child: Text(c,
+                    style: TextStyle(
+                        color: c == 'Damaged' ? kCoral : kGreen,
+                        fontWeight: FontWeight.w600))))
+                .toList(),
+            onChanged: (v) => setState(() => _condition = v ?? _condition),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          child: _condition != 'Damaged'
+              ? const SizedBox.shrink()
+              : Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kCoral.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: kCoral.withOpacity(0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.build_circle_outlined,
+                          color: kCoral, size: 16),
+                      const SizedBox(width: 8),
+                      Text('Suggested fix',
+                          style: TextStyle(
+                              color: kCoral.withOpacity(0.9),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: kDamageFixSuggestions.map((s) {
+                      return InkWell(
+                        onTap: () =>
+                            setState(() => _appendFixSuggestion(s)),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border:
+                            Border.all(color: kCoral.withOpacity(0.3)),
+                          ),
+                          child: Text(s,
+                              style: const TextStyle(
+                                  color: kCoral,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _fixSuggestionCtrl,
+                    maxLines: 2,
+                    style: const TextStyle(color: kNavy, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Replace bent propeller, recalibrate gimbal',
+                      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: kCoral.withOpacity(0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: kCoral.withOpacity(0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: kCoral, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
