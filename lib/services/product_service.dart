@@ -201,6 +201,25 @@ class ProductService {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  //  DELETE BY NAME (used by InventorySyncService to remove the
+  //  Search-Products copy of an item when the original is deleted from
+  //  Inventory or New Products — same name-matching approach the
+  //  add-sync already uses, since no cross-collection id is stored)
+  // ═══════════════════════════════════════════════════════════════
+  static Future<void> deleteByName(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final snap = await _col.where('name', isEqualTo: trimmed).get();
+    if (snap.docs.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+    clearCache();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   //  QUERY HELPERS
   // ═══════════════════════════════════════════════════════════════
 

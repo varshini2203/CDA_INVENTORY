@@ -91,6 +91,10 @@ class PdfExportService {
 
     doc.addPage(pw.MultiPage(
       pageTheme: _pageTheme(logoBytes),
+      // Default maxPages is 20 — large datasets (e.g. 1000+ stock items)
+      // blow past that and the pdf package throws TooManyPagesException
+      // instead of just... adding more pages. Raise the cap generously.
+      maxPages: 9999,
       header: (ctx) => _header('Monthly Consolidated Report', month),
       footer: (ctx) => _footer(ctx),
       build: (ctx) => [
@@ -122,6 +126,10 @@ class PdfExportService {
     final doc = pw.Document();
     doc.addPage(pw.MultiPage(
       pageTheme: _pageTheme(logoBytes),
+      // Default maxPages is 20 — large datasets (e.g. 1000+ stock items)
+      // blow past that and the pdf package throws TooManyPagesException
+      // instead of just... adding more pages. Raise the cap generously.
+      maxPages: 9999,
       header: (ctx) => _header('Drone In / Out Report', month),
       footer: (ctx) => _footer(ctx),
       build: (ctx) => [
@@ -142,6 +150,10 @@ class PdfExportService {
     final doc = pw.Document();
     doc.addPage(pw.MultiPage(
       pageTheme: _pageTheme(logoBytes),
+      // Default maxPages is 20 — large datasets (e.g. 1000+ stock items)
+      // blow past that and the pdf package throws TooManyPagesException
+      // instead of just... adding more pages. Raise the cap generously.
+      maxPages: 9999,
       header: (ctx) => _header('Stock History Report', month),
       footer: (ctx) => _footer(ctx),
       build: (ctx) => [
@@ -163,6 +175,10 @@ class PdfExportService {
     final doc = pw.Document();
     doc.addPage(pw.MultiPage(
       pageTheme: _pageTheme(logoBytes),
+      // Default maxPages is 20 — large datasets (e.g. 1000+ stock items)
+      // blow past that and the pdf package throws TooManyPagesException
+      // instead of just... adding more pages. Raise the cap generously.
+      maxPages: 9999,
       header: (ctx) => _header('Invoice Report', month),
       footer: (ctx) => _footer(ctx),
       build: (ctx) => [
@@ -184,6 +200,10 @@ class PdfExportService {
     final doc = pw.Document();
     doc.addPage(pw.MultiPage(
       pageTheme: _pageTheme(logoBytes),
+      // Default maxPages is 20 — large datasets (e.g. 1000+ stock items)
+      // blow past that and the pdf package throws TooManyPagesException
+      // instead of just... adding more pages. Raise the cap generously.
+      maxPages: 9999,
       header: (ctx) => _header('Purchase Report', month),
       footer: (ctx) => _footer(ctx),
       build: (ctx) => [
@@ -206,6 +226,10 @@ class PdfExportService {
     final doc = pw.Document();
     doc.addPage(pw.MultiPage(
       pageTheme: _pageTheme(logoBytes),
+      // Default maxPages is 20 — large datasets (e.g. 1000+ stock items)
+      // blow past that and the pdf package throws TooManyPagesException
+      // instead of just... adding more pages. Raise the cap generously.
+      maxPages: 9999,
       header: (ctx) => _header('New Products Report', month),
       footer: (ctx) => _footer(ctx),
       build: (ctx) => [
@@ -228,6 +252,10 @@ class PdfExportService {
     final doc = pw.Document();
     doc.addPage(pw.MultiPage(
       pageTheme: _pageTheme(logoBytes),
+      // Default maxPages is 20 — large datasets (e.g. 1000+ stock items)
+      // blow past that and the pdf package throws TooManyPagesException
+      // instead of just... adding more pages. Raise the cap generously.
+      maxPages: 9999,
       header: (ctx) => _header('Stock Management Report', asOf),
       footer: (ctx) => _footer(ctx),
       build: (ctx) => [

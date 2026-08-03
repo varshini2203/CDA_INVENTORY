@@ -92,6 +92,22 @@ class FixedAssetService {
     );
   }
 
+  // ── DELETE BY NAME ─────────────────────────────────────────────────────
+  // Used by InventorySyncService to remove the Fixed-Assets copy of an
+  // item when the original is deleted from Inventory or New Products.
+  static Future<void> deleteByName(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final snap = await _col.where('name', isEqualTo: trimmed).get();
+    if (snap.docs.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+    clearCache();
+  }
+
   // ── BULK SEED (batched writes — 400 per batch) ────────────────────────────
   static Future<Map<String, int>> seedAssets(
       List<Map<String, dynamic>> assets) async {

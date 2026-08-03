@@ -225,6 +225,18 @@ class NewProductService {
       itemName: product.productName.isEmpty ? product.productId : product.productName,
       data: product.toActivityLogMap(),
     );
+
+    // Mirror addNewProduct's fan-out: remove this item from Inventory,
+    // Search Products, Branch, Stock Management, and Fixed Assets/
+    // Consumables too, so a delete here doesn't leave stale copies
+    // behind everywhere else.
+    try {
+      await InventorySyncService.syncFromNewProductDelete(product);
+    } catch (_) {
+      // Cross-module sync failures must never block the primary delete —
+      // InventorySyncService already isolates + logs each module's own
+      // failure internally.
+    }
   }
 
   // ── NOTIFICATIONS ─────────────────────────────────────────────────────

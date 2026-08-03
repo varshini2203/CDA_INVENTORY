@@ -113,7 +113,7 @@ class ReportService {
     final stockInQty = stockIn.fold<int>(0, (s, t) => s + t.quantity);
     final stockOutQty = stockOut.fold<int>(0, (s, t) => s + t.quantity);
 
-    final invoiceTotal = invoices.fold<double>(0, (s, i) => s + i.amount);
+    final invoiceTotal = invoices.fold<double>(0, (s, i) => s + i.displayAmount);
 
     return MonthlySummary(
       droneInCount: droneInCount,

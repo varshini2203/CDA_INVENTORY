@@ -223,6 +223,40 @@ class StockService {
     );
   }
 
+  // ── Delete-sync helper ────────────────────────────────────────────────────
+  // Used by InventorySyncService when an item is deleted from Inventory or
+  // New Products. Stock Management's doc id is deterministic
+  // (name + branch, see _itemDocId), so unlike the other modules this
+  // doesn't need a name-based query — it can go straight to the doc.
+  // Decrements the quantity that was added by the deleted item; only
+  // removes the doc entirely once its quantity reaches zero, so it
+  // doesn't wipe out stock that other adds contributed to the same
+  // product/branch pair.
+  static Future<void> removeStockSync({
+    required String productName,
+    required String branch,
+    required int quantity,
+  }) async {
+    final itemId = _itemDocId(productName, branch);
+    final itemRef = _items.doc(itemId);
+    final snap = await itemRef.get();
+    if (!snap.exists) return;
+
+    final currentQty =
+        ((snap.data() as Map<String, dynamic>?)?['quantity'] as int?) ?? 0;
+    final newQty = currentQty - quantity;
+
+    if (newQty <= 0) {
+      await itemRef.delete();
+    } else {
+      await itemRef.update({
+        'quantity': newQty,
+        'updated_at': Timestamp.fromDate(DateTime.now()),
+      });
+    }
+    clearCache();
+  }
+
   // ── Stock IN ───────────────────────────────────────────────────────────────
   // Uses a manual read → write instead of runTransaction (web compatible)
   static Future<bool> addStockIn({

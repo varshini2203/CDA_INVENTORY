@@ -11,6 +11,7 @@ import '../constants/gamification_constants.dart';
 import 'activity_log_service.dart';
 import 'gamification_service.dart';
 import 'staff_reward_service.dart';
+import 'report_service.dart';
 
 class InvoiceService {
   // ── Firestore collection reference ──────────────────────────────────────────
@@ -29,6 +30,13 @@ class InvoiceService {
 
   static void clearCache() {
     _invoicesCache = null;
+    // FIX: ReportService keeps its own independent invoice cache
+    // (_allInvoicesCache / _invoiceCache) for the Reports dashboard. It was
+    // never invalidated here, so adding/editing/deleting an invoice updated
+    // the Invoice List immediately but Reports kept showing an old
+    // snapshot until the app was restarted. Clearing it here keeps both in
+    // sync on every write.
+    ReportService.clearCache();
   }
 
   // ── GET all invoices (ordered by last update descending, cached) ────────────

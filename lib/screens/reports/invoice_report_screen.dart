@@ -170,7 +170,7 @@ class _InvoiceReportScreenState extends State<InvoiceReportScreen> {
       });
     }
 
-    final total = _rows.fold<double>(0, (s, i) => s + i.amount);
+    final total = _rows.fold<double>(0, (s, i) => s + i.displayAmount);
     return Scaffold(
       backgroundColor: kSurface,
       appBar: AppBar(
@@ -295,9 +295,9 @@ class _InvoiceReportScreenState extends State<InvoiceReportScreen> {
           ]),
         ),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(_currency.format(inv.amount),
+          Text(_currency.format(inv.displayAmount),
               style: const TextStyle(color: kGreen, fontWeight: FontWeight.w800, fontSize: 14)),
-          Text('Qty ${inv.quantity}', style: TextStyle(color: Colors.grey.shade400, fontSize: 10.5)),
+          Text('Qty ${inv.displayQuantity}', style: TextStyle(color: Colors.grey.shade400, fontSize: 10.5)),
         ]),
       ]),
     );

@@ -1,17 +1,26 @@
 // lib/services/inventory_sync_service.dart
 //
-// Cross-module propagation. Whenever an item is added via InventoryService
-// or NewProductService, this pushes the same item into every other module
-// so nothing has to be entered twice:
+// Cross-module propagation. Whenever an item is added OR deleted via
+// InventoryService or NewProductService, this applies the same change to
+// every other module so nothing has to be entered (or removed) twice:
 //
-//   Inventory add     → Search Products, Branch module, Stock Management,
-//                        Fixed Assets OR Consumables (auto-classified)
-//   New Product add   → Inventory, Search Products, Branch module,
-//                        Stock Management, Fixed Assets OR Consumables
+//   Inventory add/delete     → Search Products, Branch module, Stock
+//                               Management, Fixed Assets OR Consumables
+//                               (auto-classified)
+//   New Product add/delete  → Inventory, Search Products, Branch module,
+//                               Stock Management, Fixed Assets OR
+//                               Consumables
 //
 // Each downstream write is isolated in its own try/catch so a failure in
 // one module (e.g. a bad branch id) never blocks the others or the
-// original add the user is waiting on.
+// original add/delete the user is waiting on.
+//
+// Downstream modules don't store a cross-collection id back to the item
+// that created them, so deletes are matched the same simple way adds are
+// written: by name (+ branch, in the modules that track one). Stock
+// Management is the one exception — its doc id is already deterministic
+// (name + branch), so a delete decrements/removes that exact doc instead
+// of running a name query.
 
 import 'package:flutter/foundation.dart';
 
@@ -220,6 +229,91 @@ class InventorySyncService {
       location: product.storageLocation,
       description: product.description,
       addedBy: product.addedBy,
+    );
+  }
+
+  // ── Shared downstream delete (Search Products / Branch / Stock / FA-CO) ─
+  // Mirrors _pushDownstream(), but removes instead of creates. Matched by
+  // name (+ branch where the module tracks one), the same way the add-sync
+  // matches nothing at all — there's no stored cross-collection id, so a
+  // delete here removes every doc in each module whose name (and branch,
+  // where applicable) matches what was just deleted upstream.
+  static Future<void> _deleteDownstream({
+    required String name,
+    required String category,
+    required int quantity,
+    required String branchLabel,
+    bool includeStock = true,
+  }) async {
+    // 1) Search Products module
+    try {
+      await ProductService.deleteByName(name);
+    } catch (e) {
+      debugPrint('InventorySyncService: Search Products delete-sync failed: $e');
+    }
+
+    // 2) Branch module
+    try {
+      final branchId = _branchIdFromLabel(branchLabel);
+      await BranchInventoryService.deleteByNameAndBranch(branchId, name);
+    } catch (e) {
+      debugPrint('InventorySyncService: Branch module delete-sync failed: $e');
+    }
+
+    // 3) Stock Management module — skipped when the caller is Stock
+    //    Management itself, same as the add-sync.
+    if (includeStock) {
+      try {
+        await StockService.removeStockSync(
+          productName: name,
+          branch: branchLabel,
+          quantity: quantity,
+        );
+      } catch (e) {
+        debugPrint('InventorySyncService: Stock Management delete-sync failed: $e');
+      }
+    }
+
+    // 4) Fixed Assets OR Consumables (auto-segregated, same rule as add)
+    try {
+      if (isFixedAsset(category)) {
+        await FixedAssetService.deleteByName(name);
+      } else {
+        await ConsumableService.deleteByName(name);
+      }
+    } catch (e) {
+      debugPrint('InventorySyncService: Fixed Assets/Consumables delete-sync failed: $e');
+    }
+  }
+
+  // ── Entry point: called after InventoryService.deleteProduct() ──────
+  static Future<void> syncFromInventoryDelete(inv_model.InventoryItem item) async {
+    await _deleteDownstream(
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity,
+      branchLabel: item.branchLabel,
+    );
+  }
+
+  // ── Entry point: called after NewProductService.deleteNewProduct() ──
+  static Future<void> syncFromNewProductDelete(NewProduct product) async {
+    final branchLabel =
+    product.branch.isEmpty ? _branchLabelFromId(1) : product.branch;
+
+    // a) Remove the Inventory copy that syncFromNewProductAdd created.
+    try {
+      await InventoryService.deleteByName(product.productName);
+    } catch (e) {
+      debugPrint('InventorySyncService: Inventory delete-sync failed: $e');
+    }
+
+    // b) Search Products / Branch / Stock / Fixed Assets / Consumables
+    await _deleteDownstream(
+      name: product.productName,
+      category: product.category,
+      quantity: product.quantity,
+      branchLabel: branchLabel,
     );
   }
 

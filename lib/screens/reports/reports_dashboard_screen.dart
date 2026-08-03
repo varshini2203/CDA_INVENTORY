@@ -269,7 +269,7 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
         stockInQty: stockIn.fold<int>(0, (s, t) => s + t.quantity),
         stockOutQty: stockOut.fold<int>(0, (s, t) => s + t.quantity),
         invoiceCount: invoices.length,
-        invoiceTotal: invoices.fold<double>(0, (s, i) => s + i.amount),
+        invoiceTotal: invoices.fold<double>(0, (s, i) => s + i.displayAmount),
       );
 
       final branchSuffix =
@@ -593,7 +593,7 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
         .where((r) => r.type == 'OUT')
         .fold<int>(0, (s, r) => s + (r.quantity as int));
     final invoiceTotal =
-    _invoiceRows.fold<double>(0, (s, inv) => s + (inv.amount as double));
+    _invoiceRows.fold<double>(0, (s, inv) => s + ((inv.displayAmount as double)));
     final purchaseTotal = _purchasesInRange.fold<double>(
         0, (sum, p) => sum + (p.cost * p.quantity));
 

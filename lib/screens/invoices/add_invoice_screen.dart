@@ -15,6 +15,7 @@ import 'package:cda_inventory/models/product.dart';
 import 'package:cda_inventory/services/invoice_service.dart';
 import 'package:cda_inventory/services/invoice_pdf_service.dart';
 import 'package:cda_inventory/services/product_service.dart';
+import 'package:cda_inventory/widgets/reports/branch_filter_bar.dart';
 
 class AddInvoiceScreen extends StatefulWidget {
   final Invoice? invoiceToEdit;
@@ -91,6 +92,11 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   List<Product> _productSuggestions = [];
 
   String _paymentMode = 'Credit'; // 'Credit' | 'Cash'
+  // Which branch this invoice belongs to. Previously there was no field for
+  // this at all, so every new invoice silently saved branch: null — which
+  // is why filtering Reports by "CDA Admin" or "CDA Ops" always showed 0
+  // invoices even though "All Branches" showed the real count.
+  String _selectedBranch = kBranch1;
   String _stateOfSupply = 'Tamil Nadu';
   String _termsTitle = 'Sale Invoice';
   bool _roundOffEnabled = true;
@@ -151,6 +157,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       _phoneController.text = inv.customer?.phone ?? '';
       _stateOfSupply = inv.customer?.placeOfSupply ?? 'Tamil Nadu';
       _paymentMode = inv.paymentMode;
+      _selectedBranch = normalizeBranch(inv.branch) ?? kBranch1;
       _termsTitle = inv.termsTitle;
       _termsNotesController.text = inv.termsNotes ?? _termsNotesController.text;
       _shippingController.text = inv.shipping.toStringAsFixed(2);
@@ -303,7 +310,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       payments: _isEditMode ? widget.invoiceToEdit!.payments : const [],
       addedBy: widget.invoiceToEdit?.addedBy,
       addedAt: _isEditMode ? widget.invoiceToEdit!.addedAt : DateTime.now(),
-      branch: widget.invoiceToEdit?.branch,
+      branch: _selectedBranch,
       paymentMode: _paymentMode,
       shipping: _shipping,
       roundOffEnabled: _roundOffEnabled,
@@ -416,6 +423,8 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           children: [
             _paymentModeToggle(),
+            const SizedBox(height: 12),
+            _branchSelector(),
             const SizedBox(height: 20),
 
             _sectionLabel('CUSTOMER'),
@@ -596,6 +605,55 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   }
 
   // ── Payment mode: Credit / Cash toggle (mirrors the reference screen) ───
+  // Lets the user tag this invoice as CDA Admin or CDA Ops. Without this,
+  // every invoice saved branch: null, so Reports' branch filter (which
+  // matches on this exact field) could never find it under either branch.
+  Widget _branchSelector() {
+    const options = [kBranch1, kBranch2];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(children: [
+        Icon(Icons.location_city_rounded, size: 18, color: Colors.grey.shade500),
+        const SizedBox(width: 8),
+        Text('Branch',
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey.shade700)),
+        const Spacer(),
+        ...options.map((b) {
+          final isSelected = _selectedBranch == b;
+          return Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedBranch = b),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? kTeal : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: isSelected ? kTeal : Colors.grey.shade300),
+                ),
+                child: Text(
+                  branchDisplayName(b),
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.grey.shade700,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ]),
+    );
+  }
+
   Widget _paymentModeToggle() {
     final isCash = _paymentMode == 'Cash';
     return Container(

@@ -125,8 +125,46 @@ class InventoryService {
   }
 
   // ── DELETE ─────────────────────────────────────────────────────────────────
-  Future<void> deleteProduct(String id) async {
+  // [skipDownstreamSync]: set true only when this call is itself part of a
+  // sync cascade (e.g. InventorySyncService.syncFromNewProductDelete
+  // removing the Inventory copy a New Product delete already accounts
+  // for) so we don't trigger a second, duplicate round of downstream
+  // deletes on top of the one the caller is already doing.
+  Future<void> deleteProduct(String id, {bool skipDownstreamSync = false}) async {
+    final existing = await _col.doc(id).get();
+    final data = existing.data();
+
     await _col.doc(id).delete();
+    clearCache();
+
+    if (!skipDownstreamSync && data != null) {
+      try {
+        await InventorySyncService.syncFromInventoryDelete(
+          InventoryItem.fromDoc(existing),
+        );
+      } catch (_) {
+        // Cross-module sync failures must never block the primary
+        // delete — InventorySyncService already isolates + logs each
+        // module's own failure internally.
+      }
+    }
+  }
+
+  // Used by InventorySyncService to remove the Inventory copy of an item
+  // when the original is deleted from New Products.
+  static Future<void> deleteByName(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final snap = await FirebaseFirestore.instance
+        .collection('inventory')
+        .where('name', isEqualTo: trimmed)
+        .get();
+    if (snap.docs.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
     clearCache();
   }
 

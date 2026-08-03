@@ -157,6 +157,28 @@ class BranchInventoryService {
     );
   }
 
+  // ── deleteByNameAndBranch ───────────────────────────────────────────────
+  // Used by InventorySyncService to remove the Branch-module copy of an
+  // item when the original is deleted from Inventory or New Products.
+  // Matched by item_name + branch_id (same name-matching approach the
+  // add-sync uses) since no cross-collection id is stored.
+  static Future<void> deleteByNameAndBranch(
+      int branchId, String itemName) async {
+    final trimmed = itemName.trim();
+    if (trimmed.isEmpty) return;
+    final snap = await _col
+        .where('branch_id', isEqualTo: branchId)
+        .where('item_name', isEqualTo: trimmed)
+        .get();
+    if (snap.docs.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+    clearCache(branchId);
+  }
+
   // ── clearBranch ──────────────────────────────────────────────────────────
   /// Deletes ALL inventory items for a given branch. Useful when you need
   /// to wipe bad/duplicate data and let auto-seed (or a manual seed call)

@@ -80,6 +80,22 @@ class ConsumableService {
     );
   }
 
+  /// Delete all consumables matching a given name. Used by
+  /// InventorySyncService to remove the Consumables copy of an item when
+  /// the original is deleted from Inventory or New Products.
+  static Future<void> deleteByName(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final snap = await _collection.where('name', isEqualTo: trimmed).get();
+    if (snap.docs.isEmpty) return;
+    final batch = _firestore.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+    clearCache();
+  }
+
   /// Delete every document in the 'consumables' collection. Used to wipe
   /// old/incorrectly-seeded data before a fresh seedConsumables() run —
   /// unlike seedConsumables(), which only ever adds documents and will
