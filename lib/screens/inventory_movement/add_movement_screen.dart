@@ -14,6 +14,7 @@ import '../../models/product.dart';
 import '../../services/inventory_movement_service.dart';
 import '../../services/product_service.dart';
 import '../../shared/inventory_ui.dart';
+import '../../widgets/common/serial_scan_screen.dart';
 
 class AddMovementScreen extends StatefulWidget {
   final InventoryMovement? editMovement;
@@ -401,6 +402,42 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
     );
   }
 
+  /// Scans a product's serial number / UID and auto-selects it in the
+  /// picker above — same matching behaviour as the Search Products scan
+  /// (checks the already-loaded list first, then falls back to a
+  /// Firestore lookup).
+  Future<void> _scanProduct() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const SerialScanScreen(title: 'Scan Product Serial'),
+      ),
+    );
+    if (code == null || code.trim().isEmpty || !mounted) return;
+    final scanned = code.trim();
+
+    Product? match;
+    for (final p in _products) {
+      if ((p.serialNumber ?? '').trim() == scanned) {
+        match = p;
+        break;
+      }
+    }
+    match ??= await ProductService.getBySerial(scanned);
+
+    if (!mounted) return;
+    if (match != null) {
+      setState(() {
+        _selectedProduct = match;
+        _selectedProductId = match!.id;
+        _productController.text = match!.name;
+      });
+      showAppSnack(context, '${match.name} selected');
+    } else {
+      showAppSnack(context, 'No product found for serial "$scanned"', isError: true);
+    }
+  }
+
   Widget _productAutocomplete() {
     return Autocomplete<Product>(
       initialValue: TextEditingValue(text: _productController.text),
@@ -471,6 +508,11 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
             helperStyle: TextStyle(color: Colors.grey.shade400, fontSize: 11.5),
             labelStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
             prefixIcon: const Icon(Icons.inventory_2_rounded, size: 20, color: Colors.grey),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.qr_code_scanner_rounded, size: 20, color: Colors.grey),
+              tooltip: 'Scan product serial',
+              onPressed: _scanProduct,
+            ),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
             enabledBorder: OutlineInputBorder(

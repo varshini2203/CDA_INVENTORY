@@ -28,6 +28,14 @@ class DroneServiceRecord {
   final DateTime? updatedAt;
   final String? createdBy;
 
+  // ── Drone In/Out tracking ────────────────────────────────────────────
+  // When the drone/asset physically arrived at the service center (In)
+  // and when it was handed back (Out). Independent of `status` — a
+  // service can be "Scheduled" and still not checked in yet, or
+  // "Completed" but not yet physically handed back.
+  final DateTime? checkedInAt;
+  final DateTime? checkedOutAt;
+
   const DroneServiceRecord({
     required this.id,
     required this.droneName,
@@ -44,6 +52,8 @@ class DroneServiceRecord {
     this.createdAt,
     this.updatedAt,
     this.createdBy,
+    this.checkedInAt,
+    this.checkedOutAt,
   });
 
   // ── Firestore → Dart ───────────────────────────────────────────────────
@@ -78,6 +88,12 @@ class DroneServiceRecord {
           ? (j['updated_at'] as Timestamp).toDate()
           : null,
       createdBy: j['created_by']?.toString(),
+      checkedInAt: j['checked_in_at'] is Timestamp
+          ? (j['checked_in_at'] as Timestamp).toDate()
+          : null,
+      checkedOutAt: j['checked_out_at'] is Timestamp
+          ? (j['checked_out_at'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -97,6 +113,8 @@ class DroneServiceRecord {
     'cost': cost,
     'updated_at': FieldValue.serverTimestamp(),
     'created_by': createdBy,
+    'checked_in_at': checkedInAt != null ? Timestamp.fromDate(checkedInAt!) : null,
+    'checked_out_at': checkedOutAt != null ? Timestamp.fromDate(checkedOutAt!) : null,
   };
 
   DroneServiceRecord copyWith({
@@ -115,6 +133,10 @@ class DroneServiceRecord {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
+    DateTime? checkedInAt,
+    DateTime? checkedOutAt,
+    bool clearCheckedInAt = false,
+    bool clearCheckedOutAt = false,
   }) =>
       DroneServiceRecord(
         id: id ?? this.id,
@@ -132,8 +154,23 @@ class DroneServiceRecord {
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         createdBy: createdBy ?? this.createdBy,
+        checkedInAt: clearCheckedInAt ? null : (checkedInAt ?? this.checkedInAt),
+        checkedOutAt: clearCheckedOutAt ? null : (checkedOutAt ?? this.checkedOutAt),
       );
 
   bool get isOverdue =>
       status == 'Scheduled' && scheduledAt.isBefore(DateTime.now());
+
+  // ── Drone In/Out status helpers ─────────────────────────────────────
+  /// 'Not Checked In' | 'Checked In' | 'Checked Out'
+  String get inOutStatus {
+    if (checkedOutAt != null) return 'Checked Out';
+    if (checkedInAt != null) return 'Checked In';
+    return 'Not Checked In';
+  }
+
+  bool get isCheckedIn => checkedInAt != null && checkedOutAt == null;
+  bool get isCheckedOut => checkedOutAt != null;
+  bool get canCheckIn => checkedInAt == null;
+  bool get canCheckOut => checkedInAt != null && checkedOutAt == null;
 }

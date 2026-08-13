@@ -9,6 +9,12 @@ class Product {
   final int quantity;
   final double price;
   final String? notes;
+  // ── Unique identifier (serial number / UID) ────────────────────────────
+  // Optional — older products won't have one until someone scans/enters
+  // it. When set, it lets a barcode/QR scan resolve straight to this
+  // exact product (see ProductService.getBySerial) instead of relying on
+  // a name search.
+  final String? serialNumber;
   // ── Physical storage location (branch / room / rack layout) ───────────
   // Free-text so any existing labeling scheme (e.g. "R1", "Rack-3",
   // "Tray B") keeps working without a migration.
@@ -32,6 +38,7 @@ class Product {
     required this.quantity,
     required this.price,
     this.notes,
+    this.serialNumber,
     this.branch,
     this.room,
     this.row,
@@ -51,6 +58,7 @@ class Product {
       quantity: (data['quantity'] as num?)?.toInt() ?? 0,
       price: (data['price'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
+      serialNumber: data['serialNumber'] as String?,
       branch: data['branch'] as String?,
       room: data['room'] as String?,
       row: data['row'] as String?,
@@ -69,6 +77,7 @@ class Product {
       'quantity': quantity,
       'price': price,
       'notes': notes ?? '',
+      'serialNumber': serialNumber ?? '',
       'branch': branch ?? '',
       'room': room ?? '',
       'row': row ?? '',
@@ -94,6 +103,7 @@ class Product {
     int? quantity,
     double? price,
     String? notes,
+    String? serialNumber,
     String? branch,
     String? room,
     String? row,
@@ -109,6 +119,7 @@ class Product {
       quantity: quantity ?? this.quantity,
       price: price ?? this.price,
       notes: notes ?? this.notes,
+      serialNumber: serialNumber ?? this.serialNumber,
       branch: branch ?? this.branch,
       room: room ?? this.room,
       row: row ?? this.row,
@@ -149,6 +160,8 @@ class Product {
       (row ?? '').trim().isNotEmpty ||
           (rack ?? '').trim().isNotEmpty ||
           (tray ?? '').trim().isNotEmpty;
+
+  bool get hasSerial => (serialNumber ?? '').trim().isNotEmpty;
 
   // ── Stock helpers ─────────────────────────────────────────────────────────
   bool get isOutOfStock => quantity == 0;

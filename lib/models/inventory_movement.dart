@@ -76,6 +76,12 @@ class InventoryMovement {
   // ── Expected return ────────────────────────────────────────────────────
   final DateTime? expectedReturnAt;
 
+  // ── Check In / Check Out (common toggle — admin + employee) ─────────────
+  final DateTime? checkedInAt;
+  final String? checkedInBy;
+  final DateTime? checkedOutAt;
+  final String? checkedOutBy;
+
   const InventoryMovement({
     required this.id,
     required this.productId,
@@ -99,6 +105,10 @@ class InventoryMovement {
     this.dispatchedBy,
     this.returnedAt,
     this.expectedReturnAt,
+    this.checkedInAt,
+    this.checkedInBy,
+    this.checkedOutAt,
+    this.checkedOutBy,
   });
 
   // ── Firestore DocumentSnapshot -> InventoryMovement ─────────────────────
@@ -128,6 +138,10 @@ class InventoryMovement {
       dispatchedBy: data['dispatched_by'] as String?,
       returnedAt: ts('returned_at'),
       expectedReturnAt: ts('expected_return_at'),
+      checkedInAt: ts('checked_in_at'),
+      checkedInBy: data['checked_in_by'] as String?,
+      checkedOutAt: ts('checked_out_at'),
+      checkedOutBy: data['checked_out_by'] as String?,
     );
   }
 
@@ -167,6 +181,11 @@ class InventoryMovement {
           expectedReturnAt != null &&
           expectedReturnAt!.isBefore(DateTime.now());
 
+  // ── Check In / Check Out state ──────────────────────────────────────────
+  bool get isCheckedIn => checkedInAt != null && checkedOutAt == null;
+  bool get isCheckedOut => checkedOutAt != null;
+  bool get notCheckedInYet => checkedInAt == null;
+
   bool get isReturnedToday {
     if (!isReturned || returnedAt == null) return false;
     final now = DateTime.now();
@@ -183,6 +202,10 @@ class InventoryMovement {
     String? returnedBy,
     DateTime? returnedAt,
     String? rejectionReason,
+    DateTime? checkedInAt,
+    String? checkedInBy,
+    DateTime? checkedOutAt,
+    String? checkedOutBy,
   }) {
     return InventoryMovement(
       id: id,
@@ -207,6 +230,10 @@ class InventoryMovement {
       dispatchedBy: dispatchedBy ?? this.dispatchedBy,
       returnedAt: returnedAt ?? this.returnedAt,
       expectedReturnAt: expectedReturnAt,
+      checkedInAt: checkedInAt ?? this.checkedInAt,
+      checkedInBy: checkedInBy ?? this.checkedInBy,
+      checkedOutAt: checkedOutAt ?? this.checkedOutAt,
+      checkedOutBy: checkedOutBy ?? this.checkedOutBy,
     );
   }
 

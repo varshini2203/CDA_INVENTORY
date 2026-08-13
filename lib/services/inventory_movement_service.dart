@@ -412,6 +412,78 @@ class InventoryMovementService {
     );
   }
 
+  // ── CHECK IN — common toggle, usable by admin + employee alike. Stamps
+  // the current date/time + who did it. Idempotent guard: can't check in
+  // twice without checking out first. ──────────────────────────────────────
+  static Future<void> checkIn({
+    required String id,
+    required String checkedInBy,
+  }) async {
+    final snap = await _movements.doc(id).get();
+    if (!snap.exists) throw Exception('Movement not found.');
+    final m = InventoryMovement.fromDoc(snap);
+    if (m.isCheckedIn) {
+      throw Exception('Already checked in.');
+    }
+
+    final now = Timestamp.fromDate(DateTime.now());
+    await _movements.doc(id).update({
+      'checked_in_at': now,
+      'checked_in_by': checkedInBy,
+      // Reset any previous check-out so a fresh cycle can start.
+      'checked_out_at': null,
+      'checked_out_by': null,
+    });
+    clearCache();
+
+    ActivityLogService.logEdit(
+      module: _module,
+      itemName: m.productName,
+      before: {'Checked In': 'No'},
+      after: {'Checked In': 'Yes', 'Checked In By': checkedInBy},
+    );
+
+    StaffRewardService.recordActivity(
+      action: StaffAction.stockUpdate,
+      module: _module,
+      refId: 'movement_${id}_checkin',
+    );
+  }
+
+  // ── CHECK OUT — same toggle button, second tap. Only valid once
+  // currently checked in. ───────────────────────────────────────────────────
+  static Future<void> checkOut({
+    required String id,
+    required String checkedOutBy,
+  }) async {
+    final snap = await _movements.doc(id).get();
+    if (!snap.exists) throw Exception('Movement not found.');
+    final m = InventoryMovement.fromDoc(snap);
+    if (!m.isCheckedIn) {
+      throw Exception('Must be checked in before checking out.');
+    }
+
+    final now = Timestamp.fromDate(DateTime.now());
+    await _movements.doc(id).update({
+      'checked_out_at': now,
+      'checked_out_by': checkedOutBy,
+    });
+    clearCache();
+
+    ActivityLogService.logEdit(
+      module: _module,
+      itemName: m.productName,
+      before: {'Checked Out': 'No'},
+      after: {'Checked Out': 'Yes', 'Checked Out By': checkedOutBy},
+    );
+
+    StaffRewardService.recordActivity(
+      action: StaffAction.stockUpdate,
+      module: _module,
+      refId: 'movement_${id}_checkout',
+    );
+  }
+
   // ── UPDATE — edit a mistaken Pending entry (product, qty, destination,
   // etc). Same restriction as delete: once a movement has actually moved
   // stock (Dispatched/Returned) it's part of the audit trail and can no

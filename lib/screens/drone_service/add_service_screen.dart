@@ -2,6 +2,12 @@
 //
 // Add (or edit, when `existing` is passed) a Drone Service booking.
 // Theme matched to add_drone_entry_screen.dart.
+//
+// CHANGE: the "Schedule" section (Scheduled Date & Time picker) has been
+// removed from the form per request. `scheduledAt` is still a required
+// field on DroneServiceRecord, so on save we fall back to the existing
+// record's scheduledAt (when editing) or DateTime.now() (when creating),
+// instead of asking the user to pick it.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -34,9 +40,12 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
   String _serviceType = kServiceTypes.first;
   String _branch = kBranchOptions.first;
   String _priority = kServicePriorities[1]; // 'Normal'
-  DateTime? _scheduledAt;
   String? _linkedDroneId;
   bool _saving = false;
+
+  // ── Drone In/Out tracking state ──────────────────────────────────────
+  DateTime? _checkedInAt;
+  DateTime? _checkedOutAt;
 
   List<Drone> _fleet = [];
   bool _fleetLoading = true;
@@ -63,8 +72,9 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
       _serviceType = e.serviceType;
       _branch = e.branch;
       _priority = e.priority;
-      _scheduledAt = e.scheduledAt;
       _linkedDroneId = e.droneId;
+      _checkedInAt = e.checkedInAt;
+      _checkedOutAt = e.checkedOutAt;
     }
     _loadFleet();
   }
@@ -87,16 +97,42 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     super.dispose();
   }
 
+  // ── Check In / Check Out actions ─────────────────────────────────────
+  void _checkIn() {
+    setState(() => _checkedInAt = DateTime.now());
+    _showSnack('Marked as checked in', color: kGreen);
+  }
+
+  void _checkOut() {
+    if (_checkedInAt == null) {
+      _showSnack('Check in first before checking out', isError: true);
+      return;
+    }
+    setState(() => _checkedOutAt = DateTime.now());
+    _showSnack('Marked as checked out', color: kGreen);
+  }
+
+  void _undoCheckIn() {
+    setState(() {
+      _checkedInAt = null;
+      _checkedOutAt = null; // can't be checked out without being checked in
+    });
+  }
+
+  void _undoCheckOut() {
+    setState(() => _checkedOutAt = null);
+  }
+
   Future<void> _save() async {
     if (!requireEditAccess(context)) return;
     if (!_formKey.currentState!.validate()) return;
-    if (_scheduledAt == null) {
-      _showSnack('Please pick a scheduled date & time', isError: true);
-      return;
-    }
     setState(() => _saving = true);
 
     final currentUserName = context.read<CurrentAccess>().access?.name;
+    // Scheduled Date & Time is no longer collected from the user — keep the
+    // original value when editing, otherwise default to "now".
+    final effectiveScheduledAt = widget.existing?.scheduledAt ?? DateTime.now();
+
     final record = DroneServiceRecord(
       id: widget.existing?.id ?? '',
       droneName: _droneNameCtrl.text.trim(),
@@ -105,12 +141,14 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
       branch: _branch,
       status: widget.existing?.status ?? 'Scheduled',
       priority: _priority,
-      scheduledAt: _scheduledAt!,
+      scheduledAt: effectiveScheduledAt,
       completedAt: widget.existing?.completedAt,
       technician: _technicianCtrl.text.trim(),
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       cost: double.tryParse(_costCtrl.text.trim()),
       createdBy: widget.existing?.createdBy ?? currentUserName,
+      checkedInAt: _checkedInAt,
+      checkedOutAt: _checkedOutAt,
     );
 
     final result = _isEdit
@@ -169,6 +207,10 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
               validator: (v) => v == null || v.trim().isEmpty ? 'Name is required' : null,
             ),
             const SizedBox(height: 24),
+            _sectionHeader('Drone In / Out', Icons.compare_arrows_rounded),
+            const SizedBox(height: 12),
+            _buildInOutSection(),
+            const SizedBox(height: 24),
             _sectionHeader('Service Details', Icons.build_circle_outlined),
             const SizedBox(height: 12),
             _buildServiceTypeDropdown(),
@@ -176,17 +218,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
             _buildBranchDropdown(),
             const SizedBox(height: 14),
             _buildPrioritySelector(),
-            const SizedBox(height: 24),
-            _sectionHeader('Schedule', Icons.event_outlined),
-            const SizedBox(height: 12),
-            _DateTimePickerField(
-              label: 'Scheduled Date & Time',
-              value: _scheduledAt,
-              accent: kTeal,
-              onChanged: (dt) => setState(() => _scheduledAt = dt),
-              firstDate: DateTime.now().subtract(const Duration(days: 30)),
-              lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-            ),
+            // ── "Schedule" section (Scheduled Date & Time picker) removed ──
             const SizedBox(height: 24),
             _sectionHeader('Assignment', Icons.person_pin_outlined),
             const SizedBox(height: 12),
@@ -217,6 +249,118 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
             _buildSubmitButton(),
           ],
         ),
+      ),
+    );
+  }
+
+  // ── Drone In/Out card: status pill + Check In / Check Out buttons ────
+  Widget _buildInOutSection() {
+    final isCheckedOut = _checkedOutAt != null;
+    final isCheckedIn = _checkedInAt != null && !isCheckedOut;
+    final notCheckedIn = _checkedInAt == null;
+
+    Color statusColor;
+    String statusLabel;
+    IconData statusIcon;
+    if (isCheckedOut) {
+      statusColor = kNavy;
+      statusLabel = 'Checked Out';
+      statusIcon = Icons.logout_rounded;
+    } else if (isCheckedIn) {
+      statusColor = kGreen;
+      statusLabel = 'Checked In';
+      statusIcon = Icons.login_rounded;
+    } else {
+      statusColor = Colors.grey.shade500;
+      statusLabel = 'Not Checked In';
+      statusIcon = Icons.radio_button_unchecked_rounded;
+    }
+
+    String two(int n) => n.toString().padLeft(2, '0');
+    String fmt(DateTime dt) => '${two(dt.day)}/${two(dt.month)}/${dt.year}  ${two(dt.hour)}:${two(dt.minute)}';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(statusIcon, size: 14, color: statusColor),
+                const SizedBox(width: 6),
+                Text(statusLabel,
+                    style: TextStyle(color: statusColor, fontWeight: FontWeight.w700, fontSize: 12.5)),
+              ]),
+            ),
+          ]),
+          if (_checkedInAt != null) ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              Icon(Icons.login_rounded, size: 14, color: Colors.grey.shade500),
+              const SizedBox(width: 6),
+              Text('In: ${fmt(_checkedInAt!)}', style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
+              const Spacer(),
+              InkWell(
+                onTap: _undoCheckIn,
+                child: Text('Undo', style: TextStyle(fontSize: 12, color: kCoral, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ],
+          if (_checkedOutAt != null) ...[
+            const SizedBox(height: 6),
+            Row(children: [
+              Icon(Icons.logout_rounded, size: 14, color: Colors.grey.shade500),
+              const SizedBox(width: 6),
+              Text('Out: ${fmt(_checkedOutAt!)}', style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
+              const Spacer(),
+              InkWell(
+                onTap: _undoCheckOut,
+                child: Text('Undo', style: TextStyle(fontSize: 12, color: kCoral, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ],
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: notCheckedIn ? _checkIn : null,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: kGreen,
+                  side: BorderSide(color: notCheckedIn ? kGreen : Colors.grey.shade300),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.login_rounded, size: 16),
+                label: const Text('Check In', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: (isCheckedIn) ? _checkOut : null,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: kNavy,
+                  side: BorderSide(color: isCheckedIn ? kNavy : Colors.grey.shade300),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.logout_rounded, size: 16),
+                label: const Text('Check Out', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ]),
+        ],
       ),
     );
   }
@@ -399,100 +543,6 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
         errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kCoral, width: 1.5)),
         focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kCoral, width: 1.5)),
         errorStyle: const TextStyle(color: kCoral),
-      ),
-    );
-  }
-}
-
-// ── DATE + TIME PICKER FIELD (local — avoids depending on the unused
-//    widgets/Drone entry form fields.dart, whose filename contains spaces) ──
-
-class _DateTimePickerField extends StatelessWidget {
-  final String label;
-  final DateTime? value;
-  final ValueChanged<DateTime> onChanged;
-  final DateTime? firstDate;
-  final DateTime? lastDate;
-  final Color accent;
-
-  const _DateTimePickerField({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    required this.accent,
-    this.firstDate,
-    this.lastDate,
-  });
-
-  Future<void> _pick(BuildContext context) async {
-    final now = DateTime.now();
-    final initialDate = value ?? now;
-
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: firstDate ?? DateTime(now.year - 1),
-      lastDate: lastDate ?? DateTime(now.year + 1),
-      builder: (context, child) => Theme(
-        data: ThemeData.light().copyWith(
-          colorScheme: ColorScheme.light(primary: accent, surface: Colors.white),
-        ),
-        child: child!,
-      ),
-    );
-    if (pickedDate == null) return;
-    if (!context.mounted) return;
-
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(initialDate),
-      builder: (context, child) => Theme(
-        data: ThemeData.light().copyWith(
-          colorScheme: ColorScheme.light(primary: accent, surface: Colors.white),
-        ),
-        child: child!,
-      ),
-    );
-    if (pickedTime == null) return;
-
-    onChanged(DateTime(
-      pickedDate.year,
-      pickedDate.month,
-      pickedDate.day,
-      pickedTime.hour,
-      pickedTime.minute,
-    ));
-  }
-
-  String _formatted(DateTime dt) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(dt.day)}/${two(dt.month)}/${dt.year}  ${two(dt.hour)}:${two(dt.minute)}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => _pick(context),
-      borderRadius: BorderRadius.circular(14),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-          prefixIcon: Icon(Icons.calendar_month_outlined, color: accent, size: 20),
-          suffixIcon: Icon(Icons.access_time, color: Colors.grey.shade400, size: 18),
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade200)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: accent, width: 1.5)),
-        ),
-        child: Text(
-          value != null ? _formatted(value!) : 'Select date & time',
-          style: TextStyle(
-            color: value == null ? Colors.grey.shade400 : const Color(0xFF0A1628),
-            fontWeight: value == null ? FontWeight.normal : FontWeight.w600,
-          ),
-        ),
       ),
     );
   }

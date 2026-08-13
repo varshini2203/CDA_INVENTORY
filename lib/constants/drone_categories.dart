@@ -36,3 +36,13 @@ const List<String> kDroneCategories = [
   'Military',
   'Other',
 ];
+
+// Drone weight/regulatory classification (matches the standard Nano / Micro
+// / Small / Medium / Large classes used for drone registration in India).
+const List<String> kDroneClasses = [
+  'Nano',
+  'Micro',
+  'Small',
+  'Medium',
+  'Large',
+];

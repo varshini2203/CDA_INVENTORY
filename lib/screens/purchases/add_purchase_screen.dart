@@ -16,13 +16,16 @@ import 'package:printing/printing.dart';
 import 'package:cda_inventory/models/purchase.dart';
 import 'package:cda_inventory/models/invoice_line_item.dart';
 import 'package:cda_inventory/models/customer_details.dart';
+import 'package:cda_inventory/models/product.dart';
 import 'package:cda_inventory/services/purchase_service.dart';
 import 'package:cda_inventory/services/purchase_pdf_service.dart';
+import 'package:cda_inventory/services/product_service.dart';
 
 // ── One editable row in the item table ────────────────────────────────────
 class _ItemRow {
   final String id;
   final TextEditingController itemController = TextEditingController();
+  final FocusNode itemFocusNode = FocusNode();
   final TextEditingController serialController = TextEditingController();
   final TextEditingController descController = TextEditingController();
   final TextEditingController qtyController = TextEditingController();
@@ -59,6 +62,7 @@ class _ItemRow {
 
   void dispose() {
     itemController.dispose();
+    itemFocusNode.dispose();
     serialController.dispose();
     descController.dispose();
     qtyController.dispose();
@@ -109,6 +113,19 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
   bool _isSaving = false;
   bool get _isEditMode => widget.purchaseToEdit != null;
 
+  // ── Inventory products, loaded once for the item-search Autocomplete ──
+  List<Product> _products = [];
+
+  Future<void> _loadProducts() async {
+    try {
+      final products = await ProductService.getProducts();
+      if (!mounted) return;
+      setState(() => _products = products);
+    } catch (_) {
+      // Silent — the item field just won't show suggestions if this fails.
+    }
+  }
+
   // ── Uploaded/scanned bill image (stored as Base64 in Firestore, same
   //    pattern as BillsService — no Firebase Storage/Blaze plan needed) ──
   Uint8List? _newBillImageBytes;
@@ -146,6 +163,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
   @override
   void initState() {
     super.initState();
+    _loadProducts();
     if (_isEditMode) {
       final p = widget.purchaseToEdit!;
       _partyNameController.text = p.displayVendorName;
@@ -824,7 +842,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
         ),
         SizedBox(
           width: cItem,
-          child: _cellField(row.itemController, hint: 'Search item'),
+          child: _itemSearchField(row),
         ),
         SizedBox(
           width: cSerial,
@@ -907,6 +925,85 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
         border: InputBorder.none,
         contentPadding: const EdgeInsets.symmetric(vertical: 6),
       ),
+    );
+  }
+
+  // ── Item search field — Autocomplete over the live `products` (inventory)
+  //    collection. Typing filters by name; selecting a product fills in
+  //    the item name and its current price (and defaults qty to 1 if the
+  //    row's qty is still empty). Uses the row's own controller/focusNode
+  //    so it behaves exactly like a normal cell field otherwise. ────────
+  Widget _itemSearchField(_ItemRow row) {
+    return RawAutocomplete<Product>(
+      textEditingController: row.itemController,
+      focusNode: row.itemFocusNode,
+      optionsBuilder: (TextEditingValue value) {
+        final q = value.text.trim().toLowerCase();
+        if (q.isEmpty) return const Iterable<Product>.empty();
+        return _products.where((p) => p.name.toLowerCase().contains(q)).take(20);
+      },
+      displayStringForOption: (p) => p.name,
+      onSelected: (p) {
+        row.itemController.text = p.name;
+        row.priceController.text = p.price.toString();
+        if (row.qtyController.text.trim().isEmpty) row.qtyController.text = '1';
+        _recalc();
+      },
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        return TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          style: const TextStyle(fontSize: 12.5, color: kTextDark),
+          decoration: const InputDecoration(
+            hintText: 'Search item',
+            hintStyle: TextStyle(color: kTextMute, fontSize: 12.5),
+            isDense: true,
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.symmetric(vertical: 6),
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              width: cItem,
+              constraints: const BoxConstraints(maxHeight: 220),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: kBorder),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final p = options.elementAt(index);
+                  return InkWell(
+                    onTap: () => onSelected(p),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(p.name,
+                              style: const TextStyle(fontSize: 12.5, color: kTextDark, fontWeight: FontWeight.w600)),
+                          Text('Stock: ${p.quantity} · ₹${p.price.toStringAsFixed(0)}',
+                              style: const TextStyle(fontSize: 11, color: kTextMute)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

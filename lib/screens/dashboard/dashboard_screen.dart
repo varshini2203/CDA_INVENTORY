@@ -415,6 +415,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (!isAdmin) const ViewOnlyBanner(),
                 Expanded(
                   child: _DashboardBody(
+                    isAdmin: isAdmin,
                     onNavigate: (title) => _navigate(context, title),
                   ),
                 ),
@@ -1364,7 +1365,8 @@ class _CDABgPainter extends CustomPainter {
 // ═══════════════════════════════════════════════════════════════════════════════
 class _DashboardBody extends StatefulWidget {
   final void Function(String) onNavigate;
-  const _DashboardBody({required this.onNavigate});
+  final bool isAdmin;
+  const _DashboardBody({required this.onNavigate, this.isAdmin = false});
   @override
   State<_DashboardBody> createState() => _DashboardBodyState();
 }
@@ -1372,6 +1374,11 @@ class _DashboardBody extends StatefulWidget {
 class _DashboardBodyState extends State<_DashboardBody>
     with SingleTickerProviderStateMixin {
   late AnimationController _stagger;
+
+  // Inventory Movement is now shown to every role, admin included — no
+  // filtering here anymore. _modules stays the single source of truth for
+  // all roles.
+  List<Map<String, dynamic>> get _visibleModules => _modules;
 
   @override
   void initState() {
@@ -1456,7 +1463,7 @@ class _DashboardBodyState extends State<_DashboardBody>
                     mainAxisSpacing: 6,
                     childAspectRatio: aspectRatio,
                   ),
-                  itemCount: _modules.length,
+                  itemCount: _visibleModules.length,
                   itemBuilder: (context, i) {
                     final anim = _s(0.28 + i * 0.025,
                         (0.28 + i * 0.025 + 0.22).clamp(0.0, 1.0));
@@ -1468,17 +1475,17 @@ class _DashboardBodyState extends State<_DashboardBody>
                             offset: Offset(0, 16 * (1 - anim.value)), child: child),
                       ),
                       child: _ModuleCard(
-                        title: _modules[i]['title'] as String,
-                        icon: _modules[i]['icon'] as IconData,
-                        emoji: _modules[i]['emoji'] as String,
-                        desc: _modules[i]['desc'] as String,
-                        tag: _modules[i]['tag'] as String,
-                        color: _modules[i]['color'] as Color,
-                        gradFrom: _modules[i]['gradFrom'] as Color,
-                        gradTo: _modules[i]['gradTo'] as Color,
-                        image: _modules[i]['image'] as String,
+                        title: _visibleModules[i]['title'] as String,
+                        icon: _visibleModules[i]['icon'] as IconData,
+                        emoji: _visibleModules[i]['emoji'] as String,
+                        desc: _visibleModules[i]['desc'] as String,
+                        tag: _visibleModules[i]['tag'] as String,
+                        color: _visibleModules[i]['color'] as Color,
+                        gradFrom: _visibleModules[i]['gradFrom'] as Color,
+                        gradTo: _visibleModules[i]['gradTo'] as Color,
+                        image: _visibleModules[i]['image'] as String,
                         labelHeight: labelHeight,
-                        onTap: () => widget.onNavigate(_modules[i]['title'] as String),
+                        onTap: () => widget.onNavigate(_visibleModules[i]['title'] as String),
                       ),
                     );
                   },
@@ -2363,6 +2370,11 @@ class _CDADrawer extends StatefulWidget {
 class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMixin {
   late final AnimationController _c;
 
+  // Inventory Movement is now shown to every role in the side menu too —
+  // no filtering here anymore. _drawerItems stays the single source of
+  // truth for all roles.
+  List<Map<String, dynamic>> get _visibleDrawerItems => _drawerItems;
+
   @override
   void initState() {
     super.initState();
@@ -2480,8 +2492,8 @@ class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMi
                   child: ListView(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     children: [
-                      ...List.generate(_drawerItems.length, (i) {
-                        final item = _drawerItems[i];
+                      ...List.generate(_visibleDrawerItems.length, (i) {
+                        final item = _visibleDrawerItems[i];
                         final start = (i * 0.055).clamp(0.0, 0.85);
                         final end   = (start + 0.32).clamp(0.0, 1.0);
                         final anim  = CurvedAnimation(parent: _c,

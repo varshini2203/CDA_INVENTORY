@@ -33,6 +33,7 @@ import 'package:cda_inventory/services/product_service.dart';
 import 'package:cda_inventory/services/seed_guard_service.dart';
 import 'package:cda_inventory/data/seed_search_products.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart' show kBranches, kBranchLabels;
+import 'package:cda_inventory/widgets/common/serial_scan_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -371,6 +372,11 @@ class _SearchScreenState extends State<SearchScreen> {
       backgroundColor: kNavy,
       foregroundColor: Colors.white,
       actions: [
+        IconButton(
+          icon: const Icon(Icons.qr_code_scanner_rounded),
+          tooltip: 'Scan serial number',
+          onPressed: _scanToFind,
+        ),
         IconButton(
           icon: const Icon(Icons.refresh_rounded),
           tooltip: 'Refresh',
@@ -841,6 +847,39 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  /// Scans a serial number / UID and jumps straight to that product —
+  /// checks the already-loaded list first (instant, works offline), then
+  /// falls back to a Firestore lookup (ProductService.getBySerial) in case
+  /// the product isn't in the currently loaded page.
+  Future<void> _scanToFind() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const SerialScanScreen(title: 'Scan to Find Product'),
+      ),
+    );
+    if (code == null || code.trim().isEmpty || !mounted) return;
+    final scanned = code.trim();
+
+    Product? match;
+    for (final p in _all) {
+      if ((p.serialNumber ?? '').trim() == scanned) {
+        match = p;
+        break;
+      }
+    }
+    match ??= await ProductService.getBySerial(scanned);
+
+    if (!mounted) return;
+    if (match != null) {
+      _openDetailSheet(match);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No product found for serial "$scanned"')),
+      );
+    }
+  }
+
   void _openDetailSheet(Product product) {
     showModalBottomSheet(
       context: context,
@@ -1053,6 +1092,7 @@ class _ProductDetailSheet extends StatelessWidget {
               _row('Category', product.category),
               _row('Quantity', '${product.quantity}  (${product.stockLabel})'),
               if (product.price > 0) _row('Price', '₹${product.price.toStringAsFixed(2)}'),
+              if (product.hasSerial) _row('Serial / UID', product.serialNumber!.trim()),
               if (locationText.isNotEmpty) _row('Location', locationText),
               if ((product.notes ?? '').trim().isNotEmpty) _row('Notes', product.notes!.trim()),
               const SizedBox(height: 20),
@@ -1135,6 +1175,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   late TextEditingController _categoryController;
   late TextEditingController _qtyController;
   late TextEditingController _priceController;
+  late TextEditingController _serialController;
   late TextEditingController _roomController;
   late TextEditingController _rowController;
   late TextEditingController _rackController;
@@ -1154,6 +1195,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _categoryController = TextEditingController(text: p?.category ?? '');
     _qtyController = TextEditingController(text: (p?.quantity ?? 1).toString());
     _priceController = TextEditingController(text: (p?.price ?? 0.0) == 0.0 ? '' : p!.price.toString());
+    _serialController = TextEditingController(text: p?.serialNumber ?? '');
     _branch = (p?.branch ?? '').trim().isEmpty ? null : p!.branch;
     _roomController = TextEditingController(text: p?.room ?? '');
     _rowController = TextEditingController(text: p?.row ?? '');
@@ -1168,6 +1210,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _categoryController.dispose();
     _qtyController.dispose();
     _priceController.dispose();
+    _serialController.dispose();
     _roomController.dispose();
     _rowController.dispose();
     _rackController.dispose();
@@ -1195,6 +1238,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       'quantity': int.tryParse(_qtyController.text.trim()) ?? 0,
       'price': double.tryParse(_priceController.text.trim()) ?? 0.0,
       'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      'serialNumber': _serialController.text.trim().isEmpty ? null : _serialController.text.trim(),
       'branch': _branch,
       'room': room.isEmpty ? null : room,
       'row': _rowController.text.trim().isEmpty ? null : _rowController.text.trim(),
@@ -1310,6 +1354,31 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _serialController,
+                      decoration: InputDecoration(
+                        labelText: 'Serial Number / UID (optional)',
+                        hintText: 'Scan or type the item\'s unique code',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.qr_code_scanner_rounded),
+                          tooltip: 'Scan serial number',
+                          onPressed: () async {
+                            final code = await Navigator.push<String>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SerialScanScreen(
+                                    title: 'Scan Product Serial'),
+                              ),
+                            );
+                            if (code != null && mounted) {
+                              setState(() => _serialController.text = code);
+                            }
+                          },
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     const Align(
