@@ -620,98 +620,170 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
 
   // ── Party search / phone  +  Bill No. / Bill Date / State of supply ────
   Widget _buildPartyAndBillRow() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 3,
-          child: Row(children: [
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 700;
+        if (isNarrow) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _label('Party name', required: true),
+            TextFormField(
+              controller: _partyNameController,
+              style: const TextStyle(color: kTextDark, fontSize: 13),
+              decoration: _fieldDecoration(hint: 'Search by Name/Phone *').copyWith(
+                suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded, color: kTextMute, size: 20),
+              ),
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+            _label('Phone number'),
+            TextFormField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              style: const TextStyle(color: kTextDark, fontSize: 13),
+              decoration: _fieldDecoration(hint: 'Phone No.'),
+            ),
+            const SizedBox(height: 12),
+            _label('Bill Number'),
+            TextFormField(
+              controller: _billNumberController,
+              style: const TextStyle(color: kTextDark, fontSize: 13),
+              decoration: _fieldDecoration(hint: 'Bill number'),
+            ),
+            const SizedBox(height: 12),
+            _label('Bill Date'),
+            InkWell(
+              onTap: _pickBillDate,
+              child: InputDecorator(
+                decoration: _fieldDecoration(),
+                child: Row(children: [
+                  Text(_fmtDate(_billDate), style: const TextStyle(fontSize: 13, color: kTextDark)),
+                  const Spacer(),
+                  const Icon(Icons.calendar_today_rounded, size: 15, color: kTextMute),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _label('State of supply'),
+            DropdownButtonFormField<String>(
+              initialValue: _stateOfSupply,
+              isExpanded: true,
+              dropdownColor: Colors.white,
+              style: const TextStyle(fontSize: 13, color: kTextDark),
+              decoration: _fieldDecoration(),
+              items: _indianStates
+                  .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 13, color: kTextDark), overflow: TextOverflow.ellipsis)))
+                  .toList(),
+              onChanged: (v) => setState(() => _stateOfSupply = v ?? _stateOfSupply),
+            ),
+            const SizedBox(height: 12),
+            _label('Firm / Branch'),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedBranch,
+              isExpanded: true,
+              dropdownColor: Colors.white,
+              style: const TextStyle(fontSize: 13, color: kTextDark),
+              decoration: _fieldDecoration(),
+              items: _branchOptions
+                  .map((b) => DropdownMenuItem(value: b, child: Text(_branchLabels[b] ?? b, style: const TextStyle(fontSize: 13, color: kTextDark))))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedBranch = v ?? _selectedBranch),
+            ),
+          ]);
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Expanded(
-              flex: 2,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                TextFormField(
-                  controller: _partyNameController,
-                  style: const TextStyle(color: kTextDark, fontSize: 13),
-                  decoration: _fieldDecoration(hint: 'Search by Name/Phone *').copyWith(
-                    suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded, color: kTextMute, size: 20),
+              flex: 3,
+              child: Row(children: [
+                Expanded(
+                  flex: 2,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    TextFormField(
+                      controller: _partyNameController,
+                      style: const TextStyle(color: kTextDark, fontSize: 13),
+                      decoration: _fieldDecoration(hint: 'Search by Name/Phone *').copyWith(
+                        suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded, color: kTextMute, size: 20),
+                      ),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    ),
+                  ]),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 1,
+                  child: TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    style: const TextStyle(color: kTextDark, fontSize: 13),
+                    decoration: _fieldDecoration(hint: 'Phone No.'),
                   ),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                 ),
               ]),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 24),
             Expanded(
-              flex: 1,
-              child: TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                style: const TextStyle(color: kTextDark, fontSize: 13),
-                decoration: _fieldDecoration(hint: 'Phone No.'),
-              ),
+              flex: 3,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                _metaRow('Bill Number', ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: TextFormField(
+                    controller: _billNumberController,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(color: kTextDark, fontSize: 13),
+                    decoration: _fieldDecoration(hint: 'Bill number', padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                  ),
+                )),
+                const SizedBox(height: 8),
+                _metaRow('Bill Date', ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: InkWell(
+                    onTap: _pickBillDate,
+                    child: InputDecorator(
+                      decoration: _fieldDecoration(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                        Text(_fmtDate(_billDate), style: const TextStyle(fontSize: 13, color: kTextDark)),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.calendar_today_rounded, size: 15, color: kTextMute),
+                      ]),
+                    ),
+                  ),
+                )),
+                const SizedBox(height: 8),
+                _metaRow('State of supply', ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _stateOfSupply,
+                    isExpanded: true,
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(fontSize: 12.5, color: kTextDark),
+                    decoration: _fieldDecoration(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
+                    items: _indianStates
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12.5, color: kTextDark), overflow: TextOverflow.ellipsis)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _stateOfSupply = v ?? _stateOfSupply),
+                  ),
+                )),
+                const SizedBox(height: 8),
+                _metaRow('Firm / Branch', ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedBranch,
+                    isExpanded: true,
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(fontSize: 12.5, color: kTextDark),
+                    decoration: _fieldDecoration(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
+                    items: _branchOptions
+                        .map((b) => DropdownMenuItem(value: b, child: Text(_branchLabels[b] ?? b, style: const TextStyle(fontSize: 12.5, color: kTextDark))))
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedBranch = v ?? _selectedBranch),
+                  ),
+                )),
+              ]),
             ),
-          ]),
-        ),
-        const SizedBox(width: 24),
-        Expanded(
-          flex: 3,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            _metaRow('Bill Number', ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 200),
-              child: TextFormField(
-                controller: _billNumberController,
-                textAlign: TextAlign.right,
-                style: const TextStyle(color: kTextDark, fontSize: 13),
-                decoration: _fieldDecoration(hint: 'Bill number', padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-              ),
-            )),
-            const SizedBox(height: 8),
-            _metaRow('Bill Date', ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 200),
-              child: InkWell(
-                onTap: _pickBillDate,
-                child: InputDecorator(
-                  decoration: _fieldDecoration(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                    Text(_fmtDate(_billDate), style: const TextStyle(fontSize: 13, color: kTextDark)),
-                    const SizedBox(width: 6),
-                    const Icon(Icons.calendar_today_rounded, size: 15, color: kTextMute),
-                  ]),
-                ),
-              ),
-            )),
-            const SizedBox(height: 8),
-            _metaRow('State of supply', ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 200),
-              child: DropdownButtonFormField<String>(
-                initialValue: _stateOfSupply,
-                isExpanded: true,
-                dropdownColor: Colors.white,
-                style: const TextStyle(fontSize: 12.5, color: kTextDark),
-                decoration: _fieldDecoration(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
-                items: _indianStates
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12.5, color: kTextDark), overflow: TextOverflow.ellipsis)))
-                    .toList(),
-                onChanged: (v) => setState(() => _stateOfSupply = v ?? _stateOfSupply),
-              ),
-            )),
-            const SizedBox(height: 8),
-            _metaRow('Firm / Branch', ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 200),
-              child: DropdownButtonFormField<String>(
-                initialValue: _selectedBranch,
-                isExpanded: true,
-                dropdownColor: Colors.white,
-                style: const TextStyle(fontSize: 12.5, color: kTextDark),
-                decoration: _fieldDecoration(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
-                items: _branchOptions
-                    .map((b) => DropdownMenuItem(value: b, child: Text(_branchLabels[b] ?? b, style: const TextStyle(fontSize: 12.5, color: kTextDark))))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedBranch = v ?? _selectedBranch),
-              ),
-            )),
-          ]),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -743,20 +815,167 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
       cIcon + cItem + cSerial + cDesc + cQty + cUnit + cPrice + cDiscPct + cDiscAmt + cTaxPct + cTaxAmt + cAmount + cDelete + (kRowHPad * 2);
 
   Widget _buildItemTable() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 700;
+        if (isNarrow) return _buildItemCardsList();
+        return Container(
+          decoration: BoxDecoration(border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(4)),
+          clipBehavior: Clip.antiAlias,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: _tableWidth,
+              child: Column(children: [
+                _tableHeader(),
+                ...List.generate(_rows.length, (i) => _tableRow(i)),
+              ]),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Phone-friendly stacked card per item (replaces the wide table) ──────
+  Widget _buildItemCardsList() {
+    return Column(
+      children: List.generate(_rows.length, (i) => _itemCard(i)),
+    );
+  }
+
+  Widget _itemCard(int index) {
+    final row = _rows[index];
     return Container(
-      decoration: BoxDecoration(border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(4)),
-      clipBehavior: Clip.antiAlias,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: _tableWidth,
-          child: Column(children: [
-            _tableHeader(),
-            ...List.generate(_rows.length, (i) => _tableRow(i)),
-          ]),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: kBorder),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Container(
+            width: 22, height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: kHeaderBg, borderRadius: BorderRadius.circular(6)),
+            child: Text('${index + 1}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kTextSub)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: _cardField(row.itemController, hint: 'Search item', label: 'Item')),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18, color: kTextMute),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+            onPressed: () => _removeRow(index),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: _cardField(row.serialController, hint: '—', label: 'Serial no.')),
+          const SizedBox(width: 10),
+          Expanded(child: _cardField(row.descController, hint: '—', label: 'Description')),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: _cardField(row.qtyController, hint: '0', label: 'Qty', numeric: true)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _cardDropdownWrap(
+              label: 'Unit',
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: row.unit,
+                  isDense: true,
+                  isExpanded: true,
+                  dropdownColor: Colors.white,
+                  style: const TextStyle(fontSize: 13, color: kTextDark),
+                  items: _units.map((u) => DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(color: kTextDark)))).toList(),
+                  onChanged: (v) => setState(() => row.unit = v ?? 'NONE'),
+                ),
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: _cardField(row.priceController, hint: '0', label: 'Price/unit', numeric: true)),
+          const SizedBox(width: 10),
+          Expanded(child: _cardField(row.discPercentController, hint: '0', label: 'Discount %', numeric: true)),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: _cardDropdownWrap(
+              label: 'Tax',
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<double?>(
+                  value: row.taxPercent,
+                  isDense: true,
+                  isExpanded: true,
+                  dropdownColor: Colors.white,
+                  hint: const Text('Select', style: TextStyle(fontSize: 12.5, color: kTextMute)),
+                  style: const TextStyle(fontSize: 13, color: kTextDark),
+                  items: _taxRates.map((t) => DropdownMenuItem(value: t, child: Text('GST $t%', style: const TextStyle(color: kTextDark)))).toList(),
+                  onChanged: (v) => setState(() => row.taxPercent = v),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Discount amt / Tax amt', style: TextStyle(fontSize: 11, color: kTextMute)),
+              const SizedBox(height: 4),
+              Text('₹${row.discAmount.toStringAsFixed(2)}  ·  ₹${row.taxAmount.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 12.5, color: kTextSub)),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        const Divider(height: 1, color: kBorder),
+        const SizedBox(height: 8),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Amount', style: TextStyle(fontSize: 13, color: kTextSub)),
+          Text('₹${row.amount.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: kTextDark)),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _cardField(TextEditingController controller, {required String hint, required String label, bool numeric = false}) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 11, color: kTextMute)),
+      const SizedBox(height: 3),
+      TextFormField(
+        controller: controller,
+        keyboardType: numeric ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+        style: const TextStyle(fontSize: 13.5, color: kTextDark),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: kTextMute, fontSize: 13.5),
+          isDense: true,
+          filled: true,
+          fillColor: kHeaderBg,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
         ),
       ),
-    );
+    ]);
+  }
+
+  Widget _cardDropdownWrap({required String label, required Widget child}) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 11, color: kTextMute)),
+      const SizedBox(height: 3),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+        decoration: BoxDecoration(color: kHeaderBg, borderRadius: BorderRadius.circular(6)),
+        child: child,
+      ),
+    ]);
   }
 
   Widget _th(double w, String text, {TextAlign align = TextAlign.left}) => SizedBox(
@@ -912,40 +1131,76 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
 
   // ── "ADD ROW" + TOTAL summary line ──────────────────────────────────
   Widget _buildAddRowAndTotal() {
-    return Container(
-      decoration: BoxDecoration(border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(4)),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: _tableWidth,
-          child: Row(children: [
-            SizedBox(
-              width: cIcon + cItem,
-              child: TextButton.icon(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 700;
+        if (isNarrow) {
+          return Container(
+            decoration: BoxDecoration(border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.all(12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              TextButton.icon(
                 onPressed: _addRow,
                 style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
                 icon: const Icon(Icons.add_rounded, size: 16, color: kBlue),
                 label: const Text('ADD ROW', style: TextStyle(color: kBlue, fontWeight: FontWeight.w700, fontSize: 12)),
               ),
+              const SizedBox(height: 10),
+              const Divider(height: 1, color: kBorder),
+              const SizedBox(height: 10),
+              _totalSummaryLine('Total qty', _totalQty.toStringAsFixed(0)),
+              const SizedBox(height: 6),
+              _totalSummaryLine('Total discount', '₹${_totalDiscountAmount.toStringAsFixed(0)}'),
+              const SizedBox(height: 6),
+              _totalSummaryLine('Total tax', '₹${_totalTaxAmount.toStringAsFixed(0)}'),
+              const SizedBox(height: 8),
+              _totalSummaryLine('Total amount', '₹${_totalAmount.toStringAsFixed(0)}', emphasize: true),
+            ]),
+          );
+        }
+        return Container(
+          decoration: BoxDecoration(border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(4)),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: _tableWidth,
+              child: Row(children: [
+                SizedBox(
+                  width: cIcon + cItem,
+                  child: TextButton.icon(
+                    onPressed: _addRow,
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+                    icon: const Icon(Icons.add_rounded, size: 16, color: kBlue),
+                    label: const Text('ADD ROW', style: TextStyle(color: kBlue, fontWeight: FontWeight.w700, fontSize: 12)),
+                  ),
+                ),
+                SizedBox(
+                  width: cSerial + cDesc,
+                  child: const Text('TOTAL', textAlign: TextAlign.right, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kTextDark)),
+                ),
+                SizedBox(width: cQty, child: Text(_totalQty.toStringAsFixed(0), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kTextDark))),
+                SizedBox(width: cUnit, child: const SizedBox()),
+                SizedBox(width: cPrice, child: const SizedBox()),
+                SizedBox(width: cDiscPct, child: const SizedBox()),
+                SizedBox(width: cDiscAmt, child: Text('₹${_totalDiscountAmount.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kTextDark))),
+                SizedBox(width: cTaxPct, child: const SizedBox()),
+                SizedBox(width: cTaxAmt, child: Text('₹${_totalTaxAmount.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kTextDark))),
+                SizedBox(width: cAmount, child: Text('₹${_totalAmount.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: kTextDark))),
+                SizedBox(width: cDelete, child: const SizedBox()),
+              ]),
             ),
-            SizedBox(
-              width: cSerial + cDesc,
-              child: const Text('TOTAL', textAlign: TextAlign.right, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kTextDark)),
-            ),
-            SizedBox(width: cQty, child: Text(_totalQty.toStringAsFixed(0), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kTextDark))),
-            SizedBox(width: cUnit, child: const SizedBox()),
-            SizedBox(width: cPrice, child: const SizedBox()),
-            SizedBox(width: cDiscPct, child: const SizedBox()),
-            SizedBox(width: cDiscAmt, child: Text('₹${_totalDiscountAmount.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kTextDark))),
-            SizedBox(width: cTaxPct, child: const SizedBox()),
-            SizedBox(width: cTaxAmt, child: Text('₹${_totalTaxAmount.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kTextDark))),
-            SizedBox(width: cAmount, child: Text('₹${_totalAmount.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: kTextDark))),
-            SizedBox(width: cDelete, child: const SizedBox()),
-          ]),
-        ),
-      ),
+          ),
+        );
+      },
     );
+  }
+
+  Widget _totalSummaryLine(String label, String value, {bool emphasize = false}) {
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Text(label, style: TextStyle(fontSize: emphasize ? 13.5 : 12.5, color: emphasize ? kTextDark : kTextSub, fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500)),
+      Text(value, style: TextStyle(fontSize: emphasize ? 15 : 12.5, color: kTextDark, fontWeight: emphasize ? FontWeight.w800 : FontWeight.w700)),
+    ]);
   }
 
   // ── Terms & Conditions / Payment / Shipping / Round Off / Total ─────

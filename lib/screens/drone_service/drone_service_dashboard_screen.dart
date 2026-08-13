@@ -466,6 +466,8 @@ class _DroneServiceDashboardScreenState
       child: Column(children: [
         TextField(
           onChanged: (v) => setState(() => _search = v),
+          cursorColor: kNavy,
+          style: const TextStyle(color: kNavy, fontSize: 14, fontWeight: FontWeight.w500),
           decoration: InputDecoration(
             hintText: 'Search drone, service type, technician…',
             hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),

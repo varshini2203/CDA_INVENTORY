@@ -439,103 +439,110 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     );
   }
 
-  // ── Top bar: search + Payment-In + Add Sale ─────────────────────────────
+  // ── Top bar: search bar on top, Payment-In + Add Sale below ─────────────
   Widget _buildTopBar() {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: _showSearchBar
-              ? Container(
+        _showSearchBar
+            ? Container(
+          height: 42,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: kBorder),
+          ),
+          child: TextField(
+            controller: _searchController,
+            focusNode: _searchFocusNode,
+            autofocus: true,
+            cursorColor: kTextDark,
+            showCursor: true,
+            enableInteractiveSelection: true,
+            style: const TextStyle(
+              fontSize: 14,
+              color: kTextDark,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              isDense: true,
+              filled: true,
+              fillColor: Colors.white,
+              hintText: 'Search Transactions',
+              hintStyle: const TextStyle(color: kTextMute, fontSize: 14),
+              prefixIcon: const Icon(Icons.search_rounded, color: kTextMute, size: 20),
+              suffixIcon: _searchController.text.isEmpty
+                  ? null
+                  : IconButton(
+                icon: const Icon(Icons.close_rounded, color: kTextMute, size: 18),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _showSearchBar = false);
+                },
+              ),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            ),
+          ),
+        )
+            : GestureDetector(
+          onTap: () {
+            setState(() => _showSearchBar = true);
+            WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocusNode.requestFocus());
+          },
+          child: Container(
             height: 42,
-            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: kBorder),
             ),
-            child: TextField(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              autofocus: true,
-              cursorColor: kTextDark,
-              showCursor: true,
-              enableInteractiveSelection: true,
-              style: const TextStyle(
-                fontSize: 14,
-                color: kTextDark,
-                fontWeight: FontWeight.w500,
+            child: const Row(children: [
+              Icon(Icons.search_rounded, color: kTextMute, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Search Transactions',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: kTextMute, fontSize: 14)),
               ),
-              decoration: InputDecoration(
-                isDense: true,
-                filled: true,
-                fillColor: Colors.white,
-                hintText: 'Search Transactions',
-                hintStyle: const TextStyle(color: kTextMute, fontSize: 14),
-                prefixIcon: const Icon(Icons.search_rounded, color: kTextMute, size: 20),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                  icon: const Icon(Icons.close_rounded, color: kTextMute, size: 18),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _showSearchBar = false);
-                  },
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-              ),
-            ),
-          )
-              : GestureDetector(
-            onTap: () {
-              setState(() => _showSearchBar = true);
-              WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocusNode.requestFocus());
-            },
-            child: Container(
-              height: 42,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: kBorder),
-              ),
-              child: const Row(children: [
-                Icon(Icons.search_rounded, color: kTextMute, size: 20),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text('Search Transactions',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: kTextMute, fontSize: 14)),
-                ),
-              ]),
-            ),
+            ]),
           ),
         ),
-        const SizedBox(width: 10),
-        OutlinedButton.icon(
-          onPressed: () => _navigateToPaymentIn(),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: kBlue,
-            side: const BorderSide(color: kBlue),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-          icon: const Icon(Icons.currency_rupee_rounded, size: 16),
-          label: const Text('Payment-In', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton.icon(
-          onPressed: _navigateToAddInvoice,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: kRed,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-          icon: const Icon(Icons.add_rounded, size: 18),
-          label: const Text('Add Sale', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _navigateToPaymentIn(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: kBlue,
+                  side: const BorderSide(color: kBlue),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.currency_rupee_rounded, size: 16),
+                label: const Text('Payment-In', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _navigateToAddInvoice,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kRed,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Add Sale', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              ),
+            ),
+          ],
         ),
       ],
     );

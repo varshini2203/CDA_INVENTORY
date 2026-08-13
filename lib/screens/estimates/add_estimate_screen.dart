@@ -436,53 +436,55 @@ class _AddEstimateScreenState extends State<AddEstimateScreen> {
           ),
         ]),
         const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _label('Valid Till (optional)'),
+        SizedBox(
+          width: double.infinity,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _label('Valid Till (optional)'),
+                  InkWell(
+                    onTap: () => _pickDate(isValidTill: true),
+                    child: InputDecorator(
+                      decoration: _fieldDecoration(hint: 'Select date'),
+                      child: Text(_validTill != null ? _fmtDate(_validTill!) : '—',
+                          style: const TextStyle(fontSize: 13.5, color: kTextDark)),
+                    ),
+                  ),
+                ]),
+              ),
+              const Expanded(child: SizedBox()),
+            ]),
+            const SizedBox(height: 14),
+            Row(mainAxisSize: MainAxisSize.min, children: [
               InkWell(
-                onTap: () => _pickDate(isValidTill: true),
-                child: InputDecorator(
-                  decoration: _fieldDecoration(hint: 'Select date'),
-                  child: Text(_validTill != null ? _fmtDate(_validTill!) : '—',
-                      style: const TextStyle(fontSize: 13.5, color: kTextDark)),
-                ),
+                onTap: () => setState(() => _gstEnabled = !_gstEnabled),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Checkbox(
+                    value: _gstEnabled,
+                    activeColor: kBlue,
+                    side: const BorderSide(color: kBorder, width: 1.5),
+                    onChanged: (v) => setState(() => _gstEnabled = v ?? false),
+                  ),
+                  const Text('GST', style: TextStyle(fontSize: 13, color: kTextDark)),
+                ]),
+              ),
+              const SizedBox(width: 16),
+              InkWell(
+                onTap: () => setState(() => _isInterState = !_isInterState),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Checkbox(
+                    value: _isInterState,
+                    activeColor: kBlue,
+                    side: const BorderSide(color: kBorder, width: 1.5),
+                    onChanged: (v) => setState(() => _isInterState = v ?? false),
+                  ),
+                  const Text('Inter-state', style: TextStyle(fontSize: 13, color: kTextDark)),
+                ]),
               ),
             ]),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Row(children: [
-              Transform.scale(
-                scale: 0.85,
-                child: Checkbox(
-                  value: _gstEnabled,
-                  activeColor: kBlue,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                  onChanged: (v) => setState(() => _gstEnabled = v ?? false),
-                ),
-              ),
-              const Text('GST', style: TextStyle(fontSize: 13, color: kTextDark)),
-              const SizedBox(width: 6),
-              Transform.scale(
-                scale: 0.85,
-                child: Checkbox(
-                  value: _isInterState,
-                  activeColor: kBlue,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                  onChanged: (v) => setState(() => _isInterState = v ?? false),
-                ),
-              ),
-              const Flexible(
-                child: Text('Inter-state',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: kTextDark)),
-              ),
-            ]),
-          ),
-        ]),
+          ]),
+        ),
       ],
     );
   }
