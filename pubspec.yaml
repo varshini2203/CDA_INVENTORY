@@ -35,6 +35,8 @@ dependencies:
   syncfusion_flutter_pdf: ^28.1.33
   firebase_messaging: ^16.4.3
   cloud_functions: ^6.3.5
+  # ── Serial number / UID scanning (product & drone lookup) ────────────────
+  mobile_scanner: ^5.2.3
 
 dev_dependencies:
   flutter_test:

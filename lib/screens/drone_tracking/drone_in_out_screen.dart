@@ -14,9 +14,20 @@ import '../../services/drone_reminder_service.dart';
 import '../../constants/drone_categories.dart';
 import '../../core/access/access_scope.dart';
 import '../../data/seed_drones.dart';
+import '../../widgets/common/serial_scan_screen.dart';
 import 'add_drone_entry_screen.dart';
 import 'edit_drone_screen.dart';
 import 'drone_history_screen.dart';
+
+// Drone type / category filter options. Extend this list anytime a new
+// drone type gets added to the fleet — the type filter chip row (below the
+// branch filter row) is built from it. Values here must match exactly
+// whatever string gets saved into Drone.category from the Add/Edit Drone
+// screens, or the chip will show a count of 0 and filter nothing in.
+const List<String> kDroneCategoryOptions = [
+  'RPTO Aerial',
+  'FPV',
+];
 
 class DroneInOutScreen extends StatefulWidget {
   const DroneInOutScreen({super.key});
@@ -36,6 +47,8 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
   String _filter = 'ALL';
   // 'ALL' | 'Branch 1' (CDA Admin) | 'Branch 2' (CDA Ops)
   String _branchFilter = 'ALL';
+  // 'ALL' | 'RPTO Aerial' | 'FPV' | ... (see kDroneCategoryOptions)
+  String _categoryFilter = 'ALL';
   // 'newest' | 'oldest' | 'date'
   String _sortOption = 'newest';
   DateTime? _sortDate; // used when _sortOption == 'date'
@@ -204,6 +217,27 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
     }
   }
 
+  /// Scans a drone's serial number and drops it straight into the search
+  /// box — reuses the existing `_filtered` matching (which already checks
+  /// `d.serialNumber`), so the list narrows to that exact drone.
+  Future<void> _scanSerial() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const SerialScanScreen(title: 'Scan Drone Serial'),
+      ),
+    );
+    if (code == null || code.trim().isEmpty || !mounted) return;
+    final scanned = code.trim();
+    _searchCtrl.text = scanned;
+    setState(() => _search = scanned);
+    final found = _drones.any(
+            (d) => d.serialNumber.toLowerCase() == scanned.toLowerCase());
+    if (!found) {
+      _showSnack('No drone found for serial "$scanned"', isError: true);
+    }
+  }
+
   Future<void> _openAdd() async {
     final added = await Navigator.push(
         context, _slide(AddDroneEntryScreen(service: _service)));
@@ -264,10 +298,16 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
         (d.pilotName ?? '').toLowerCase().contains(_search.toLowerCase());
     final matchFilter = _filter == 'ALL' || d.status == _filter;
     final matchBranch = _branchFilter == 'ALL' || d.branch == _branchFilter;
+    final matchCategory =
+        _categoryFilter == 'ALL' || d.category == _categoryFilter;
     final matchDate = _sortOption != 'date' ||
         _sortDate == null ||
         (d.lastUpdated != null && _isSameDate(d.lastUpdated!, _sortDate!));
-    return matchSearch && matchFilter && matchBranch && matchDate;
+    return matchSearch &&
+        matchFilter &&
+        matchBranch &&
+        matchCategory &&
+        matchDate;
   }).toList()
     ..sort((a, b) {
       final at = a.lastUpdated;
@@ -283,6 +323,9 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
 
   int _branchCount(String branch) =>
       _drones.where((d) => d.branch == branch).length;
+
+  int _categoryCount(String category) =>
+      _drones.where((d) => d.category == category).length;
 
   int get _inCount => _drones.where((d) => d.status == 'IN').length;
   int get _outCount => _drones.where((d) => d.status == 'OUT').length;
@@ -316,6 +359,8 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
             SliverToBoxAdapter(child: _buildFilterRow()),
           if (!_loading && _error == null && _drones.isNotEmpty)
             SliverToBoxAdapter(child: _buildBranchFilterRow()),
+          if (!_loading && _error == null && _drones.isNotEmpty)
+            SliverToBoxAdapter(child: _buildCategoryFilterRow()),
           if (!_loading && _error == null && _sortOption == 'date' && _sortDate != null)
             SliverToBoxAdapter(child: _buildDateFilterChip()),
           _buildContent(),
@@ -390,6 +435,27 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
                   focusedBorder: InputBorder.none,
                 ),
               ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            height: 48,
+            width: 48,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200, width: 1),
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2)),
+              ],
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.qr_code_scanner_rounded, color: kTeal, size: 22),
+              tooltip: 'Scan drone serial',
+              onPressed: _scanSerial,
             ),
           ),
           const SizedBox(width: 10),
@@ -485,6 +551,37 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
                   selected: _branchFilter == branch,
                   color: kPurple,
                   onTap: () => setState(() => _branchFilter = branch)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Drone-type filter row — "All Types", "RPTO Aerial", "FPV", etc.
+  /// Same chip pattern as the branch filter row above; filters on
+  /// Drone.category (see kDroneCategoryOptions at the top of this file).
+  Widget _buildCategoryFilterRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _FilterChip(
+                label: 'All Types',
+                count: _drones.length,
+                selected: _categoryFilter == 'ALL',
+                color: kGreen,
+                onTap: () => setState(() => _categoryFilter = 'ALL')),
+            for (final type in kDroneCategoryOptions) ...[
+              const SizedBox(width: 8),
+              _FilterChip(
+                  label: type,
+                  count: _categoryCount(type),
+                  selected: _categoryFilter == type,
+                  color: kGreen,
+                  onTap: () => setState(() => _categoryFilter = type)),
             ],
           ],
         ),

@@ -15,12 +15,26 @@ const List<String> kAdditionalDroneProducts = [
   'Extra Battery',
   'Propellers Set',
   'Charger',
-  'Remote Controller',
+  'Remote Controller (Master)',
+  'Remote Controller (Slave)',
   'Carrying Case',
   'Camera Gimbal',
   'Landing Gear',
   'Memory Card',
   'ND Filters',
+  // Suggested additions — these show up repeatedly in the CDA Ops
+  // inventory sheets (seed_search_products.dart / seed_stock_items.dart)
+  // as accessories that get bundled with a drone but weren't in this list:
+  'FPV Goggles',
+  'Monitor',
+  'Anemometer',
+  'LiPo Checker',
+  // Further suggested additions — common drone-fleet accessories not yet
+  // covered above:
+  'GPS Module',
+  'VTX (Video Transmitter)',
+  'Signal Booster / Range Extender',
+  'Drone Backpack / Hard Case',
 ];
 
 const List<String> kDroneConditions = ['Good', 'Damaged'];
@@ -50,6 +64,7 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
   final _nameCtrl = TextEditingController();
   final _modelCtrl = TextEditingController();
   final _serialCtrl = TextEditingController();
+  final _uinCtrl = TextEditingController();
   final _pilotCtrl = TextEditingController();
   final _hoursCtrl = TextEditingController(text: '0');
   final _notesCtrl = TextEditingController();
@@ -57,6 +72,7 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
   final _fixSuggestionCtrl = TextEditingController();
   String _status = 'IN';
   String _category = kDroneCategories.first;
+  String _droneClass = kDroneClasses.first;
   // Raw value stored/filtered on ('Branch 1' / 'Branch 2'); dropdown shows
   // the friendly label ('CDA Admin' / 'CDA Ops').
   String _branch = kBranchOptions.first;
@@ -98,6 +114,7 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
     _nameCtrl.dispose();
     _modelCtrl.dispose();
     _serialCtrl.dispose();
+    _uinCtrl.dispose();
     _pilotCtrl.dispose();
     _hoursCtrl.dispose();
     _notesCtrl.dispose();
@@ -173,6 +190,8 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
       name: _nameCtrl.text.trim(),
       model: _modelCtrl.text.trim(),
       serialNumber: _serialCtrl.text.trim(),
+      uin: _uinCtrl.text.trim(),
+      droneClass: _droneClass,
       status: _status,
       pilotName: _pilotCtrl.text.trim().isEmpty
           ? null
@@ -263,21 +282,44 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
                     const SizedBox(height: 14),
                     _buildField(
                         controller: _modelCtrl,
-                        label: 'Model',
+                        label: 'Model (optional)',
                         hint: 'e.g. DJI Phantom 4',
-                        icon: Icons.category_outlined,
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Model is required'
-                            : null),
+                        icon: Icons.category_outlined),
                     const SizedBox(height: 14),
-                    _buildField(
-                        controller: _serialCtrl,
-                        label: 'Serial Number',
-                        hint: 'e.g. SN-2024-001',
-                        icon: Icons.tag,
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Serial number is required'
-                            : null),
+                    // Serial Number / UIN side by side, separated by "/" —
+                    // Serial Number is optional (spreadsheet imports don't
+                    // always have one), UIN (DGCA Unique Identification
+                    // Number) is required.
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: _buildField(
+                              controller: _serialCtrl,
+                              label: 'Serial Number (optional)',
+                              hint: 'e.g. SN-2024-001',
+                              icon: Icons.tag),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('/',
+                              style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                        Expanded(
+                          child: _buildField(
+                              controller: _uinCtrl,
+                              label: 'UIN',
+                              hint: 'e.g. UIN-2024-001',
+                              icon: Icons.fingerprint,
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? 'UIN is required'
+                                  : null),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 24),
                     _buildSectionHeader(
                         'Assignment', Icons.person_pin_outlined),
@@ -289,6 +331,8 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
                         icon: Icons.person_outline),
                     const SizedBox(height: 14),
                     _buildCategoryDropdown(),
+                    const SizedBox(height: 14),
+                    _buildClassDropdown(),
                     const SizedBox(height: 14),
                     _buildBranchDropdown(),
                     const SizedBox(height: 24),
@@ -454,6 +498,39 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
             .map((c) => DropdownMenuItem(value: c, child: Text(c)))
             .toList(),
         onChanged: (v) => setState(() => _category = v ?? _category),
+      ),
+    );
+  }
+
+  Widget _buildClassDropdown() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: DropdownButtonFormField<String>(
+        value: _droneClass,
+        dropdownColor: Colors.white,
+        style: const TextStyle(color: kNavy, fontSize: 15),
+        decoration: InputDecoration(
+          labelText: 'Class',
+          labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+          prefixIcon: const Icon(Icons.speed_outlined,
+              color: kTeal, size: 20),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.only(right: 16),
+        ),
+        items: kDroneClasses
+            .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+            .toList(),
+        onChanged: (v) => setState(() => _droneClass = v ?? _droneClass),
       ),
     );
   }

@@ -1,10 +1,16 @@
 // lib/screens/inventory_movement/movement_detail_screen.dart
 //
-// Full detail view of a single movement plus the approval-workflow action
-// buttons: Approve / Reject (admin-gated, via CurrentAccess.isAdmin — same
-// gate used by AdminGuard elsewhere) and Dispatch / Return (any editor,
-// via EditGuard/requireEditAccess — the same guard already used across
-// every other write action in the app).
+// Full detail view of a single movement, with a single common CHECK IN /
+// CHECK OUT toggle button — usable by admin AND employee alike (no
+// role-gating, unlike the old Approve/Reject/Dispatch/Return flow).
+//
+// Tap 1 -> "Check In"  : current date + time auto-captured, who did it
+//                        auto-captured from the logged-in user.
+// Tap 2 -> "Check Out" : current date + time auto-captured, who did it
+//                        auto-captured from the logged-in user.
+//
+// Timeline section shows Check In (date/time) and Check Out (date/time)
+// automatically, same pattern as the Drone In/Out module.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,7 +18,6 @@ import 'package:provider/provider.dart';
 import '../../core/access/access_scope.dart';
 import '../../models/inventory_movement.dart';
 import '../../services/inventory_movement_service.dart';
-import '../../services/movement_reminder_service.dart';
 import '../../shared/inventory_ui.dart';
 
 class MovementDetailScreen extends StatefulWidget {
@@ -56,86 +61,29 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
     }
   }
 
-  Future<void> _approve() async {
+  String _currentUserName() {
     final access = context.read<CurrentAccess>().access;
-    await _act(
-          () => InventoryMovementService.approveMovement(
-        id: widget.movementId,
-        approvedBy: access?.name.isNotEmpty == true ? access!.name : (access?.email ?? 'Admin'),
-      ),
-      successMsg: 'Movement approved',
-    );
+    return access?.name.isNotEmpty == true ? access!.name : (access?.email ?? 'User');
   }
 
-  Future<void> _reject() async {
-    final reason = await _promptText('Reject Movement', 'Reason for rejection (optional)');
-    if (reason == null) return; // cancelled
-    final access = context.read<CurrentAccess>().access;
-    await _act(
-          () => InventoryMovementService.rejectMovement(
-        id: widget.movementId,
-        rejectedBy: access?.name.isNotEmpty == true ? access!.name : (access?.email ?? 'Admin'),
-        reason: reason,
-      ),
-      successMsg: 'Movement rejected',
-    );
-  }
+  // Single toggle handler — decides Check In vs Check Out from current state.
+  // Common to admin + employee, no access-level gating.
+  Future<void> _toggle() async {
+    final m = _movement;
+    if (m == null) return;
+    final who = _currentUserName();
 
-  Future<void> _dispatch() async {
-    if (!requireEditAccess(context)) return;
-    final access = context.read<CurrentAccess>().access;
-    final dispatchedBy = access?.name.isNotEmpty == true ? access!.name : (access?.email ?? 'Unknown');
-    await _act(
-          () async {
-        await InventoryMovementService.dispatchMovement(id: widget.movementId, dispatchedBy: dispatchedBy);
-        final m = _movement;
-        if (m?.expectedReturnAt != null) {
-          MovementReminderService.instance.scheduleReminder(
-            movementId: widget.movementId,
-            productName: m!.productName,
-            quantity: m.quantity,
-            expectedReturnAt: m.expectedReturnAt!,
-          );
-        }
-      },
-      successMsg: 'Marked as Dispatched — stock updated',
-    );
-  }
-
-  Future<void> _return() async {
-    if (!requireEditAccess(context)) return;
-    final access = context.read<CurrentAccess>().access;
-    final returnedBy = access?.name.isNotEmpty == true ? access!.name : (access?.email ?? 'Unknown');
-    await _act(
-          () async {
-        await InventoryMovementService.returnMovement(id: widget.movementId, returnedBy: returnedBy);
-        MovementReminderService.instance.cancelReminder(widget.movementId);
-      },
-      successMsg: 'Marked as Returned — stock restored',
-    );
-  }
-
-  Future<String?> _promptText(String title, String hint) async {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          maxLines: 2,
-          decoration: InputDecoration(hintText: hint, border: const OutlineInputBorder()),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.coral, foregroundColor: Colors.white),
-            child: const Text('Confirm'),
-          ),
-        ],
-      ),
-    );
+    if (!m.isCheckedIn) {
+      await _act(
+            () => InventoryMovementService.checkIn(id: widget.movementId, checkedInBy: who),
+        successMsg: 'Checked In',
+      );
+    } else {
+      await _act(
+            () => InventoryMovementService.checkOut(id: widget.movementId, checkedOutBy: who),
+        successMsg: 'Checked Out',
+      );
+    }
   }
 
   @override
@@ -157,8 +105,6 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
   }
 
   Widget _body(BuildContext context, InventoryMovement m) {
-    final isAdmin = context.watch<CurrentAccess>().isAdmin;
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -184,19 +130,6 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
                 const SizedBox(height: 6),
                 Text('Qty ${m.quantity} · ${m.movementType}',
                     style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                if (m.isOverdue) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.18), borderRadius: BorderRadius.circular(8)),
-                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 16),
-                      SizedBox(width: 6),
-                      Text('Overdue for return', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700, fontSize: 12)),
-                    ]),
-                  ),
-                ],
               ],
             ),
           ),
@@ -209,7 +142,6 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
             _kv('Purpose', m.purpose.isEmpty ? '—' : m.purpose),
             _kv('Taken By', m.takenBy),
             _kv('Used By', m.usedBy.isEmpty ? '—' : m.usedBy),
-            _kv('Returned By', m.returnedBy.isEmpty ? '—' : m.returnedBy),
             _kv('Remarks', m.remarks.isEmpty ? '—' : m.remarks, isLast: true),
           ]),
           const SizedBox(height: 20),
@@ -217,97 +149,38 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
           const SizedBox(height: 10),
           FormCard(children: [
             _kv('Created', _fmt(m.createdAt), sub: m.createdBy),
-            _kv('Expected Return', _fmt(m.expectedReturnAt)),
-            _kv('Approved', _fmt(m.approvedAt), sub: m.approvedBy),
-            _kv('Dispatched', _fmt(m.dispatchedAt), sub: m.dispatchedBy),
-            _kv('Returned', _fmt(m.returnedAt), sub: m.returnedBy, isLast: true),
-            if (m.isRejected && (m.rejectionReason ?? '').isNotEmpty) ...[
-              const Divider(height: 20),
-              _kv('Rejection Reason', m.rejectionReason!, isLast: true),
-            ],
+            _kv('Check In', _fmt(m.checkedInAt), sub: m.checkedInBy),
+            _kv('Check Out', _fmt(m.checkedOutAt), sub: m.checkedOutBy, isLast: true),
           ]),
           const SizedBox(height: 28),
-          _actionButtons(m, isAdmin),
+          _actionButton(m),
           const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _actionButtons(InventoryMovement m, bool isAdmin) {
-    if (m.isPending) {
-      if (!isAdmin) {
-        return _infoNote('Waiting for admin approval.');
-      }
-      return Row(children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _busy ? null : _reject,
-            icon: const Icon(Icons.close_rounded, size: 18),
-            label: const Text('Reject'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.coral,
-              side: const BorderSide(color: AppColors.coral),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: _busy ? null : _approve,
-            icon: const Icon(Icons.check_rounded, size: 18),
-            label: const Text('Approve'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.green,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-      ]);
+  // Single common toggle — same button for admin and employee.
+  Widget _actionButton(InventoryMovement m) {
+    if (m.isCheckedOut) {
+      return _infoNote('Checked out on ${_fmt(m.checkedOutAt)} by ${m.checkedOutBy ?? '—'}.');
     }
-    if (m.isApproved) {
-      return EditGuard(
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _busy ? null : _dispatch,
-            icon: const Icon(Icons.north_east_rounded, size: 18),
-            label: const Text('Mark as Dispatched'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.coral,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
+
+    final isIn = m.isCheckedIn;
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _busy ? null : _toggle,
+        icon: Icon(isIn ? Icons.logout_rounded : Icons.login_rounded, size: 18),
+        label: Text(isIn ? 'Check Out' : 'Check In'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isIn ? AppColors.coral : AppColors.green,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-      );
-    }
-    if (m.isDispatched) {
-      return EditGuard(
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _busy ? null : _return,
-            icon: const Icon(Icons.south_west_rounded, size: 18),
-            label: const Text('Mark as Returned'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.green,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-      );
-    }
-    if (m.isReturned) return _infoNote('This movement is complete.');
-    if (m.isRejected) return _infoNote('This movement request was rejected.');
-    return const SizedBox.shrink();
+      ),
+    );
   }
 
   Widget _infoNote(String text) => Container(
@@ -359,27 +232,16 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
 
   Widget _statusPill(InventoryMovement m) {
     Color c;
-    String label = m.status;
-    if (m.isOverdue) {
-      c = Colors.redAccent;
-      label = 'Overdue';
+    String label;
+    if (m.isCheckedOut) {
+      c = AppColors.green;
+      label = 'Checked Out';
+    } else if (m.isCheckedIn) {
+      c = AppColors.coral;
+      label = 'Checked In';
     } else {
-      switch (m.status) {
-        case MovementStatus.pending:
-          c = AppColors.amber;
-          break;
-        case MovementStatus.approved:
-          c = AppColors.teal;
-          break;
-        case MovementStatus.dispatched:
-          c = AppColors.coral;
-          break;
-        case MovementStatus.returned:
-          c = AppColors.green;
-          break;
-        default:
-          c = Colors.grey;
-      }
+      c = AppColors.amber;
+      label = 'Not Checked In';
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

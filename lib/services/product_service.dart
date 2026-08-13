@@ -62,6 +62,7 @@ class ProductService {
       quantity: (data['quantity'] as num).toInt(),
       price: (data['price'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
+      serialNumber: data['serialNumber'] as String?,
       branch: data['branch'] as String?,
       room: data['room'] as String?,
       row: data['row'] as String?,
@@ -122,6 +123,7 @@ class ProductService {
       quantity: (data['quantity'] as num).toInt(),
       price: (data['price'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
+      serialNumber: data['serialNumber'] as String?,
       branch: data['branch'] as String?,
       room: data['room'] as String?,
       row: data['row'] as String?,
@@ -269,6 +271,19 @@ class ProductService {
   static Future<List<Product>> getByTray(String tray) async {
     final snapshot = await _col.where('tray', isEqualTo: tray).get();
     return snapshot.docs.map(Product.fromDoc).toList();
+  }
+
+  /// Exact-match lookup by serial number / UID (server-side) — used by the
+  /// barcode/QR scan flows (Search Products, Add Movement) to resolve a
+  /// scanned code straight to its product. Returns null if nothing matches
+  /// or the code is blank.
+  static Future<Product?> getBySerial(String serial) async {
+    final trimmed = serial.trim();
+    if (trimmed.isEmpty) return null;
+    final snapshot =
+    await _col.where('serialNumber', isEqualTo: trimmed).limit(1).get();
+    if (snapshot.docs.isEmpty) return null;
+    return Product.fromDoc(snapshot.docs.first);
   }
 
   /// Items at or below a stock threshold.

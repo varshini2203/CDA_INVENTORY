@@ -17,6 +17,8 @@ class Drone {
   String name;
   final String model;
   final String serialNumber;
+  final String? uin; // Unique Identification Number (DGCA drone registration ID)
+  final String? droneClass; // Nano/Micro/Small/Medium/Large — see kDroneClasses
   String status; // 'IN' | 'OUT'
   String? pilotName; // also doubles as "used by" — last person to toggle IN/OUT
   final String? category;
@@ -36,6 +38,8 @@ class Drone {
     required this.model,
     required this.serialNumber,
     required this.status,
+    this.uin,
+    this.droneClass,
     this.pilotName,
     this.category,
     this.batteryLevel = 100,
@@ -112,6 +116,8 @@ class Drone {
       name: j['name']?.toString() ?? '',
       model: j['model']?.toString() ?? '',
       serialNumber: j['serial_number']?.toString() ?? '',
+      uin: j['uin']?.toString(),
+      droneClass: j['drone_class']?.toString(),
       status: _normalizeStatus(j['status']),
       pilotName: j['pilot_name']?.toString(),
       category: j['category']?.toString(),
@@ -139,6 +145,8 @@ class Drone {
     'name': name,
     'model': model,
     'serial_number': serialNumber,
+    'uin': uin,
+    'drone_class': droneClass,
     'status': status,
     'pilot_name': pilotName,
     'category': category,
@@ -164,6 +172,8 @@ class Drone {
     String? name,
     String? model,
     String? serialNumber,
+    String? uin,
+    String? droneClass,
     String? status,
     String? pilotName,
     String? category,
@@ -182,6 +192,8 @@ class Drone {
         name: name ?? this.name,
         model: model ?? this.model,
         serialNumber: serialNumber ?? this.serialNumber,
+        uin: uin ?? this.uin,
+        droneClass: droneClass ?? this.droneClass,
         status: status ?? this.status,
         pilotName: pilotName ?? this.pilotName,
         category: category ?? this.category,

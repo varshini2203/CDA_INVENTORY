@@ -4,6 +4,15 @@
 // the Drone In/Out flight-log module. Covers all branches (All Branch /
 // CDA Admin / CDA Ops), a list view and a calendar view, and an "Add
 // Service" flow. Theme matched to the Drone In/Out & Invoice pages.
+//
+// CHANGE: each _ServiceCard now shows a tappable IN / OUT chip next to the
+// existing status pill. It reflects DroneServiceRecord.inOutStatus
+// (checkedInAt / checkedOutAt) and tapping it cycles the state directly
+// from the list — no need to open Add/Edit Service:
+//   Not Checked In  --tap-->  IN (checkedInAt = now)
+//   IN              --tap-->  OUT (checkedOutAt = now)
+//   OUT             --tap-->  IN again (new cycle: checkedInAt = now,
+//                              checkedOutAt cleared)
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -163,6 +172,55 @@ class _DroneServiceDashboardScreenState
     }
   }
 
+  /// Cycles the drone's Check In / Check Out state directly from the list
+  /// card, without opening Add/Edit Service:
+  ///   Not Checked In → IN   (checkedInAt = now)
+  ///   IN             → OUT  (checkedOutAt = now)
+  ///   OUT            → IN   (new cycle: checkedInAt = now, checkedOutAt cleared)
+  Future<void> _toggleInOut(DroneServiceRecord r) async {
+    if (!requireEditAccess(context)) return;
+
+    final DroneServiceRecord updated;
+    final String snackMsg;
+    final Color snackColor;
+
+    if (r.isCheckedOut) {
+      // OUT → IN again (starting a fresh check-in cycle)
+      updated = r.copyWith(checkedInAt: DateTime.now(), clearCheckedOutAt: true);
+      snackMsg = '${r.droneName} marked IN';
+      snackColor = kGreen;
+    } else if (r.isCheckedIn) {
+      // IN → OUT
+      updated = r.copyWith(checkedOutAt: DateTime.now());
+      snackMsg = '${r.droneName} marked OUT';
+      snackColor = kNavy;
+    } else {
+      // Not Checked In → IN
+      updated = r.copyWith(checkedInAt: DateTime.now());
+      snackMsg = '${r.droneName} marked IN';
+      snackColor = kGreen;
+    }
+
+    // Optimistic local update so the chip flips instantly.
+    setState(() {
+      final idx = _all.indexWhere((e) => e.id == r.id);
+      if (idx != -1) _all[idx] = updated;
+    });
+
+    final result = await _service.updateService(r, updated);
+    if (!mounted) return;
+    if (result.success) {
+      _showSnack(snackMsg, color: snackColor);
+    } else {
+      // Roll back on failure
+      setState(() {
+        final idx = _all.indexWhere((e) => e.id == r.id);
+        if (idx != -1) _all[idx] = r;
+      });
+      _showSnack('Update failed: ${result.error}', isError: true);
+    }
+  }
+
   Future<void> _delete(DroneServiceRecord r) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -264,6 +322,7 @@ class _DroneServiceDashboardScreenState
                             statusColor: _statusColor(_filtered[i].status),
                             icon: _serviceIcon(_filtered[i].serviceType),
                             onTap: () => _openDetail(_filtered[i]),
+                            onToggleInOut: () => _toggleInOut(_filtered[i]),
                           ),
                         ),
                         childCount: _filtered.length,
@@ -294,6 +353,7 @@ class _DroneServiceDashboardScreenState
                             statusColor: _statusColor(_agendaList[i].status),
                             icon: _serviceIcon(_agendaList[i].serviceType),
                             onTap: () => _openDetail(_agendaList[i]),
+                            onToggleInOut: () => _toggleInOut(_agendaList[i]),
                           ),
                         ),
                         childCount: _agendaList.length,
@@ -583,7 +643,17 @@ class _ServiceCard extends StatelessWidget {
   final Color statusColor;
   final IconData icon;
   final VoidCallback onTap;
-  const _ServiceCard({required this.record, required this.statusColor, required this.icon, required this.onTap});
+  final VoidCallback onToggleInOut;
+  const _ServiceCard({
+    required this.record,
+    required this.statusColor,
+    required this.icon,
+    required this.onTap,
+    required this.onToggleInOut,
+  });
+
+  static const Color kGreen = Color(0xFF00B894);
+  static const Color kNavy = Color(0xFF0A1628);
 
   @override
   Widget build(BuildContext context) {
@@ -629,12 +699,75 @@ class _ServiceCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-              child: Text(record.status, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: statusColor)),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                  child: Text(record.status, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: statusColor)),
+                ),
+                const SizedBox(height: 6),
+                _InOutChip(record: record, onTap: onToggleInOut),
+              ],
             ),
           ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tappable IN / OUT chip on each service card. Reflects
+/// DroneServiceRecord.inOutStatus and cycles the state on tap without
+/// leaving the list (see _DroneServiceDashboardScreenState._toggleInOut).
+class _InOutChip extends StatelessWidget {
+  final DroneServiceRecord record;
+  final VoidCallback onTap;
+  const _InOutChip({required this.record, required this.onTap});
+
+  static const Color kGreen = Color(0xFF00B894);
+  static const Color kNavy = Color(0xFF0A1628);
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color;
+    final String label;
+    final IconData chipIcon;
+    if (record.isCheckedOut) {
+      color = kNavy;
+      label = 'OUT';
+      chipIcon = Icons.logout_rounded;
+    } else if (record.isCheckedIn) {
+      color = kGreen;
+      label = 'IN';
+      chipIcon = Icons.login_rounded;
+    } else {
+      color = Colors.grey.shade400;
+      label = 'Not In';
+      chipIcon = Icons.radio_button_unchecked_rounded;
+    }
+
+    return GestureDetector(
+      // Stop the tap from also bubbling up to the card's onTap (which
+      // opens the detail sheet) — this chip is meant to act on its own.
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(chipIcon, size: 11, color: color),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: color)),
+          ],
         ),
       ),
     );
