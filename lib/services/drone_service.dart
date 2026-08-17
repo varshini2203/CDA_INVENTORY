@@ -478,6 +478,37 @@ class DroneService {
     }
   }
 
+  /// Combined Check-In / Check-Out history across every drone in the fleet,
+  /// newest first. Used by the "Drone In/Out History" screen so staff can
+  /// see who used which drone and when, without opening each drone one by
+  /// one. Uses a Firestore `collectionGroup` query across every drone's
+  /// `history` sub-collection, then sorts client-side (no `orderBy` on the
+  /// query itself, so no composite/collection-group index needs to be
+  /// created in the Firebase console for this to work).
+  Future<ApiResult<List<DroneHistory>>> getAllHistory() async {
+    try {
+      final snap = await _db.collectionGroup('history').get();
+      final list = snap.docs.map((doc) {
+        // The parent of a history doc is drones/{droneId}/history, so its
+        // parent's parent is the drones/{droneId} document itself.
+        final droneId = doc.reference.parent.parent?.id ?? '';
+        return DroneHistory.fromFirestore(
+            doc as DocumentSnapshot<Map<String, dynamic>>, droneId);
+      }).toList()
+        ..sort((a, b) {
+          final at = a.timestamp;
+          final bt = b.timestamp;
+          if (at == null && bt == null) return 0;
+          if (at == null) return 1;
+          if (bt == null) return -1;
+          return bt.compareTo(at); // newest first
+        });
+      return ApiResult.ok(list);
+    } catch (e) {
+      return ApiResult.err(_firestoreError(e));
+    }
+  }
+
   // ── SERVER STATS ───────────────────────────────────────────────────────────
 
   Future<ApiResult<Map<String, dynamic>>> getServerStats() async {

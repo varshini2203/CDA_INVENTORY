@@ -123,6 +123,52 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     setState(() => _checkedOutAt = null);
   }
 
+  // ── Manual date/time override for Check In / Check Out ────────────────
+  // The timestamps are auto-filled with DateTime.now() when the Check
+  // In / Check Out buttons are tapped. These let the user open a
+  // date + time picker afterwards to correct/backdate the value.
+  Future<void> _editCheckedInAt() async {
+    final picked = await _pickDateTime(initial: _checkedInAt ?? DateTime.now());
+    if (picked == null) return;
+    setState(() => _checkedInAt = picked);
+  }
+
+  Future<void> _editCheckedOutAt() async {
+    if (_checkedInAt == null) {
+      _showSnack('Check in first before setting a check-out time', isError: true);
+      return;
+    }
+    final picked = await _pickDateTime(initial: _checkedOutAt ?? DateTime.now());
+    if (picked == null) return;
+    setState(() => _checkedOutAt = picked);
+  }
+
+  Future<DateTime?> _pickDateTime({required DateTime initial}) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime.now().subtract(const Duration(days: 365 * 2)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: kTeal)),
+        child: child!,
+      ),
+    );
+    if (date == null || !mounted) return null;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: kTeal)),
+        child: child!,
+      ),
+    );
+    if (time == null) return null;
+
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
   Future<void> _save() async {
     if (!requireEditAccess(context)) return;
     if (!_formKey.currentState!.validate()) return;
@@ -312,8 +358,25 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
               Text('In: ${fmt(_checkedInAt!)}', style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
               const Spacer(),
               InkWell(
+                onTap: _editCheckedInAt,
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.edit_calendar_rounded, size: 13, color: kTeal),
+                    const SizedBox(width: 4),
+                    Text('Edit', style: TextStyle(fontSize: 12, color: kTeal, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
+              const SizedBox(width: 4),
+              InkWell(
                 onTap: _undoCheckIn,
-                child: Text('Undo', style: TextStyle(fontSize: 12, color: kCoral, fontWeight: FontWeight.w600)),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Text('Undo', style: TextStyle(fontSize: 12, color: kCoral, fontWeight: FontWeight.w600)),
+                ),
               ),
             ]),
           ],
@@ -325,8 +388,25 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
               Text('Out: ${fmt(_checkedOutAt!)}', style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
               const Spacer(),
               InkWell(
+                onTap: _editCheckedOutAt,
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.edit_calendar_rounded, size: 13, color: kTeal),
+                    const SizedBox(width: 4),
+                    Text('Edit', style: TextStyle(fontSize: 12, color: kTeal, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
+              const SizedBox(width: 4),
+              InkWell(
                 onTap: _undoCheckOut,
-                child: Text('Undo', style: TextStyle(fontSize: 12, color: kCoral, fontWeight: FontWeight.w600)),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Text('Undo', style: TextStyle(fontSize: 12, color: kCoral, fontWeight: FontWeight.w600)),
+                ),
               ),
             ]),
           ],
@@ -342,10 +422,19 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 icon: const Icon(Icons.login_rounded, size: 16),
-                label: const Text('Check In', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                label: const Text('Check In (Now)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
+            _manualTimeIconButton(
+              color: kGreen,
+              enabled: notCheckedIn,
+              tooltip: 'Set check-in time manually',
+              onTap: _editCheckedInAt,
+            ),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: (isCheckedIn) ? _checkOut : null,
@@ -356,11 +445,49 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 icon: const Icon(Icons.logout_rounded, size: 16),
-                label: const Text('Check Out', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                label: const Text('Check Out (Now)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
               ),
+            ),
+            const SizedBox(width: 8),
+            _manualTimeIconButton(
+              color: kNavy,
+              enabled: isCheckedIn,
+              tooltip: 'Set check-out time manually',
+              onTap: _editCheckedOutAt,
             ),
           ]),
         ],
+      ),
+    );
+  }
+
+  // Small square icon button placed beside "Check In (Now)" / "Check Out
+  // (Now)" that opens the date + time picker so the value can be entered
+  // manually instead of defaulting to the current time.
+  Widget _manualTimeIconButton({
+    required Color color,
+    required bool enabled,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border.all(color: enabled ? color : Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.edit_calendar_rounded, size: 18, color: enabled ? color : Colors.grey.shade400),
+          ),
+        ),
       ),
     );
   }

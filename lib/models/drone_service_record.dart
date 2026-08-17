@@ -28,13 +28,15 @@ class DroneServiceRecord {
   final DateTime? updatedAt;
   final String? createdBy;
 
-  // ── Drone In/Out tracking ────────────────────────────────────────────
-  // When the drone/asset physically arrived at the service center (In)
-  // and when it was handed back (Out). Independent of `status` — a
-  // service can be "Scheduled" and still not checked in yet, or
-  // "Completed" but not yet physically handed back.
+  // ── Drone-in / drone-out tracking ──────────────────────────────────────
+  // Distinct from `scheduledAt`/`completedAt` (which are the booking's
+  // planned/finished timestamps): these capture the physical hand-over —
+  // exactly when the drone arrived at the shop for this service, who
+  // received it, exactly when it was handed back, and who released it.
   final DateTime? checkedInAt;
+  final String? checkedInBy;
   final DateTime? checkedOutAt;
+  final String? checkedOutBy;
 
   const DroneServiceRecord({
     required this.id,
@@ -53,7 +55,9 @@ class DroneServiceRecord {
     this.updatedAt,
     this.createdBy,
     this.checkedInAt,
+    this.checkedInBy,
     this.checkedOutAt,
+    this.checkedOutBy,
   });
 
   // ── Firestore → Dart ───────────────────────────────────────────────────
@@ -91,9 +95,11 @@ class DroneServiceRecord {
       checkedInAt: j['checked_in_at'] is Timestamp
           ? (j['checked_in_at'] as Timestamp).toDate()
           : null,
+      checkedInBy: j['checked_in_by']?.toString(),
       checkedOutAt: j['checked_out_at'] is Timestamp
           ? (j['checked_out_at'] as Timestamp).toDate()
           : null,
+      checkedOutBy: j['checked_out_by']?.toString(),
     );
   }
 
@@ -114,7 +120,9 @@ class DroneServiceRecord {
     'updated_at': FieldValue.serverTimestamp(),
     'created_by': createdBy,
     'checked_in_at': checkedInAt != null ? Timestamp.fromDate(checkedInAt!) : null,
+    'checked_in_by': checkedInBy,
     'checked_out_at': checkedOutAt != null ? Timestamp.fromDate(checkedOutAt!) : null,
+    'checked_out_by': checkedOutBy,
   };
 
   DroneServiceRecord copyWith({
@@ -134,7 +142,9 @@ class DroneServiceRecord {
     DateTime? updatedAt,
     String? createdBy,
     DateTime? checkedInAt,
+    String? checkedInBy,
     DateTime? checkedOutAt,
+    String? checkedOutBy,
     bool clearCheckedInAt = false,
     bool clearCheckedOutAt = false,
   }) =>
@@ -155,22 +165,25 @@ class DroneServiceRecord {
         updatedAt: updatedAt ?? this.updatedAt,
         createdBy: createdBy ?? this.createdBy,
         checkedInAt: clearCheckedInAt ? null : (checkedInAt ?? this.checkedInAt),
+        checkedInBy: clearCheckedInAt ? null : (checkedInBy ?? this.checkedInBy),
         checkedOutAt: clearCheckedOutAt ? null : (checkedOutAt ?? this.checkedOutAt),
+        checkedOutBy: clearCheckedOutAt ? null : (checkedOutBy ?? this.checkedOutBy),
       );
 
   bool get isOverdue =>
       status == 'Scheduled' && scheduledAt.isBefore(DateTime.now());
 
-  // ── Drone In/Out status helpers ─────────────────────────────────────
-  /// 'Not Checked In' | 'Checked In' | 'Checked Out'
-  String get inOutStatus {
-    if (checkedOutAt != null) return 'Checked Out';
-    if (checkedInAt != null) return 'Checked In';
-    return 'Not Checked In';
-  }
+  /// True once the drone has physically arrived for this service and has
+  /// not yet been handed back out.
+  bool get isDroneCheckedIn => checkedInAt != null && checkedOutAt == null;
 
-  bool get isCheckedIn => checkedInAt != null && checkedOutAt == null;
-  bool get isCheckedOut => checkedOutAt != null;
-  bool get canCheckIn => checkedInAt == null;
-  bool get canCheckOut => checkedInAt != null && checkedOutAt == null;
+  /// True once the drone has both arrived and been handed back out.
+  bool get isDroneCheckedOut => checkedInAt != null && checkedOutAt != null;
+
+  /// How long the drone stayed in the shop for this service, once both
+  /// timestamps are known.
+  Duration? get turnaroundDuration =>
+      (checkedInAt != null && checkedOutAt != null)
+          ? checkedOutAt!.difference(checkedInAt!)
+          : null;
 }

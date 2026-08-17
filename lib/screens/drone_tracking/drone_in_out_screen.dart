@@ -18,6 +18,7 @@ import '../../widgets/common/serial_scan_screen.dart';
 import 'add_drone_entry_screen.dart';
 import 'edit_drone_screen.dart';
 import 'drone_history_screen.dart';
+import 'drone_inout_history_screen.dart';
 
 // Drone type / category filter options. Extend this list anytime a new
 // drone type gets added to the fleet — the type filter chip row (below the
@@ -255,6 +256,13 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
         context, _slide(DroneHistoryScreen(service: _service, drone: drone)));
   }
 
+  // Fleet-wide "who used which drone, when" log — combines the history of
+  // every drone into one page, reached from the app bar (Icons.history_rounded).
+  void _openAllHistory() {
+    Navigator.push(
+        context, _slide(DroneInOutHistoryScreen(service: _service)));
+  }
+
   PageRouteBuilder<bool> _slide(Widget page) {
     return PageRouteBuilder<bool>(
       pageBuilder: (_, animation, __) => page,
@@ -351,6 +359,7 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
               onRefresh: _loadDrones,
               onSeed: _seedFleet,
               onBack: () => Navigator.maybePop(context),
+              onHistory: _openAllHistory,
             ),
           ),
           if (!_loading && _error == null && _drones.isNotEmpty)
@@ -696,6 +705,7 @@ class _DroneHeaderDelegate extends SliverPersistentHeaderDelegate {
   final VoidCallback onRefresh;
   final VoidCallback onSeed;
   final VoidCallback onBack;
+  final VoidCallback onHistory;
 
   static const Color kNavy = Color(0xFF0A1628);
   static const Color kNavyLight = Color(0xFF162944);
@@ -714,6 +724,7 @@ class _DroneHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.onRefresh,
     required this.onSeed,
     required this.onBack,
+    required this.onHistory,
   });
 
   static const double _pinnedHeight = 56.0;
@@ -901,6 +912,12 @@ class _DroneHeaderDelegate extends SliverPersistentHeaderDelegate {
                     ),
                   ],
                   const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.history_rounded,
+                        color: Colors.white),
+                    onPressed: onHistory,
+                    tooltip: 'Drone In/Out history',
+                  ),
                   IconButton(
                     icon: seeding
                         ? const SizedBox(

@@ -183,6 +183,74 @@ class DroneServiceBookingService {
     }
   }
 
+  // ── DRONE CHECK-IN (arrived at the shop for this service) ─────────────────
+
+  Future<ApiResult<bool>> checkIn(
+      DroneServiceRecord record, {
+        required DateTime at,
+        required String by,
+      }) async {
+    try {
+      final updates = <String, dynamic>{
+        'checked_in_at': Timestamp.fromDate(at),
+        'checked_in_by': by,
+        'updated_at': FieldValue.serverTimestamp(),
+        // Moves a booking out of "Scheduled" the moment the drone is
+        // actually handed over, without disturbing an already-active or
+        // already-finished booking's status.
+        if (record.status == 'Scheduled') 'status': 'In Progress',
+      };
+      await _services.doc(record.id).update(updates);
+      clearCache();
+      ActivityLogService.logEdit(
+        module: 'Drone Services',
+        itemName: '${record.serviceType} — ${record.droneName}',
+        before: {'checked_in': 'No'},
+        after: {
+          'checked_in': 'Yes',
+          'checked_in_by': by,
+          'checked_in_at': at.toIso8601String(),
+        },
+      );
+      return ApiResult.ok(true);
+    } catch (e) {
+      return ApiResult.err(_firestoreError(e));
+    }
+  }
+
+  // ── DRONE CHECK-OUT (handed back after service is done) ───────────────────
+
+  Future<ApiResult<bool>> checkOut(
+      DroneServiceRecord record, {
+        required DateTime at,
+        required String by,
+      }) async {
+    try {
+      final updates = <String, dynamic>{
+        'checked_out_at': Timestamp.fromDate(at),
+        'checked_out_by': by,
+        'completed_at': Timestamp.fromDate(at),
+        'status': 'Completed',
+        'updated_at': FieldValue.serverTimestamp(),
+      };
+      await _services.doc(record.id).update(updates);
+      clearCache();
+      ActivityLogService.logEdit(
+        module: 'Drone Services',
+        itemName: '${record.serviceType} — ${record.droneName}',
+        before: {'checked_out': 'No'},
+        after: {
+          'checked_out': 'Yes',
+          'checked_out_by': by,
+          'checked_out_at': at.toIso8601String(),
+        },
+      );
+      return ApiResult.ok(true);
+    } catch (e) {
+      return ApiResult.err(_firestoreError(e));
+    }
+  }
+
   // ── DELETE ──────────────────────────────────────────────────────────────
 
   Future<ApiResult<bool>> deleteService(DroneServiceRecord record) async {

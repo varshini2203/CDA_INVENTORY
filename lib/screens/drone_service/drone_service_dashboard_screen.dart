@@ -4,18 +4,10 @@
 // the Drone In/Out flight-log module. Covers all branches (All Branch /
 // CDA Admin / CDA Ops), a list view and a calendar view, and an "Add
 // Service" flow. Theme matched to the Drone In/Out & Invoice pages.
-//
-// CHANGE: each _ServiceCard now shows a tappable IN / OUT chip next to the
-// existing status pill. It reflects DroneServiceRecord.inOutStatus
-// (checkedInAt / checkedOutAt) and tapping it cycles the state directly
-// from the list — no need to open Add/Edit Service:
-//   Not Checked In  --tap-->  IN (checkedInAt = now)
-//   IN              --tap-->  OUT (checkedOutAt = now)
-//   OUT             --tap-->  IN again (new cycle: checkedInAt = now,
-//                              checkedOutAt cleared)
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../models/drone_service_record.dart';
 import '../../services/drone_service_booking_service.dart';
 import '../../constants/drone_categories.dart';
@@ -42,7 +34,10 @@ class _DroneServiceDashboardScreenState
   String _branchFilter = DroneServiceBookingService.branchAll;
   String _statusFilter = DroneServiceBookingService.statusAll;
   String _search = '';
-  bool _calendarView = false;
+  String _viewMode = 'list'; // 'list' | 'calendar' | 'history' — three-way switch shown as List/Calendar/History
+  String _historySearch = '';
+  // 'all' | 'checkedIn' | 'checkedOut' | 'awaiting'
+  String _historyInOutFilter = 'all';
   bool _sortAscending = true; // true = Oldest → Newest, false = Newest → Oldest
   DateTime _focusedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime? _selectedDay;
@@ -160,6 +155,49 @@ class _DroneServiceDashboardScreenState
     if (added == true) _load(forceRefresh: true);
   }
 
+  void _openHistory() => setState(() => _viewMode = 'history');
+
+  // ── Drone check-in / check-out toggle ──────────────────────────────────
+  // ON  = drone has physically arrived and is at the shop for this service.
+  // OFF = either not yet arrived, or already handed back after service.
+  Future<void> _toggleCheckInOut(DroneServiceRecord r) async {
+    if (!requireEditAccess(context)) return;
+    if (r.isDroneCheckedOut) {
+      _showSnack('This drone has already been checked out for this service.');
+      return;
+    }
+    final isCheckingIn = !r.isDroneCheckedIn;
+    final currentUserName = context.read<CurrentAccess>().access?.name;
+
+    final entry = await showDialog<_CheckInOutEntry>(
+      context: context,
+      builder: (_) => _CheckInOutDialog(
+        record: r,
+        isCheckingIn: isCheckingIn,
+        defaultName: isCheckingIn ? currentUserName : (r.checkedInBy ?? currentUserName),
+      ),
+    );
+    if (entry == null) return;
+
+    final result = isCheckingIn
+        ? await _service.checkIn(r, at: entry.time, by: entry.handledBy)
+        : await _service.checkOut(r, at: entry.time, by: entry.handledBy);
+
+    if (!mounted) return;
+    if (result.success) {
+      _showSnack(
+        isCheckingIn
+            ? '${r.droneName} checked IN by ${entry.handledBy}'
+            : '${r.droneName} checked OUT by ${entry.handledBy}',
+        icon: isCheckingIn ? Icons.login_rounded : Icons.logout_rounded,
+        color: isCheckingIn ? kTeal : kGreen,
+      );
+      _load(forceRefresh: true);
+    } else {
+      _showSnack('Failed: ${result.error}', isError: true);
+    }
+  }
+
   Future<void> _quickStatus(DroneServiceRecord r, String newStatus) async {
     final result = await _service.updateStatus(r.id, newStatus,
         previousStatus: r.status, itemName: '${r.serviceType} — ${r.droneName}');
@@ -169,55 +207,6 @@ class _DroneServiceDashboardScreenState
       _load(forceRefresh: true);
     } else {
       _showSnack('Failed: ${result.error}', isError: true);
-    }
-  }
-
-  /// Cycles the drone's Check In / Check Out state directly from the list
-  /// card, without opening Add/Edit Service:
-  ///   Not Checked In → IN   (checkedInAt = now)
-  ///   IN             → OUT  (checkedOutAt = now)
-  ///   OUT            → IN   (new cycle: checkedInAt = now, checkedOutAt cleared)
-  Future<void> _toggleInOut(DroneServiceRecord r) async {
-    if (!requireEditAccess(context)) return;
-
-    final DroneServiceRecord updated;
-    final String snackMsg;
-    final Color snackColor;
-
-    if (r.isCheckedOut) {
-      // OUT → IN again (starting a fresh check-in cycle)
-      updated = r.copyWith(checkedInAt: DateTime.now(), clearCheckedOutAt: true);
-      snackMsg = '${r.droneName} marked IN';
-      snackColor = kGreen;
-    } else if (r.isCheckedIn) {
-      // IN → OUT
-      updated = r.copyWith(checkedOutAt: DateTime.now());
-      snackMsg = '${r.droneName} marked OUT';
-      snackColor = kNavy;
-    } else {
-      // Not Checked In → IN
-      updated = r.copyWith(checkedInAt: DateTime.now());
-      snackMsg = '${r.droneName} marked IN';
-      snackColor = kGreen;
-    }
-
-    // Optimistic local update so the chip flips instantly.
-    setState(() {
-      final idx = _all.indexWhere((e) => e.id == r.id);
-      if (idx != -1) _all[idx] = updated;
-    });
-
-    final result = await _service.updateService(r, updated);
-    if (!mounted) return;
-    if (result.success) {
-      _showSnack(snackMsg, color: snackColor);
-    } else {
-      // Roll back on failure
-      setState(() {
-        final idx = _all.indexWhere((e) => e.id == r.id);
-        if (idx != -1) _all[idx] = r;
-      });
-      _showSnack('Update failed: ${result.error}', isError: true);
     }
   }
 
@@ -276,6 +265,10 @@ class _DroneServiceDashboardScreenState
         onComplete: () => _quickStatus(r, 'Completed'),
         onCancel: () => _quickStatus(r, 'Cancelled'),
         onDelete: () => _delete(r),
+        onToggleCheckInOut: () {
+          Navigator.pop(context);
+          _toggleCheckInOut(r);
+        },
         onEdit: () async {
           Navigator.pop(context);
           final updated = await Navigator.push<bool>(
@@ -304,10 +297,10 @@ class _DroneServiceDashboardScreenState
             else if (_error != null)
               SliverFillRemaining(child: _ErrorView(message: _error!, onRetry: () => _load(forceRefresh: true)))
             else ...[
-                SliverToBoxAdapter(child: _buildStatsRow()),
+                SliverToBoxAdapter(child: _viewMode == 'history' ? _buildHistoryStatsRow() : _buildStatsRow()),
                 SliverToBoxAdapter(child: _buildBranchFilterRow()),
                 SliverToBoxAdapter(child: _buildViewToggle()),
-                if (!_calendarView) ...[
+                if (_viewMode == 'list') ...[
                   SliverToBoxAdapter(child: _buildSearchAndStatusRow()),
                   _filtered.isEmpty
                       ? SliverFillRemaining(child: _EmptyView(onAdd: _openAdd))
@@ -322,14 +315,14 @@ class _DroneServiceDashboardScreenState
                             statusColor: _statusColor(_filtered[i].status),
                             icon: _serviceIcon(_filtered[i].serviceType),
                             onTap: () => _openDetail(_filtered[i]),
-                            onToggleInOut: () => _toggleInOut(_filtered[i]),
+                            onToggleCheckInOut: () => _toggleCheckInOut(_filtered[i]),
                           ),
                         ),
                         childCount: _filtered.length,
                       ),
                     ),
                   ),
-                ] else ...[
+                ] else if (_viewMode == 'calendar') ...[
                   SliverToBoxAdapter(child: _buildCalendar()),
                   SliverToBoxAdapter(child: _buildAgendaHeader()),
                   _agendaList.isEmpty
@@ -353,10 +346,39 @@ class _DroneServiceDashboardScreenState
                             statusColor: _statusColor(_agendaList[i].status),
                             icon: _serviceIcon(_agendaList[i].serviceType),
                             onTap: () => _openDetail(_agendaList[i]),
-                            onToggleInOut: () => _toggleInOut(_agendaList[i]),
+                            onToggleCheckInOut: () => _toggleCheckInOut(_agendaList[i]),
                           ),
                         ),
                         childCount: _agendaList.length,
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  // ── History ──────────────────────────────────────────
+                  SliverToBoxAdapter(child: _buildHistorySearchRow()),
+                  SliverToBoxAdapter(child: _buildHistoryInOutFilterRow()),
+                  _historyFiltered.isEmpty
+                      ? SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 60),
+                      child: Center(
+                        child: Column(children: [
+                          Icon(Icons.history_rounded, size: 44, color: Colors.grey.shade300),
+                          const SizedBox(height: 12),
+                          Text('No matching history', style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w600)),
+                        ]),
+                      ),
+                    ),
+                  )
+                      : SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                            (context, i) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _HistoryCard(record: _historyFiltered[i]),
+                        ),
+                        childCount: _historyFiltered.length,
                       ),
                     ),
                   ),
@@ -387,6 +409,132 @@ class _DroneServiceDashboardScreenState
       ..sort((a, b) => _sortAscending
           ? a.scheduledAt.compareTo(b.scheduledAt)
           : b.scheduledAt.compareTo(a.scheduledAt));
+  }
+
+  // ── History (embedded — same screen, third view mode) ───────────────────
+
+  List<DroneServiceRecord> get _historyFiltered {
+    var list = _branchOnly.where((r) {
+      final matchSearch = _historySearch.isEmpty ||
+          r.droneName.toLowerCase().contains(_historySearch.toLowerCase()) ||
+          r.serviceType.toLowerCase().contains(_historySearch.toLowerCase()) ||
+          r.technician.toLowerCase().contains(_historySearch.toLowerCase()) ||
+          (r.checkedInBy ?? '').toLowerCase().contains(_historySearch.toLowerCase()) ||
+          (r.checkedOutBy ?? '').toLowerCase().contains(_historySearch.toLowerCase());
+      final matchInOut = switch (_historyInOutFilter) {
+        'checkedIn' => r.isDroneCheckedIn,
+        'checkedOut' => r.isDroneCheckedOut,
+        'awaiting' => r.checkedInAt == null,
+        _ => true,
+      };
+      return matchSearch && matchInOut;
+    }).toList();
+    // Most recent activity first: prefer check-out time, then check-in
+    // time, then when it was scheduled.
+    list.sort((a, b) {
+      final at = a.checkedOutAt ?? a.checkedInAt ?? a.scheduledAt;
+      final bt = b.checkedOutAt ?? b.checkedInAt ?? b.scheduledAt;
+      return bt.compareTo(at);
+    });
+    return list;
+  }
+
+  Map<String, int> get _historyStats {
+    final list = _branchOnly;
+    return {
+      'total': list.length,
+      'checkedIn': list.where((r) => r.isDroneCheckedIn).length,
+      'checkedOut': list.where((r) => r.isDroneCheckedOut).length,
+      'awaiting': list.where((r) => r.checkedInAt == null).length,
+    };
+  }
+
+  Widget _buildHistoryStatsRow() {
+    final s = _historyStats;
+    Widget card(String label, int value, Color color, IconData icon) => Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(height: 6),
+            Text('$value', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: kNavy)),
+            const SizedBox(height: 2),
+            Text(label,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      child: Row(children: [
+        card('Total', s['total']!, kNavy, Icons.miscellaneous_services_rounded),
+        card('At Shop', s['checkedIn']!, kTeal, Icons.garage_rounded),
+        card('Handed Back', s['checkedOut']!, kGreen, Icons.task_alt_rounded),
+        card('Awaiting', s['awaiting']!, Colors.grey.shade500, Icons.hourglass_empty_rounded),
+      ]),
+    );
+  }
+
+  Widget _buildHistorySearchRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: TextField(
+        onChanged: (v) => setState(() => _historySearch = v),
+        cursorColor: kNavy,
+        style: const TextStyle(color: kNavy, fontSize: 14, fontWeight: FontWeight.w500),
+        decoration: InputDecoration(
+          hintText: 'Search drone, service type, handled by…',
+          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+          prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400, size: 20),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryInOutFilterRow() {
+    Widget chip(String label, String value, Color color) {
+      final selected = _historyInOutFilter == value;
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: FilterChip(
+          label: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: selected ? Colors.white : color)),
+          selected: selected,
+          onSelected: (_) => setState(() => _historyInOutFilter = value),
+          selectedColor: color,
+          backgroundColor: color.withValues(alpha: 0.08),
+          showCheckmark: false,
+          side: BorderSide(color: color.withValues(alpha: 0.3)),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      child: SizedBox(
+        height: 34,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            chip('All', 'all', kNavy),
+            chip('Currently at shop', 'checkedIn', kTeal),
+            chip('Handed back out', 'checkedOut', kGreen),
+            chip('Not checked in yet', 'awaiting', Colors.grey.shade600),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildAppBar() {
@@ -441,8 +589,8 @@ class _DroneServiceDashboardScreenState
       child: Row(children: [
         card('Total', s['total']!, kNavy, Icons.miscellaneous_services_rounded),
         card('Scheduled', s['Scheduled']!, kPurple, Icons.event_rounded),
-        card('In Progress', s['In Progress']!, kAmber, Icons.pending_actions_rounded),
-        card('Completed', s['Completed']!, kGreen, Icons.check_circle_rounded),
+        card(kServiceStatusLabels['In Progress']!, s['In Progress']!, kAmber, Icons.login_rounded),
+        card(kServiceStatusLabels['Completed']!, s['Completed']!, kGreen, Icons.check_circle_rounded),
       ]),
     );
   }
@@ -488,8 +636,9 @@ class _DroneServiceDashboardScreenState
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
         child: Row(children: [
-          Expanded(child: _toggleBtn('List', Icons.view_list_rounded, !_calendarView, () => setState(() => _calendarView = false))),
-          Expanded(child: _toggleBtn('Calendar', Icons.calendar_month_rounded, _calendarView, () => setState(() => _calendarView = true))),
+          Expanded(child: _toggleBtn('List', Icons.view_list_rounded, _viewMode == 'list', () => setState(() => _viewMode = 'list'))),
+          Expanded(child: _toggleBtn('Calendar', Icons.calendar_month_rounded, _viewMode == 'calendar', () => setState(() => _viewMode = 'calendar'))),
+          Expanded(child: _toggleBtn('History', Icons.history_rounded, _viewMode == 'history', _openHistory)),
         ]),
       ),
     );
@@ -545,7 +694,7 @@ class _DroneServiceDashboardScreenState
             scrollDirection: Axis.horizontal,
             children: [
               _statusChip('All', DroneServiceBookingService.statusAll, kNavy),
-              for (final s in kServiceStatuses) _statusChip(s, s, _statusColor(s)),
+              for (final s in kServiceStatuses) _statusChip(kServiceStatusLabels[s] ?? s, s, _statusColor(s)),
             ],
           ),
         ),
@@ -643,17 +792,14 @@ class _ServiceCard extends StatelessWidget {
   final Color statusColor;
   final IconData icon;
   final VoidCallback onTap;
-  final VoidCallback onToggleInOut;
+  final VoidCallback onToggleCheckInOut;
   const _ServiceCard({
     required this.record,
     required this.statusColor,
     required this.icon,
     required this.onTap,
-    required this.onToggleInOut,
+    required this.onToggleCheckInOut,
   });
-
-  static const Color kGreen = Color(0xFF00B894);
-  static const Color kNavy = Color(0xFF0A1628);
 
   @override
   Widget build(BuildContext context) {
@@ -665,116 +811,273 @@ class _ServiceCard extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: Row(children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: statusColor, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(record.serviceType,
-                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Color(0xFF0A1628))),
-                  const SizedBox(height: 3),
-                  Text('${record.droneName} · ${kBranchLabels[record.branch] ?? record.branch}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                  const SizedBox(height: 5),
-                  Row(children: [
-                    Icon(Icons.access_time_rounded, size: 12, color: Colors.grey.shade400),
-                    const SizedBox(width: 4),
-                    Text(DateFormat('d MMM, h:mm a').format(record.scheduledAt),
-                        style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500)),
-                    if (record.technician.isNotEmpty) ...[
-                      const SizedBox(width: 10),
-                      Icon(Icons.person_outline_rounded, size: 12, color: Colors.grey.shade400),
-                      const SizedBox(width: 4),
-                      Flexible(child: Text(record.technician, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500))),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                  child: Icon(icon, color: statusColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(record.serviceType,
+                          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Color(0xFF0A1628))),
+                      const SizedBox(height: 3),
+                      Text('${record.droneName} · ${kBranchLabels[record.branch] ?? record.branch}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                      const SizedBox(height: 5),
+                      Row(children: [
+                        Icon(Icons.access_time_rounded, size: 12, color: Colors.grey.shade400),
+                        const SizedBox(width: 4),
+                        Text(DateFormat('d MMM, h:mm a').format(record.scheduledAt),
+                            style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500)),
+                        if (record.technician.isNotEmpty) ...[
+                          const SizedBox(width: 10),
+                          Icon(Icons.person_outline_rounded, size: 12, color: Colors.grey.shade400),
+                          const SizedBox(width: 4),
+                          Flexible(child: Text(record.technician, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500))),
+                        ],
+                      ]),
                     ],
-                  ]),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
+                  ),
+                ),
+                const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                   decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                  child: Text(record.status, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: statusColor)),
+                  child: Text(kServiceStatusLabels[record.status] ?? record.status, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: statusColor)),
                 ),
-                const SizedBox(height: 6),
-                _InOutChip(record: record, onTap: onToggleInOut),
-              ],
-            ),
-          ]),
+              ]),
+              const Divider(height: 18),
+              _CheckInOutRow(record: record, onToggle: onToggleCheckInOut),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Tappable IN / OUT chip on each service card. Reflects
-/// DroneServiceRecord.inOutStatus and cycles the state on tap without
-/// leaving the list (see _DroneServiceDashboardScreenState._toggleInOut).
-class _InOutChip extends StatelessWidget {
-  final DroneServiceRecord record;
-  final VoidCallback onTap;
-  const _InOutChip({required this.record, required this.onTap});
+// ── DRONE IN/OUT TOGGLE ROW ─────────────────────────────────────────────
+// Compact, reusable "is the drone physically here right now?" row: a
+// toggle switch plus a one-line summary of the in/out timestamps. Used on
+// both the list card and the detail sheet so the two never drift apart.
 
-  static const Color kGreen = Color(0xFF00B894);
+class _CheckInOutRow extends StatelessWidget {
+  final DroneServiceRecord record;
+  final VoidCallback onToggle;
+  const _CheckInOutRow({required this.record, required this.onToggle});
+
   static const Color kNavy = Color(0xFF0A1628);
+  static const Color kTeal = Color(0xFF00D4AA);
+  static const Color kGreen = Color(0xFF00B894);
 
   @override
   Widget build(BuildContext context) {
-    final Color color;
-    final String label;
-    final IconData chipIcon;
-    if (record.isCheckedOut) {
-      color = kNavy;
-      label = 'OUT';
-      chipIcon = Icons.logout_rounded;
-    } else if (record.isCheckedIn) {
+    final checkedIn = record.isDroneCheckedIn;
+    final checkedOut = record.isDroneCheckedOut;
+    final fmt = DateFormat('d MMM, h:mm a');
+
+    String label;
+    String? subLabel;
+    Color color;
+    if (checkedOut) {
+      label = 'Drone handed back out';
+      subLabel = 'In: ${fmt.format(record.checkedInAt!)}  ·  Out: ${fmt.format(record.checkedOutAt!)}';
       color = kGreen;
-      label = 'IN';
-      chipIcon = Icons.login_rounded;
+    } else if (checkedIn) {
+      label = 'Drone is at the shop';
+      subLabel = 'Checked in ${fmt.format(record.checkedInAt!)}'
+          '${record.checkedInBy != null && record.checkedInBy!.isNotEmpty ? ' by ${record.checkedInBy}' : ''}';
+      color = kTeal;
     } else {
+      label = 'Awaiting drone drop-off';
+      subLabel = null;
       color = Colors.grey.shade400;
-      label = 'Not In';
-      chipIcon = Icons.radio_button_unchecked_rounded;
     }
 
-    return GestureDetector(
-      // Stop the tap from also bubbling up to the card's onTap (which
-      // opens the detail sheet) — this chip is meant to act on its own.
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+    return Row(children: [
+      Icon(
+        checkedOut ? Icons.task_alt_rounded : (checkedIn ? Icons.garage_rounded : Icons.hourglass_empty_rounded),
+        size: 15,
+        color: color,
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(chipIcon, size: 11, color: color),
-            const SizedBox(width: 4),
-            Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: color)),
+            Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: checkedOut ? kGreen : kNavy)),
+            if (subLabel != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Text(subLabel, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade500)),
+              ),
           ],
         ),
       ),
-    );
+      if (!checkedOut)
+        Switch(
+          value: checkedIn,
+          onChanged: (_) => onToggle(),
+          activeThumbColor: kTeal,
+        )
+      else
+        Icon(Icons.check_circle_rounded, size: 20, color: kGreen),
+    ]);
   }
 }
 
 // ── DETAIL BOTTOM SHEET ────────────────────────────────────────────────────
+
+// ── HISTORY CARD ─────────────────────────────────────────────────────────
+// One row per booking with the full in/out trail visible at a glance,
+// used by the embedded History view (third tab next to List/Calendar).
+
+class _HistoryCard extends StatelessWidget {
+  final DroneServiceRecord record;
+  const _HistoryCard({required this.record});
+
+  static const Color kNavy = Color(0xFF0A1628);
+  static const Color kTeal = Color(0xFF00D4AA);
+  static const Color kGreen = Color(0xFF00B894);
+  static const Color kAmber = Color(0xFFFFB800);
+  static const Color kCoral = Color(0xFFFF6B6B);
+  static const Color kPurple = Color(0xFF6C63FF);
+
+  Color get _statusColor {
+    switch (record.status) {
+      case 'Scheduled':
+        return kPurple;
+      case 'In Progress':
+        return kAmber;
+      case 'Completed':
+        return kGreen;
+      case 'Cancelled':
+        return kCoral;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String get _durationLabel {
+    final d = record.turnaroundDuration;
+    if (d == null) return '—';
+    if (d.inDays > 0) return '${d.inDays}d ${d.inHours % 24}h';
+    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
+    return '${d.inMinutes}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = DateFormat('d MMM yyyy, h:mm a');
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(record.droneName, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: kNavy)),
+                  const SizedBox(height: 2),
+                  Text('${record.serviceType} · ${kBranchLabels[record.branch] ?? record.branch}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(color: _statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+              child: Text(kServiceStatusLabels[record.status] ?? record.status, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: _statusColor)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          if (record.technician.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(children: [
+                Icon(Icons.engineering_outlined, size: 14, color: Colors.grey.shade400),
+                const SizedBox(width: 6),
+                Text('Serviced by ', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                Text(record.technician, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kNavy)),
+              ]),
+            ),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: const Color(0xFFF0F4F8), borderRadius: BorderRadius.circular(10)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _trailRow(
+                  icon: Icons.login_rounded,
+                  iconColor: kTeal,
+                  label: 'In',
+                  value: record.checkedInAt != null ? fmt.format(record.checkedInAt!) : 'Not checked in',
+                  by: record.checkedInBy,
+                ),
+                const SizedBox(height: 6),
+                _trailRow(
+                  icon: Icons.logout_rounded,
+                  iconColor: kGreen,
+                  label: 'Out',
+                  value: record.checkedOutAt != null ? fmt.format(record.checkedOutAt!) : 'Not handed back yet',
+                  by: record.checkedOutBy,
+                ),
+                if (record.turnaroundDuration != null) ...[
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Icon(Icons.timelapse_rounded, size: 13, color: Colors.grey.shade400),
+                    const SizedBox(width: 6),
+                    Text('Turnaround: $_durationLabel', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+                  ]),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _trailRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+    String? by,
+  }) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, size: 14, color: iconColor),
+      const SizedBox(width: 8),
+      SizedBox(width: 28, child: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.grey.shade500))),
+      Expanded(
+        child: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kNavy)),
+              if (by != null && by.isNotEmpty)
+                TextSpan(text: '  ·  $by', style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500)),
+            ],
+          ),
+        ),
+      ),
+    ]);
+  }
+}
 
 class _ServiceDetailSheet extends StatelessWidget {
   final DroneServiceRecord record;
@@ -784,6 +1087,7 @@ class _ServiceDetailSheet extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onDelete;
   final VoidCallback onEdit;
+  final VoidCallback onToggleCheckInOut;
   const _ServiceDetailSheet({
     required this.record,
     required this.statusColor,
@@ -792,6 +1096,7 @@ class _ServiceDetailSheet extends StatelessWidget {
     required this.onCancel,
     required this.onDelete,
     required this.onEdit,
+    required this.onToggleCheckInOut,
   });
 
   @override
@@ -818,7 +1123,7 @@ class _ServiceDetailSheet extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-              child: Text(record.status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
+              child: Text(kServiceStatusLongLabels[record.status] ?? record.status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
             ),
           ]),
           const SizedBox(height: 14),
@@ -829,6 +1134,15 @@ class _ServiceDetailSheet extends StatelessWidget {
           _row(Icons.flag_outlined, 'Priority', record.priority),
           if (record.cost != null) _row(Icons.currency_rupee_rounded, 'Cost', record.cost!.toStringAsFixed(2)),
           if (record.notes != null && record.notes!.trim().isNotEmpty) _row(Icons.notes_rounded, 'Notes', record.notes!),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F4F8),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: _CheckInOutRow(record: record, onToggle: onToggleCheckInOut),
+          ),
           const SizedBox(height: 18),
           if (record.status == 'Scheduled' || record.status == 'In Progress')
             Row(children: [
@@ -905,6 +1219,205 @@ class _ServiceDetailSheet extends StatelessWidget {
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+}
+
+// ── CHECK-IN / CHECK-OUT DIALOG ──────────────────────────────────────────
+// Captures exactly who handed over / received the drone and exactly when,
+// so the history page can show a complete in/out trail. Defaults to "now"
+// and the current logged-in user, both editable.
+
+class _CheckInOutEntry {
+  final String handledBy;
+  final DateTime time;
+  const _CheckInOutEntry({required this.handledBy, required this.time});
+}
+
+class _CheckInOutDialog extends StatefulWidget {
+  final DroneServiceRecord record;
+  final bool isCheckingIn;
+  final String? defaultName;
+  const _CheckInOutDialog({
+    required this.record,
+    required this.isCheckingIn,
+    this.defaultName,
+  });
+
+  @override
+  State<_CheckInOutDialog> createState() => _CheckInOutDialogState();
+}
+
+class _CheckInOutDialogState extends State<_CheckInOutDialog> {
+  static const Color kNavy = Color(0xFF0A1628);
+  static const Color kTeal = Color(0xFF00D4AA);
+  static const Color kGreen = Color(0xFF00B894);
+
+  late final TextEditingController _nameCtrl;
+  late DateTime _when;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.defaultName ?? '');
+    _when = DateTime.now();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Color get _accent => widget.isCheckingIn ? kTeal : kGreen;
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _when,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+      builder: (context, child) => Theme(
+        data: ThemeData.light().copyWith(colorScheme: ColorScheme.light(primary: _accent)),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() => _when = DateTime(picked.year, picked.month, picked.day, _when.hour, _when.minute));
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_when),
+      builder: (context, child) => Theme(
+        data: ThemeData.light().copyWith(colorScheme: ColorScheme.light(primary: _accent)),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() => _when = DateTime(_when.year, _when.month, _when.day, picked.hour, picked.minute));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.isCheckingIn ? 'Check In Drone' : 'Check Out Drone';
+    final subtitle = widget.isCheckingIn
+        ? '${widget.record.droneName} has arrived for service'
+        : '${widget.record.droneName} is being handed back';
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: _accent.withValues(alpha: 0.12), shape: BoxShape.circle),
+                child: Icon(widget.isCheckingIn ? Icons.login_rounded : Icons.logout_rounded, color: _accent, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: kNavy)),
+                    Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                  ],
+                ),
+              ),
+            ]),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _nameCtrl,
+              style: const TextStyle(color: kNavy, fontSize: 14),
+              cursorColor: _accent,
+              decoration: InputDecoration(
+                labelText: widget.isCheckingIn ? 'Received by' : 'Handed over by',
+                labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                prefixIcon: Icon(Icons.person_outline_rounded, color: _accent, size: 20),
+                filled: true,
+                fillColor: const Color(0xFFF0F4F8),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _accent, width: 1.5)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: InkWell(
+                  onTap: _pickDate,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 12),
+                    decoration: BoxDecoration(color: const Color(0xFFF0F4F8), borderRadius: BorderRadius.circular(12)),
+                    child: Row(children: [
+                      Icon(Icons.calendar_month_outlined, size: 16, color: _accent),
+                      const SizedBox(width: 8),
+                      Text(DateFormat('d MMM yyyy').format(_when), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kNavy)),
+                    ]),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: InkWell(
+                  onTap: _pickTime,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 12),
+                    decoration: BoxDecoration(color: const Color(0xFFF0F4F8), borderRadius: BorderRadius.circular(12)),
+                    child: Row(children: [
+                      Icon(Icons.access_time_rounded, size: 16, color: _accent),
+                      const SizedBox(width: 8),
+                      Text(DateFormat('h:mm a').format(_when), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kNavy)),
+                    ]),
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    final name = _nameCtrl.text.trim();
+                    if (name.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter a name')),
+                      );
+                      return;
+                    }
+                    Navigator.pop(context, _CheckInOutEntry(handledBy: name, time: _when));
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accent,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(widget.isCheckingIn ? 'Check In' : 'Check Out',
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                ),
+              ),
+            ]),
+          ],
+        ),
       ),
     );
   }
