@@ -116,14 +116,17 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'xls', 'csv', 'pdf'],
+      // `PlatformFile` has no `readAsBytes()` method — its bytes must be
+      // requested up front so `picked.bytes` is populated on every
+      // platform (web included, where there is no filesystem `path` to
+      // fall back on).
+      withData: true,
     );
     if (result == null || result.files.isEmpty) return;
 
     final picked = result.files.single;
-    Uint8List bytes;
-    try {
-      bytes = await picked.readAsBytes();
-    } catch (_) {
+    final bytes = picked.bytes;
+    if (bytes == null) {
       _showSnack('Could not read that file — please try again.');
       return;
     }
@@ -388,7 +391,11 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 16, offset: const Offset(0, 6)),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
               ],
             ),
             child: Column(
@@ -398,7 +405,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    color: _teal.withOpacity(0.12),
+                    color: _teal.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Icon(

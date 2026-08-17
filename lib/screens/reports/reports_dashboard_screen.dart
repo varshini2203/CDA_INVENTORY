@@ -500,6 +500,19 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
                                 initialBranch: _selectedBranch)),
                       ),
                     ),
+                    _ReportListTile(
+                      icon: Icons.report_problem_rounded,
+                      title: 'Low Stock',
+                      subtitle:
+                      '${_stockItems.where((i) => i.quantity <= 2).length} items  ≤ 2 qty',
+                      color: kCoral,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(settings: const RouteSettings(name: 'Low Stock Report'),
+                            builder: (_) => StockManagementReportScreen(
+                                initialBranch: _selectedBranch, initialThreshold: 2)),
+                      ),
+                    ),
                   ]),
                 ),
               ),

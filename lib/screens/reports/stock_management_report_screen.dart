@@ -20,7 +20,11 @@ import 'package:cda_inventory/widgets/reports/branch_filter_bar.dart';
 
 class StockManagementReportScreen extends StatefulWidget {
   final String? initialBranch; // null = All Branches
-  const StockManagementReportScreen({super.key, this.initialBranch});
+  // Opens the screen pre-filtered to items with quantity <= this value
+  // (e.g. 0, 1, or 2), instead of the per-item minStock-based low-stock
+  // filter. null = no threshold filter applied.
+  final int? initialThreshold;
+  const StockManagementReportScreen({super.key, this.initialBranch, this.initialThreshold});
 
   @override
   State<StockManagementReportScreen> createState() => _StockManagementReportScreenState();
@@ -31,6 +35,9 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
   String? _selectedBranch;
   String? _selectedCategory; // null = All, 'consumable', 'fixed_asset'
   bool _lowStockOnly = false;
+  // Absolute quantity threshold (0, 1, or 2). When set, takes priority over
+  // _lowStockOnly — the two are mutually exclusive in the UI.
+  int? _threshold;
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -40,7 +47,9 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
     if (_selectedCategory != null) {
       list = list.where((i) => i.category == _selectedCategory).toList();
     }
-    if (_lowStockOnly) {
+    if (_threshold != null) {
+      list = list.where((i) => i.quantity <= _threshold!).toList();
+    } else if (_lowStockOnly) {
       list = list.where((i) => i.isLowStock).toList();
     }
     return list;
@@ -58,6 +67,7 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
   void initState() {
     super.initState();
     _selectedBranch = widget.initialBranch;
+    _threshold = widget.initialThreshold;
     _load();
   }
 
@@ -133,8 +143,8 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
         backgroundColor: kNavy,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Stock Management Report',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        title: Text(_threshold != null ? 'Low Stock Report' : 'Stock Management Report',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -195,7 +205,10 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
         _categoryChip('Fixed Assets', 'fixed_asset'),
         const Spacer(),
         GestureDetector(
-          onTap: () => setState(() => _lowStockOnly = !_lowStockOnly),
+          onTap: () => setState(() {
+            _lowStockOnly = !_lowStockOnly;
+            _threshold = null; // mutually exclusive with the qty threshold chips
+          }),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
@@ -216,8 +229,42 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
           ),
         ),
       ]),
+      const SizedBox(height: 8),
+      Row(children: [
+        Text('Qty ≤',
+            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11.5, fontWeight: FontWeight.w600)),
+        const SizedBox(width: 8),
+        _thresholdChip(0),
+        const SizedBox(width: 8),
+        _thresholdChip(1),
+        const SizedBox(width: 8),
+        _thresholdChip(2),
+      ]),
     ]),
   );
+
+  Widget _thresholdChip(int value) {
+    final isSelected = _threshold == value;
+    return GestureDetector(
+      onTap: () => setState(() {
+        _threshold = isSelected ? null : value; // tap again to clear
+        if (_threshold != null) _lowStockOnly = false;
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? kCoral : Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? kCoral : Colors.white.withOpacity(0.2)),
+        ),
+        child: Text('$value',
+            style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white.withOpacity(0.85),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
 
   Widget _categoryChip(String label, String? value) {
     final isSelected = _selectedCategory == value;
@@ -382,7 +429,11 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
       Icon(Icons.warehouse_outlined, size: 56, color: Colors.grey.shade300),
       const SizedBox(height: 10),
       Text(
-        _lowStockOnly ? 'No low-stock items match these filters' : 'No stock items match these filters',
+        _threshold != null
+            ? 'No items with quantity ≤ $_threshold'
+            : _lowStockOnly
+            ? 'No low-stock items match these filters'
+            : 'No stock items match these filters',
         textAlign: TextAlign.center,
         style: TextStyle(color: Colors.grey.shade500),
       ),
