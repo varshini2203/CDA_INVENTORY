@@ -30,6 +30,7 @@ class Drone {
   final String? branch; // raw value: 'Branch 1' (CDA Admin) or 'Branch 2' (CDA Ops)
   final String? purpose; // why the drone was taken OUT: Training/Testing/Service/Expo/Workshop/...
   final DateTime? checkedOutAt; // when status last became 'OUT' — used for the 4-hour overdue reminder
+  final DateTime? checkedInAt; // when status last became 'IN' — kept alongside checkedOutAt purely for display ("In: ... · Out: ...") so both dates stay visible regardless of current status
   final bool reminderAcknowledged; // true once someone has seen/dismissed the overdue reminder for this OUT session
 
   Drone({
@@ -50,6 +51,7 @@ class Drone {
     this.branch,
     this.purpose,
     this.checkedOutAt,
+    this.checkedInAt,
     this.reminderAcknowledged = false,
   });
 
@@ -135,6 +137,9 @@ class Drone {
       checkedOutAt: j['checked_out_at'] is Timestamp
           ? (j['checked_out_at'] as Timestamp).toDate()
           : null,
+      checkedInAt: j['checked_in_at'] is Timestamp
+          ? (j['checked_in_at'] as Timestamp).toDate()
+          : null,
       reminderAcknowledged: j['reminder_acknowledged'] as bool? ?? false,
     );
   }
@@ -162,6 +167,9 @@ class Drone {
     'checked_out_at': checkedOutAt != null
         ? Timestamp.fromDate(checkedOutAt!)
         : null,
+    'checked_in_at': checkedInAt != null
+        ? Timestamp.fromDate(checkedInAt!)
+        : null,
     'reminder_acknowledged': reminderAcknowledged,
   };
 
@@ -185,6 +193,7 @@ class Drone {
     String? branch,
     String? purpose,
     DateTime? checkedOutAt,
+    DateTime? checkedInAt,
     bool? reminderAcknowledged,
   }) =>
       Drone(
@@ -205,6 +214,7 @@ class Drone {
         branch: branch ?? this.branch,
         purpose: purpose ?? this.purpose,
         checkedOutAt: checkedOutAt ?? this.checkedOutAt,
+        checkedInAt: checkedInAt ?? this.checkedInAt,
         reminderAcknowledged: reminderAcknowledged ?? this.reminderAcknowledged,
       );
 }

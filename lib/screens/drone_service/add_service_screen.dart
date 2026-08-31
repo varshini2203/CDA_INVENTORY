@@ -33,6 +33,9 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
   final _technicianCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _costCtrl = TextEditingController();
+  // Free-text service name when the user picks "Other" in the Service
+  // Type dropdown instead of one of the fixed kServiceTypes options.
+  final _customServiceTypeCtrl = TextEditingController();
 
   final _bookingService = DroneServiceBookingService();
   final _droneService = DroneService();
@@ -69,7 +72,14 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
       _technicianCtrl.text = e.technician;
       _notesCtrl.text = e.notes ?? '';
       _costCtrl.text = e.cost?.toString() ?? '';
-      _serviceType = e.serviceType;
+      // If the saved serviceType isn't one of the fixed options (i.e. it was
+      // typed manually last time), select "Other" and preload the typed text.
+      if (kServiceTypes.contains(e.serviceType)) {
+        _serviceType = e.serviceType;
+      } else {
+        _serviceType = 'Other';
+        _customServiceTypeCtrl.text = e.serviceType;
+      }
       _branch = e.branch;
       _priority = e.priority;
       _linkedDroneId = e.droneId;
@@ -94,6 +104,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     _technicianCtrl.dispose();
     _notesCtrl.dispose();
     _costCtrl.dispose();
+    _customServiceTypeCtrl.dispose();
     super.dispose();
   }
 
@@ -179,11 +190,18 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     // original value when editing, otherwise default to "now".
     final effectiveScheduledAt = widget.existing?.scheduledAt ?? DateTime.now();
 
+    // When "Other" is picked, save the manually typed name instead of the
+    // literal word "Other" so it reads correctly everywhere (reports,
+    // history, edit screen re-population, etc).
+    final effectiveServiceType = _serviceType == 'Other'
+        ? _customServiceTypeCtrl.text.trim()
+        : _serviceType;
+
     final record = DroneServiceRecord(
       id: widget.existing?.id ?? '',
       droneName: _droneNameCtrl.text.trim(),
       droneId: _linkedDroneId,
-      serviceType: _serviceType,
+      serviceType: effectiveServiceType,
       branch: _branch,
       status: widget.existing?.status ?? 'Scheduled',
       priority: _priority,
@@ -260,6 +278,18 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
             _sectionHeader('Service Details', Icons.build_circle_outlined),
             const SizedBox(height: 12),
             _buildServiceTypeDropdown(),
+            if (_serviceType == 'Other') ...[
+              const SizedBox(height: 14),
+              _field(
+                controller: _customServiceTypeCtrl,
+                label: 'Enter Service Detail',
+                hint: 'e.g. Landing Gear Repair',
+                icon: Icons.edit_note_rounded,
+                validator: (v) => _serviceType == 'Other' && (v == null || v.trim().isEmpty)
+                    ? 'Please type the service detail'
+                    : null,
+              ),
+            ],
             const SizedBox(height: 14),
             _buildBranchDropdown(),
             const SizedBox(height: 14),
@@ -499,6 +529,11 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     }
     return DropdownButtonFormField<String>(
       value: _linkedDroneId,
+      // Without this, the dropdown sizes itself to its widest item instead
+      // of the available field width, so a long "name (serial)" pair
+      // renders past the field edge and Flutter draws the yellow/black
+      // overflow warning stripes instead of the ellipsis below.
+      isExpanded: true,
       style: const TextStyle(color: kNavy, fontSize: 15),
       icon: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
       dropdownColor: Colors.white,
@@ -515,7 +550,15 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
       items: [
         const DropdownMenuItem(value: null, child: Text('None — manual entry')),
         for (final d in _fleet)
-          DropdownMenuItem(value: d.id, child: Text('${d.name} (${d.serialNumber})', overflow: TextOverflow.ellipsis)),
+          DropdownMenuItem(
+            value: d.id,
+            child: Text(
+              '${d.name} (${d.serialNumber})',
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              softWrap: false,
+            ),
+          ),
       ],
       onChanged: (v) {
         setState(() {

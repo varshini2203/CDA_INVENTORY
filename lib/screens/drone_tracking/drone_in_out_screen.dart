@@ -107,6 +107,23 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
         _error = result.error;
       }
     });
+    // Quietly fill in any missing In/Out timestamps for drones toggled
+    // before checked_in_at/checked_out_at existed (see
+    // backfillCheckInOutTimestamps() in drone_service.dart). Runs after
+    // the list is already on screen so it never blocks the initial load;
+    // if it finds anything to fix, silently refreshes the list once more
+    // so the corrected dates show up without the person having to do
+    // anything.
+    if (result.success && result.data!.isNotEmpty) {
+      final updated =
+      await _service.backfillCheckInOutTimestamps(result.data!);
+      if (updated > 0 && mounted) {
+        final refreshed = await _service.getDrones(forceRefresh: true);
+        if (mounted && refreshed.success) {
+          setState(() => _drones = refreshed.data!);
+        }
+      }
+    }
   }
 
   /// Seeds the `drones` Firestore collection with the curated drone
@@ -1499,18 +1516,12 @@ class _DroneCardState extends State<_DroneCard>
                       _MaintenanceBadge(
                           dueDate: widget.drone.maintenanceDue!),
                     ],
-                    if (widget.drone.lastUpdated != null) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.access_time,
-                              size: 11, color: Colors.grey.shade400),
-                          const SizedBox(width: 4),
-                          Text(_formatTime(widget.drone.lastUpdated!),
-                              style: TextStyle(
-                                  color: Colors.grey.shade400,
-                                  fontSize: 11)),
-                        ],
+                    if (widget.drone.checkedInAt != null ||
+                        widget.drone.checkedOutAt != null) ...[
+                      const SizedBox(height: 8),
+                      _InOutDateStrip(
+                        checkedInAt: widget.drone.checkedInAt,
+                        checkedOutAt: widget.drone.checkedOutAt,
                       ),
                     ],
                     const SizedBox(height: 14),
@@ -1584,14 +1595,97 @@ class _DroneCardState extends State<_DroneCard>
       ),
     );
   }
+}
 
-  String _formatTime(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+// ── In/Out Date Strip ─────────────────────────────────────────────────────
+// Split two-tone bar showing the last OUT time (left, coral/pink) and last
+// IN time (right, green) side by side — same visual language as the
+// check-in/check-out strip used elsewhere in the app (Inventory Movement
+// history). Whichever side is missing (e.g. a drone that's never been OUT
+// yet) is skipped and the other side takes the full width.
+
+class _InOutDateStrip extends StatelessWidget {
+  final DateTime? checkedInAt;
+  final DateTime? checkedOutAt;
+  const _InOutDateStrip({this.checkedInAt, this.checkedOutAt});
+
+  static const Color _kCoral = Color(0xFFFF6B6B);
+  static const Color _kGreen = Color(0xFF00B894);
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = DateFormat('d MMM, h:mm a');
+    final segments = <Widget>[];
+
+    if (checkedOutAt != null) {
+      segments.add(Expanded(
+        child: _segment(
+          color: _kCoral,
+          icon: Icons.flight_takeoff_rounded,
+          label: 'Out',
+          value: fmt.format(checkedOutAt!),
+          alignEnd: false,
+        ),
+      ));
+    }
+    if (checkedInAt != null) {
+      segments.add(Expanded(
+        child: _segment(
+          color: _kGreen,
+          icon: Icons.flight_land_rounded,
+          label: 'In',
+          value: fmt.format(checkedInAt!),
+          alignEnd: true,
+        ),
+      ));
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Row(
+        children: [
+          for (var i = 0; i < segments.length; i++) ...[
+            if (i > 0) Container(width: 1, height: 34, color: Colors.white),
+            segments[i],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _segment({
+    required Color color,
+    required IconData icon,
+    required String label,
+    required String value,
+    required bool alignEnd,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      color: color.withOpacity(0.1),
+      child: Row(
+        mainAxisAlignment:
+        alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!alignEnd) ...[
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 5),
+          ],
+          Flexible(
+            child: Text('$label: $value',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700)),
+          ),
+          if (alignEnd) ...[
+            const SizedBox(width: 5),
+            Icon(icon, size: 12, color: color),
+          ],
+        ],
+      ),
+    );
   }
 }
 

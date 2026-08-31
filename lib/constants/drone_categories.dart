@@ -34,6 +34,7 @@ const List<String> kDroneCategories = [
   'Surveying',
   'Delivery',
   'Military',
+  'On Field',
   'Other',
 ];
 

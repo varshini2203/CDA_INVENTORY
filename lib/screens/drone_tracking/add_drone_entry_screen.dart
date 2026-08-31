@@ -35,6 +35,7 @@ const List<String> kAdditionalDroneProducts = [
   'VTX (Video Transmitter)',
   'Signal Booster / Range Extender',
   'Drone Backpack / Hard Case',
+  'Digital Thermometer',
 ];
 
 const List<String> kDroneConditions = ['Good', 'Damaged'];
@@ -71,13 +72,18 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
   final _customProductCtrl = TextEditingController();
   final _fixSuggestionCtrl = TextEditingController();
   String _status = 'IN';
+  // Date/time this initial IN/OUT status actually started — defaults to
+  // "now" but the person can backdate/forward-date it (e.g. registering a
+  // drone that's already been OUT since this morning). This is what
+  // downstream automatic logic (4-hour overdue reminder, monthly Drone
+  // IN/OUT reports) keys off of — see drone_service.dart's addDrone().
+  DateTime _statusTime = DateTime.now();
   String _category = kDroneCategories.first;
   String _droneClass = kDroneClasses.first;
   // Raw value stored/filtered on ('Branch 1' / 'Branch 2'); dropdown shows
   // the friendly label ('CDA Admin' / 'CDA Ops').
   String _branch = kBranchOptions.first;
   double _battery = 100;
-  DateTime? _maintenanceDue;
   bool _saving = false;
 
   // Additional accessories bundled with this drone (predefined chips +
@@ -124,13 +130,13 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
     super.dispose();
   }
 
-  Future<void> _pickMaintenanceDate() async {
-    final picked = await showDatePicker(
+  // ── Manual date/time for the initial IN/OUT status ───────────────────
+  Future<void> _pickStatusDateTime() async {
+    final date = await showDatePicker(
       context: context,
-      initialDate:
-      _maintenanceDue ?? DateTime.now().add(const Duration(days: 30)),
+      initialDate: _statusTime,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (context, child) => Theme(
         data: ThemeData.light().copyWith(
           colorScheme: const ColorScheme.light(
@@ -141,7 +147,27 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _maintenanceDue = picked);
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_statusTime),
+      builder: (context, child) => Theme(
+        data: ThemeData.light().copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: kTeal,
+            surface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (time == null) return;
+
+    setState(() {
+      _statusTime =
+          DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    });
   }
 
   void _addCustomProduct() {
@@ -203,11 +229,16 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
       // `condition`, and `conditionFixSuggestion` fields, pass those
       // directly instead of folding everything into `notes` here.
       notes: combinedNotes.trim().isEmpty ? null : combinedNotes.trim(),
-      maintenanceDue: _maintenanceDue,
       branch: _branch,
+      // Only meaningful when registering as OUT — feeds the 4-hour
+      // overdue-reminder countdown from the manually chosen time instead
+      // of "now".
+      checkedOutAt: _status == 'OUT' ? _statusTime : null,
+      checkedInAt: _status == 'IN' ? _statusTime : null,
     );
 
-    final result = await widget.service.addDrone(drone);
+    final result =
+    await widget.service.addDrone(drone, actionTime: _statusTime);
     if (!mounted) return;
     setState(() => _saving = false);
 
@@ -357,10 +388,6 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
                         'Condition', Icons.health_and_safety_outlined),
                     const SizedBox(height: 12),
                     _buildConditionSection(),
-                    const SizedBox(height: 24),
-                    _buildSectionHeader('Schedule', Icons.event_outlined),
-                    const SizedBox(height: 12),
-                    _buildMaintenancePicker(),
                     const SizedBox(height: 24),
                     _buildSectionHeader('purpose', Icons.notes_outlined),
                     const SizedBox(height: 12),
@@ -909,87 +936,6 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
     );
   }
 
-  Widget _buildMaintenancePicker() {
-    return InkWell(
-      onTap: _pickMaintenanceDate,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: _maintenanceDue != null
-                  ? kTeal.withOpacity(0.4)
-                  : Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2)),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: kTeal.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: const Icon(Icons.build_outlined,
-                  color: kTeal, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Maintenance Date',
-                      style: TextStyle(
-                          color: Colors.grey.shade600, fontSize: 12)),
-                  const SizedBox(height: 2),
-                  Text(
-                    _maintenanceDue == null
-                        ? 'Tap to set (optional)'
-                        : _maintenanceDue!
-                        .toLocal()
-                        .toString()
-                        .split(' ')
-                        .first,
-                    style: TextStyle(
-                        color: _maintenanceDue == null
-                            ? Colors.grey.shade400
-                            : kNavy,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-            if (_maintenanceDue != null)
-              GestureDetector(
-                onTap: () =>
-                    setState(() => _maintenanceDue = null),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Icon(Icons.close,
-                      color: Colors.grey.shade600, size: 14),
-                ),
-              )
-            else
-              Icon(Icons.chevron_right,
-                  color: Colors.grey.shade400, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildStatusSelector() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1046,7 +992,60 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          _buildStatusDateTimePicker(),
         ],
+      ),
+    );
+  }
+
+  // Lets the person backdate/forward-date when this IN/OUT status actually
+  // started, instead of always stamping "now". Defaults to now; tap to
+  // change. Whatever is picked here flows straight into checked_out_at /
+  // last_updated / the initial history entry (see addDrone() in
+  // drone_service.dart), so the overdue-reminder countdown and monthly
+  // reports pick it up automatically — no extra step needed afterwards.
+  Widget _buildStatusDateTimePicker() {
+    final dt = _statusTime;
+    final dateStr = '${dt.day.toString().padLeft(2, '0')}/'
+        '${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    final hour12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final minuteStr = dt.minute.toString().padLeft(2, '0');
+    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+    final timeStr = '$hour12:$minuteStr $ampm';
+
+    return InkWell(
+      onTap: _pickStatusDateTime,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F9FB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.schedule_rounded, color: Colors.grey.shade600, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _status == 'OUT' ? 'OUT since' : 'IN since',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('$dateStr, $timeStr',
+                      style: const TextStyle(
+                          color: kNavy, fontSize: 14, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            Icon(Icons.edit_calendar_rounded, color: kTeal, size: 18),
+          ],
+        ),
       ),
     );
   }

@@ -225,28 +225,51 @@ class DroneService {
   // in the monthly Reports page, since that report only reads the `history`
   // sub-collection, not the drone document's `status` field.
 
-  Future<ApiResult<Drone>> addDrone(Drone drone) async {
+  Future<ApiResult<Drone>> addDrone(Drone drone, {DateTime? actionTime}) async {
     try {
       final data = drone.toFirestore();
-      // Ensure last_updated is set on creation too
-      data['created_at'] = FieldValue.serverTimestamp();
-      data['last_updated'] = FieldValue.serverTimestamp();
+      // actionTime lets the caller (Register New Drone screen) backdate the
+      // IN/OUT status to when it actually started instead of "now". This
+      // timestamp is what the 4-hour overdue-reminder countdown and the
+      // monthly Drone IN/OUT report key off of, so setting it here once is
+      // enough — nothing else needs to be touched afterwards.
+      final ts =
+      actionTime != null ? Timestamp.fromDate(actionTime) : FieldValue.serverTimestamp();
+      data['created_at'] = ts;
+      data['last_updated'] = ts;
+
+      final status = drone.status.toUpperCase();
+      // If the drone is being registered as OUT and the caller didn't
+      // already set checkedOutAt explicitly on the Drone object, fall back
+      // to actionTime so the overdue countdown starts from the chosen time.
+      if (status == 'OUT' && drone.checkedOutAt == null) {
+        data['checked_out_at'] = ts;
+      }
+      // Same idea for IN — stamps checked_in_at so the "In: ..." half of
+      // the In/Out card display has something to show from day one.
+      if (status == 'IN' && drone.checkedInAt == null) {
+        data['checked_in_at'] = ts;
+      }
 
       final ref = await _drones.add(data);
 
       // Log the initial status as a history entry so it's counted in reports.
-      final status = drone.status.toUpperCase();
       if (status.isNotEmpty) {
         await _history(ref.id).add({
           'drone_id': ref.id,
           'pilot': drone.pilotName ?? 'Unknown',
           'status': status,
           'notes': 'Initial registration',
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': ts,
         });
       }
 
-      final doc = drone.copyWith(id: ref.id, lastUpdated: DateTime.now());
+      final doc = drone.copyWith(
+        id: ref.id,
+        lastUpdated: actionTime ?? DateTime.now(),
+        checkedOutAt: status == 'OUT' ? (drone.checkedOutAt ?? actionTime) : drone.checkedOutAt,
+        checkedInAt: status == 'IN' ? (drone.checkedInAt ?? actionTime) : drone.checkedInAt,
+      );
       clearCache();
       ActivityLogService.logAdd(
         module: 'Drones',
@@ -399,7 +422,13 @@ class DroneService {
           'reminder_acknowledged': false,
         } else ...{
           'purpose': null,
-          'checked_out_at': null,
+          // NOTE: checked_out_at is intentionally NOT cleared here anymore.
+          // It's kept so the "In: ... · Out: ..." display on the Drone
+          // In/Out card can still show the last OUT time even after the
+          // drone has been brought back IN. overdueDronesStream() only
+          // queries docs where status == 'OUT', so a stale checked_out_at
+          // on an IN drone is never read for the overdue calculation.
+          'checked_in_at': ts,
         },
       };
 
@@ -440,6 +469,60 @@ class DroneService {
     } catch (e) {
       return ApiResult.err(_firestoreError(e));
     }
+  }
+
+  // ── BACKFILL: derive missing In/Out timestamps from history ───────────
+  // checked_in_at / checked_out_at are new fields — any drone whose last
+  // IN or OUT toggle happened before this app update was shipped won't
+  // have one (or both) of them set yet, so the "In: ... · Out: ..." card
+  // display shows only whichever half it does have. This walks each such
+  // drone's own history sub-collection (which has always been written on
+  // every status change) and fills in the missing field from the most
+  // recent matching entry there — no manual re-toggling required.
+  //
+  // Safe to call as often as you like: a drone with both fields already
+  // set is skipped with zero extra reads, so once every drone has been
+  // backfilled once this becomes a no-op pass over the in-memory list.
+  // Returns the number of drone docs actually updated.
+  Future<int> backfillCheckInOutTimestamps(List<Drone> drones) async {
+    var updatedCount = 0;
+    for (final d in drones) {
+      if (d.checkedInAt != null && d.checkedOutAt != null) continue;
+      try {
+        final historyResult = await getHistory(d.id);
+        if (!historyResult.success) continue;
+
+        DateTime? inAt = d.checkedInAt;
+        DateTime? outAt = d.checkedOutAt;
+        for (final h in historyResult.data!) {
+          // historyResult.data! is newest-first, so the first match for
+          // each status is the most recent one.
+          if (inAt == null && h.status == 'IN' && h.timestamp != null) {
+            inAt = h.timestamp;
+          }
+          if (outAt == null && h.status == 'OUT' && h.timestamp != null) {
+            outAt = h.timestamp;
+          }
+          if (inAt != null && outAt != null) break;
+        }
+
+        final updates = <String, dynamic>{};
+        if (inAt != null && d.checkedInAt == null) {
+          updates['checked_in_at'] = Timestamp.fromDate(inAt);
+        }
+        if (outAt != null && d.checkedOutAt == null) {
+          updates['checked_out_at'] = Timestamp.fromDate(outAt);
+        }
+        if (updates.isNotEmpty) {
+          await _drones.doc(d.id).update(updates);
+          updatedCount++;
+        }
+      } catch (_) {
+        // Best-effort — skip this drone and keep going with the rest.
+      }
+    }
+    if (updatedCount > 0) clearCache();
+    return updatedCount;
   }
 
   // ── COMPLETE MAINTENANCE ───────────────────────────────────────────────────
