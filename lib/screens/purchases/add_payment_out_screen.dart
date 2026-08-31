@@ -14,6 +14,7 @@ import 'package:image/image.dart' as img;
 import 'package:cda_inventory/models/payment_out.dart';
 import 'package:cda_inventory/services/payment_out_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
+import 'package:cda_inventory/constants/payment_modes.dart';
 
 class AddPaymentOutScreen extends StatefulWidget {
   final PaymentOut? paymentToEdit;
@@ -33,7 +34,7 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
   final dateController = TextEditingController();
 
   String selectedBranch = kBranches.first;
-  String selectedMode = 'Cash';
+  String selectedMode = kDefaultPaymentMode;
   bool _isLoading = false;
   String? _attachmentName;
   Uint8List? _attachmentBytes;
@@ -41,7 +42,7 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
 
   bool get _isEditMode => widget.paymentToEdit != null;
 
-  static const modes = ['Cash', 'Bank Transfer', 'UPI', 'Cheque'];
+  static const modes = kPaymentModes;
 
   // ── Purchase-Order-style light theme tokens ───────────────────────────
   static const Color kBg        = Color(0xFFF4F6F9);
@@ -67,7 +68,7 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
       notesController.text = p.notes;
       dateController.text = p.paymentDate;
       selectedBranch = kBranches.contains(p.branch) ? p.branch : kBranches.first;
-      selectedMode = modes.contains(p.paymentMode) ? p.paymentMode : 'Cash';
+      selectedMode = resolvePaymentMode(p.paymentMode);
       _attachmentName = p.attachmentName;
       _existingAttachmentBase64 = p.attachmentBase64;
     }
@@ -215,7 +216,7 @@ class _AddPaymentOutScreenState extends State<AddPaymentOutScreen> {
     dateController.clear();
     setState(() {
       selectedBranch = kBranches.first;
-      selectedMode = 'Cash';
+      selectedMode = kDefaultPaymentMode;
       _attachmentName = null;
       _attachmentBytes = null;
       _existingAttachmentBase64 = null;

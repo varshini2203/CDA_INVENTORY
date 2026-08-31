@@ -1,14 +1,21 @@
 // lib/models/inventory_movement.dart
 //
-// Data model for the Enterprise Inventory Movement module.
-// Follows the same conventions as lib/models/product.dart and
-// lib/models/stock.dart: a plain Firestore-backed class with
-// fromDoc / toCreateMap / toMap / copyWith, all timestamps read via
-// FieldValue.serverTimestamp() on write and Timestamp -> DateTime on read.
+// Data model for the Enterprise Inventory Movement module — v2.
+//
+// Major changes from v1:
+//   - A single movement now carries a LIST of items (product + quantity
+//     each), not just one product. `totalQuantity` is the auto-summed
+//     total across every line item.
+//   - The whole Pending -> Approved -> Dispatched -> Returned approval
+//     workflow is gone. There are only two actions now: Check Out and
+//     Check In, each independently stamped with its own date/time + who
+//     did it, the moment it happens (no waiting on anyone's approval).
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Movement type — where the stock is going / what it's for.
+/// Movement type — where the stock is going / what it's for. Shown as a
+/// dropdown of common values, but the field itself is free text so a
+/// custom value can always be typed in instead (see MovementTypeField).
 class MovementType {
   static const branch = 'Branch';
   static const workshop = 'Workshop';
@@ -19,221 +26,209 @@ class MovementType {
   static const List<String> all = [branch, workshop, expo, repair, other];
 }
 
-/// Approval workflow status. Pending -> Approved -> Dispatched -> Returned,
-/// with Rejected as a terminal branch off Pending.
-class MovementStatus {
-  static const pending = 'Pending';
-  static const approved = 'Approved';
-  static const dispatched = 'Dispatched';
-  static const returned = 'Returned';
-  static const rejected = 'Rejected';
+/// A single line item within a movement (one product + its quantity).
+class MovementItem {
+  final String productId; // '' if typed manually / not in the product list
+  final String productName;
+  final int quantity;
 
-  static const List<String> all = [
-    pending,
-    approved,
-    dispatched,
-    returned,
-    rejected,
-  ];
+  const MovementItem({
+    required this.productId,
+    required this.productName,
+    required this.quantity,
+  });
 
-  /// Statuses that still count as "open" / not yet closed out.
-  static const List<String> active = [pending, approved, dispatched];
+  factory MovementItem.fromMap(Map<String, dynamic> map) => MovementItem(
+    productId: map['product_id'] as String? ?? '',
+    productName: map['product_name'] as String? ?? '',
+    quantity: (map['quantity'] as num?)?.toInt() ?? 0,
+  );
+
+  Map<String, dynamic> toMap() => {
+    'product_id': productId,
+    'product_name': productName,
+    'quantity': quantity,
+  };
+
+  MovementItem copyWith({String? productId, String? productName, int? quantity}) =>
+      MovementItem(
+        productId: productId ?? this.productId,
+        productName: productName ?? this.productName,
+        quantity: quantity ?? this.quantity,
+      );
 }
 
 class InventoryMovement {
   final String id;
 
-  // ── What & how much ───────────────────────────────────────────────────
-  final String productId;
-  final String productName;
-  final int quantity;
+  // ── What & how much — one or more line items ────────────────────────────
+  final List<MovementItem> items;
+  final int totalQuantity; // sum of every item's quantity, kept in sync
 
   // ── Movement details ──────────────────────────────────────────────────
-  final String movementType; // Branch / Workshop / Expo / Repair / Other
+  final String movementType; // Branch / Workshop / Expo / Repair / Other / custom
   final String from;
   final String to;
   final String purpose;
   final String remarks;
 
-  // ── People ─────────────────────────────────────────────────────────────
-  final String takenBy;
+  // ── Who ────────────────────────────────────────────────────────────────
   final String usedBy;
-  final String returnedBy;
 
-  // ── Workflow ───────────────────────────────────────────────────────────
-  final String status; // MovementStatus.*
-  final String? rejectionReason;
-
-  // ── Auto-captured timestamps ──────────────────────────────────────────
-  final DateTime? createdAt;
-  final String createdBy;
-  final DateTime? approvedAt;
-  final String? approvedBy;
-  final DateTime? dispatchedAt;
-  final String? dispatchedBy;
-  final DateTime? returnedAt;
-
-  // ── Expected return ────────────────────────────────────────────────────
-  final DateTime? expectedReturnAt;
-
-  // ── Check In / Check Out (common toggle — admin + employee) ─────────────
-  final DateTime? checkedInAt;
-  final String? checkedInBy;
+  // ── Check Out / Check In — each independent, each stamped the instant
+  // it happens. No approval step in between. ───────────────────────────────
   final DateTime? checkedOutAt;
   final String? checkedOutBy;
+  final DateTime? checkedInAt;
+  final String? checkedInBy;
+
+  // ── Auto-captured record metadata ────────────────────────────────────────
+  final DateTime? createdAt;
+  final String createdBy;
 
   const InventoryMovement({
     required this.id,
-    required this.productId,
-    required this.productName,
-    required this.quantity,
+    required this.items,
+    required this.totalQuantity,
     required this.movementType,
     required this.from,
     required this.to,
     this.purpose = '',
     this.remarks = '',
-    required this.takenBy,
-    this.usedBy = '',
-    this.returnedBy = '',
-    this.status = MovementStatus.pending,
-    this.rejectionReason,
-    this.createdAt,
-    required this.createdBy,
-    this.approvedAt,
-    this.approvedBy,
-    this.dispatchedAt,
-    this.dispatchedBy,
-    this.returnedAt,
-    this.expectedReturnAt,
-    this.checkedInAt,
-    this.checkedInBy,
+    required this.usedBy,
     this.checkedOutAt,
     this.checkedOutBy,
+    this.checkedInAt,
+    this.checkedInBy,
+    this.createdAt,
+    required this.createdBy,
   });
 
   // ── Firestore DocumentSnapshot -> InventoryMovement ─────────────────────
   factory InventoryMovement.fromDoc(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     DateTime? ts(String key) => (data[key] as Timestamp?)?.toDate();
+    final rawItems = (data['items'] as List?) ?? const [];
+    var items = rawItems
+        .map((e) => MovementItem.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+
+    // ── Backward compatibility with the pre-v2 schema ─────────────────────
+    // Older movements (created before the structured `items` list existed)
+    // stored a single free-text description directly on the document under
+    // one of a few possible keys. If there's no `items` array, recover the
+    // name from whichever legacy field is present so it still displays,
+    // instead of silently showing "No product recorded".
+    if (items.isEmpty) {
+      final legacyName = (data['item_name'] ?? data['product_name'] ?? data['product'] ?? data['title'] ?? data['name'])
+      as String?;
+      if (legacyName != null && legacyName.trim().isNotEmpty) {
+        final legacyQty = (data['total_quantity'] as num?)?.toInt() ??
+            (data['quantity'] as num?)?.toInt() ??
+            (data['qty'] as num?)?.toInt() ??
+            0;
+        items = [MovementItem(productId: '', productName: legacyName.trim(), quantity: legacyQty)];
+      }
+    }
+
     return InventoryMovement(
       id: doc.id,
-      productId: data['product_id'] as String? ?? '',
-      productName: data['product_name'] as String? ?? '',
-      quantity: (data['quantity'] as num?)?.toInt() ?? 0,
+      items: items,
+      totalQuantity: (data['total_quantity'] as num?)?.toInt() ??
+          items.fold<int>(0, (sum, i) => sum + i.quantity),
       movementType: data['movement_type'] as String? ?? MovementType.other,
       from: data['from'] as String? ?? '',
       to: data['to'] as String? ?? '',
       purpose: data['purpose'] as String? ?? '',
       remarks: data['remarks'] as String? ?? '',
-      takenBy: data['taken_by'] as String? ?? '',
       usedBy: data['used_by'] as String? ?? '',
-      returnedBy: data['returned_by'] as String? ?? '',
-      status: data['status'] as String? ?? MovementStatus.pending,
-      rejectionReason: data['rejection_reason'] as String?,
-      createdAt: ts('created_at'),
-      createdBy: data['created_by'] as String? ?? '',
-      approvedAt: ts('approved_at'),
-      approvedBy: data['approved_by'] as String?,
-      dispatchedAt: ts('dispatched_at'),
-      dispatchedBy: data['dispatched_by'] as String?,
-      returnedAt: ts('returned_at'),
-      expectedReturnAt: ts('expected_return_at'),
-      checkedInAt: ts('checked_in_at'),
-      checkedInBy: data['checked_in_by'] as String?,
       checkedOutAt: ts('checked_out_at'),
       checkedOutBy: data['checked_out_by'] as String?,
+      checkedInAt: ts('checked_in_at'),
+      checkedInBy: data['checked_in_by'] as String?,
+      createdAt: ts('created_at'),
+      createdBy: data['created_by'] as String? ?? '',
     );
   }
 
-  // ── Create map (initial write — status is always Pending) ──────────────
+  // ── Create map (initial write) ──────────────────────────────────────────
+  // The caller decides which of checked_out_at / checked_in_at (if either)
+  // gets stamped at creation time by passing `action` through the service —
+  // this map only carries the fields common to every new movement.
   Map<String, dynamic> toCreateMap() => {
-    'product_id': productId,
-    'product_name': productName,
-    'quantity': quantity,
+    'items': items.map((i) => i.toMap()).toList(),
+    'total_quantity': totalQuantity,
     'movement_type': movementType,
     'from': from,
     'to': to,
     'purpose': purpose,
     'remarks': remarks,
-    'taken_by': takenBy,
     'used_by': usedBy,
-    'returned_by': '',
-    'status': MovementStatus.pending,
     'created_at': FieldValue.serverTimestamp(),
     'created_by': createdBy,
-    'expected_return_at':
-    expectedReturnAt != null ? Timestamp.fromDate(expectedReturnAt!) : null,
   };
 
   // ── Derived / display helpers ───────────────────────────────────────────
-  bool get isPending => status == MovementStatus.pending;
-  bool get isApproved => status == MovementStatus.approved;
-  bool get isDispatched => status == MovementStatus.dispatched;
-  bool get isReturned => status == MovementStatus.returned;
-  bool get isRejected => status == MovementStatus.rejected;
-  bool get isActive => MovementStatus.active.contains(status);
-  bool get isOut => status == MovementStatus.dispatched;
-
-  /// Overdue = currently dispatched (out), has an expected-return date/time,
-  /// and that date/time has already passed.
-  bool get isOverdue =>
-      isDispatched &&
-          expectedReturnAt != null &&
-          expectedReturnAt!.isBefore(DateTime.now());
-
-  // ── Check In / Check Out state ──────────────────────────────────────────
-  bool get isCheckedIn => checkedInAt != null && checkedOutAt == null;
   bool get isCheckedOut => checkedOutAt != null;
-  bool get notCheckedInYet => checkedInAt == null;
+  bool get isCheckedIn => checkedInAt != null;
 
-  bool get isReturnedToday {
-    if (!isReturned || returnedAt == null) return false;
+  /// Still out — checked out but hasn't been checked back in yet.
+  bool get isOpen => isCheckedOut && !isCheckedIn;
+
+  bool get isCheckedOutToday => _isToday(checkedOutAt);
+  bool get isCheckedInToday => _isToday(checkedInAt);
+
+  static bool _isToday(DateTime? d) {
+    if (d == null) return false;
     final now = DateTime.now();
-    final r = returnedAt!;
-    return now.year == r.year && now.month == r.month && now.day == r.day;
+    return now.year == d.year && now.month == d.month && now.day == d.day;
+  }
+
+  /// Short label for list/badge display.
+  String get statusLabel {
+    if (isCheckedIn) return 'Checked In';
+    if (isCheckedOut) return 'Checked Out';
+    return 'Draft';
+  }
+
+  /// One-line summary of the items in this movement, e.g.
+  /// "Soldering Iron +2 more" — used on list rows.
+  String get itemsSummary {
+    if (items.isEmpty) return 'No product recorded';
+    if (items.length == 1) return items.first.productName;
+    return '${items.first.productName} +${items.length - 1} more';
   }
 
   InventoryMovement copyWith({
-    String? status,
-    String? approvedBy,
-    DateTime? approvedAt,
-    String? dispatchedBy,
-    DateTime? dispatchedAt,
-    String? returnedBy,
-    DateTime? returnedAt,
-    String? rejectionReason,
-    DateTime? checkedInAt,
-    String? checkedInBy,
+    List<MovementItem>? items,
+    int? totalQuantity,
+    String? movementType,
+    String? from,
+    String? to,
+    String? purpose,
+    String? remarks,
+    String? usedBy,
     DateTime? checkedOutAt,
     String? checkedOutBy,
+    DateTime? checkedInAt,
+    String? checkedInBy,
   }) {
     return InventoryMovement(
       id: id,
-      productId: productId,
-      productName: productName,
-      quantity: quantity,
-      movementType: movementType,
-      from: from,
-      to: to,
-      purpose: purpose,
-      remarks: remarks,
-      takenBy: takenBy,
-      usedBy: usedBy,
-      returnedBy: returnedBy ?? this.returnedBy,
-      status: status ?? this.status,
-      rejectionReason: rejectionReason ?? this.rejectionReason,
-      createdAt: createdAt,
-      createdBy: createdBy,
-      approvedAt: approvedAt ?? this.approvedAt,
-      approvedBy: approvedBy ?? this.approvedBy,
-      dispatchedAt: dispatchedAt ?? this.dispatchedAt,
-      dispatchedBy: dispatchedBy ?? this.dispatchedBy,
-      returnedAt: returnedAt ?? this.returnedAt,
-      expectedReturnAt: expectedReturnAt,
-      checkedInAt: checkedInAt ?? this.checkedInAt,
-      checkedInBy: checkedInBy ?? this.checkedInBy,
+      items: items ?? this.items,
+      totalQuantity: totalQuantity ?? this.totalQuantity,
+      movementType: movementType ?? this.movementType,
+      from: from ?? this.from,
+      to: to ?? this.to,
+      purpose: purpose ?? this.purpose,
+      remarks: remarks ?? this.remarks,
+      usedBy: usedBy ?? this.usedBy,
       checkedOutAt: checkedOutAt ?? this.checkedOutAt,
       checkedOutBy: checkedOutBy ?? this.checkedOutBy,
+      checkedInAt: checkedInAt ?? this.checkedInAt,
+      checkedInBy: checkedInBy ?? this.checkedInBy,
+      createdAt: createdAt,
+      createdBy: createdBy,
     );
   }
 
@@ -250,19 +245,17 @@ class InventoryMovement {
 
 /// Aggregate counts for the Movement Dashboard cards.
 class MovementDashboardData {
-  final int totalActiveMovements;
-  final int itemsOut;
-  final int overdueReturns;
-  final int returnedToday;
-  final int pendingApprovals;
+  final int totalMovements;
+  final int checkedOutOpen; // checked out, not yet checked back in
+  final int checkedInToday;
+  final int checkedOutToday;
   final List<InventoryMovement> recent;
 
   const MovementDashboardData({
-    required this.totalActiveMovements,
-    required this.itemsOut,
-    required this.overdueReturns,
-    required this.returnedToday,
-    required this.pendingApprovals,
+    required this.totalMovements,
+    required this.checkedOutOpen,
+    required this.checkedInToday,
+    required this.checkedOutToday,
     this.recent = const [],
   });
 }

@@ -14,6 +14,11 @@ class StockItem {
   final String unit;
   final String? location;
   final Timestamp? updatedAt;
+  // Which module this stock item originated from: 'inventory' (added
+  // directly in Stock Management / the Inventory module / bulk import)
+  // or 'new_product' (synced in from the New Products module). Defaults
+  // to 'inventory' for older docs that predate this field.
+  final String source;
 
   StockItem({
     this.id,
@@ -26,6 +31,7 @@ class StockItem {
     this.unit = 'pcs',
     this.location,
     this.updatedAt,
+    this.source = 'inventory',
   });
 
   factory StockItem.fromFirestore(DocumentSnapshot doc) {
@@ -41,6 +47,7 @@ class StockItem {
       unit:        data['unit']?.toString() ?? 'pcs',
       location:    data['location']?.toString(),
       updatedAt:   data['updated_at'] as Timestamp?,
+      source:      data['source']?.toString() ?? 'inventory',
     );
   }
 
@@ -53,7 +60,10 @@ class StockItem {
     if (sku != null) 'sku': sku,
     'unit':         unit,
     if (location != null) 'location': location,
+    'source':       source,
   };
+
+  bool get isNewProduct => source == 'new_product';
 
   bool get isLowStock => quantity <= minStock;
 
@@ -71,6 +81,7 @@ class StockItem {
     String? sku,
     String? unit,
     String? location,
+    String? source,
   }) =>
       StockItem(
         id:          id,
@@ -83,6 +94,7 @@ class StockItem {
         unit:        unit       ?? this.unit,
         location:    location   ?? this.location,
         updatedAt:   updatedAt,
+        source:      source     ?? this.source,
       );
 }
 

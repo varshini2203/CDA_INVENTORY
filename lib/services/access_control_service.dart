@@ -552,6 +552,20 @@ class AccessControlService {
     ).stream;
   }
 
+  /// One-time fetch of every user's name (admins + employees), for
+  /// populating a "Used By" style picker. Not a live stream — this is
+  /// meant for a short-lived dropdown, refetched each time the form opens.
+  static Future<List<String>> fetchAllUserNames() async {
+    final snap = await _users.get();
+    final names = snap.docs
+        .map((d) => AppUserAccess.fromDoc(d).name.trim())
+        .where((n) => n.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return names;
+  }
+
   /// Every employee currently awaiting admin approval — the source of
   /// truth for the "Pending Requests" page. Reads straight from
   /// users/{uid} (not admin_notifications) so it can never drift out of

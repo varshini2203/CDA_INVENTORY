@@ -108,6 +108,7 @@ class InventorySyncService {
     String description = '',
     String? addedBy,
     bool includeStock = true,
+    String source = 'inventory',
   }) async {
     // 1) Search Products module
     try {
@@ -153,6 +154,7 @@ class InventorySyncService {
           date: DateTime.now().toIso8601String(),
           remarks: 'Auto-synced from ${description.isEmpty ? 'module add' : description}',
           category: isFixedAsset(category) ? 'fixed_asset' : 'consumable',
+          source: source,
         );
       } catch (e) {
         debugPrint('InventorySyncService: Stock Management sync failed: $e');
@@ -197,6 +199,7 @@ class InventorySyncService {
       location: item.location,
       description: item.description,
       addedBy: item.addedBy,
+      source: 'inventory',
     );
   }
 
@@ -229,6 +232,7 @@ class InventorySyncService {
       location: product.storageLocation,
       description: product.description,
       addedBy: product.addedBy,
+      source: 'new_product',
     );
   }
 

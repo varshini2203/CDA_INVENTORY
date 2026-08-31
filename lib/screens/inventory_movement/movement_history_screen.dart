@@ -1,9 +1,8 @@
 // lib/screens/inventory_movement/movement_history_screen.dart
 //
-// Filterable Movement History / Pending Approvals list. Filters: Today /
-// This Week / This Month, Movement Type, Status, Destination — matches the
-// filter set requested for the module and reuses
-// InventoryMovementService.fetchHistory() for the actual filtering logic.
+// Filterable Movement History — v2. Filters: Today / This Week / This
+// Month, Movement Type, Direction (Checked Out / Checked In / Still Out),
+// Destination. No more Status/Pending/Approved filter.
 
 import 'package:flutter/material.dart';
 
@@ -14,15 +13,13 @@ import 'add_movement_screen.dart';
 import 'movement_detail_screen.dart';
 
 class MovementHistoryScreen extends StatefulWidget {
-  final String initialStatus;
+  final String initialDirection;
   final String initialDateFilter;
-  final bool overdueOnly;
 
   const MovementHistoryScreen({
     super.key,
-    this.initialStatus = 'All',
+    this.initialDirection = 'All',
     this.initialDateFilter = 'All',
-    this.overdueOnly = false,
   });
 
   @override
@@ -31,12 +28,12 @@ class MovementHistoryScreen extends StatefulWidget {
 
 class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
   late String _dateFilter = widget.initialDateFilter;
-  late String _status = widget.initialStatus;
+  late String _direction = widget.initialDirection;
   String _movementType = 'All';
   final _destinationController = TextEditingController();
 
   static const _dateFilters = ['All', 'Today', 'This Week', 'This Month'];
-  static const _statuses = ['All', ...MovementStatus.all];
+  static const _directions = ['All', 'Checked Out', 'Checked In', 'Open'];
   static const _types = ['All', ...MovementType.all];
 
   List<InventoryMovement> _results = [];
@@ -57,16 +54,13 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
   Future<void> _load({bool forceRefresh = false}) async {
     setState(() => _loading = true);
     try {
-      var list = await InventoryMovementService.fetchHistory(
+      final list = await InventoryMovementService.fetchHistory(
         dateFilter: _dateFilter,
         movementType: _movementType,
-        status: _status,
+        direction: _direction,
         destination: _destinationController.text,
         forceRefresh: forceRefresh,
       );
-      if (widget.overdueOnly) {
-        list = list.where((m) => m.isOverdue).toList();
-      }
       if (mounted) setState(() { _results = list; _loading = false; });
     } catch (e) {
       if (mounted) setState(() => _loading = false);
@@ -149,7 +143,7 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
             child: Row(children: [
               _chipGroup('Date', _dateFilters, _dateFilter, (v) { setState(() => _dateFilter = v); _load(); }),
               const SizedBox(width: 10),
-              _chipGroup('Status', _statuses, _status, (v) { setState(() => _status = v); _load(); }),
+              _chipGroup('Direction', _directions, _direction, (v) { setState(() => _direction = v); _load(); }),
               const SizedBox(width: 10),
               _chipGroup('Type', _types, _movementType, (v) { setState(() => _movementType = v); _load(); }),
             ]),
@@ -182,8 +176,6 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
   static const _iconBtnConstraints = BoxConstraints(minWidth: 32, minHeight: 32);
 
   Widget _row(InventoryMovement m) {
-    final canEdit = m.isPending;
-    final canDelete = !m.isDispatched && !m.isReturned;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -203,15 +195,18 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(m.productName,
+                          Text(m.itemsSummary,
                               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.navy)),
                           const SizedBox(height: 3),
-                          Text('Qty ${m.quantity} · ${m.movementType} · ${m.from} → ${m.to}',
+                          Text('Qty ${m.totalQuantity} · ${m.movementType} · ${m.from} → ${m.to}',
                               style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+                          const SizedBox(height: 2),
+                          Text('Used by ${m.usedBy.isEmpty ? '—' : m.usedBy}',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
                           if (m.createdAt != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 3),
-                              child: Text(_fmt(m.createdAt!), style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400)),
+                              child: Text(_fmtDate(m.createdAt!), style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400)),
                             ),
                         ],
                       ),
@@ -220,6 +215,12 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
                     _statusBadgeFor(m),
                   ],
                 ),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(child: _timeStamp(Icons.north_east_rounded, 'Out', m.checkedOutAt, AppColors.coral)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _timeStamp(Icons.south_west_rounded, 'In', m.checkedInAt, AppColors.green)),
+                ]),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -232,24 +233,22 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
                       constraints: _iconBtnConstraints,
                       padding: EdgeInsets.zero,
                     ),
-                    if (canEdit)
-                      IconButton(
-                        onPressed: () => _edit(m),
-                        tooltip: 'Edit',
-                        icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.navy),
-                        visualDensity: VisualDensity.compact,
-                        constraints: _iconBtnConstraints,
-                        padding: EdgeInsets.zero,
-                      ),
-                    if (canDelete)
-                      IconButton(
-                        onPressed: () => _delete(m),
-                        tooltip: 'Delete',
-                        icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.coral),
-                        visualDensity: VisualDensity.compact,
-                        constraints: _iconBtnConstraints,
-                        padding: EdgeInsets.zero,
-                      ),
+                    IconButton(
+                      onPressed: () => _edit(m),
+                      tooltip: 'Edit',
+                      icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.navy),
+                      visualDensity: VisualDensity.compact,
+                      constraints: _iconBtnConstraints,
+                      padding: EdgeInsets.zero,
+                    ),
+                    IconButton(
+                      onPressed: () => _delete(m),
+                      tooltip: 'Delete',
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.coral),
+                      visualDensity: VisualDensity.compact,
+                      constraints: _iconBtnConstraints,
+                      padding: EdgeInsets.zero,
+                    ),
                   ],
                 ),
               ],
@@ -287,7 +286,7 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Movement?'),
-        content: Text('Delete the request for "${m.productName}"? This cannot be undone.'),
+        content: Text('Delete this movement (${m.itemsSummary})? This cannot be undone.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
@@ -310,32 +309,46 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
     }
   }
 
-  String _fmt(DateTime d) => '${d.day}-${d.month}-${d.year}';
+  String _fmtDate(DateTime d) => '${d.day}-${d.month}-${d.year}';
+}
+
+Widget _timeStamp(IconData icon, String label, DateTime? at, Color color) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+    child: Row(children: [
+      Icon(icon, size: 13, color: at != null ? color : Colors.grey.shade400),
+      const SizedBox(width: 5),
+      Expanded(
+        child: Text(
+          at == null ? '$label —' : '$label ${_fmtDateTime(at)}',
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: at != null ? color : Colors.grey.shade400),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    ]),
+  );
+}
+
+String _fmtDateTime(DateTime d) {
+  final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
+  final m = d.minute.toString().padLeft(2, '0');
+  final p = d.hour < 12 ? 'AM' : 'PM';
+  return '${d.day}-${d.month}  $h:$m$p';
 }
 
 Widget _statusBadgeFor(InventoryMovement m) {
   Color c;
-  String label = m.status;
-  if (m.isOverdue) {
-    c = const Color(0xFFE8374A);
-    label = 'Overdue';
+  String label;
+  if (m.isCheckedIn) {
+    c = AppColors.green;
+    label = 'Checked In';
+  } else if (m.isOpen) {
+    c = AppColors.coral;
+    label = 'Out';
   } else {
-    switch (m.status) {
-      case MovementStatus.pending:
-        c = AppColors.amber;
-        break;
-      case MovementStatus.approved:
-        c = const Color(0xFF1E5FC8);
-        break;
-      case MovementStatus.dispatched:
-        c = AppColors.coral;
-        break;
-      case MovementStatus.returned:
-        c = AppColors.green;
-        break;
-      default:
-        c = Colors.grey;
-    }
+    c = Colors.grey;
+    label = m.statusLabel;
   }
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),

@@ -24,6 +24,7 @@ import 'package:image/image.dart' as img;
 import 'package:cda_inventory/models/new_product.dart';
 import 'activity_log_service.dart';
 import 'gamification_service.dart';
+import 'inventory_service.dart';
 import 'inventory_sync_service.dart';
 
 class NewProductService {
@@ -41,6 +42,15 @@ class NewProductService {
   static List<NewProduct>? _cache;
 
   static void clearCache() => _cache = null;
+
+  /// Same convention as InventorySyncService._branchIdFromLabel — kept as
+  /// a local copy since that one is private to its own file.
+  static int _branchIdFromLabel(String label) {
+    final l = label.trim().toLowerCase();
+    if (l.contains('admin')) return 1;
+    if (l.contains('ops')) return 2;
+    return 1;
+  }
 
   // ── Image / attachment compression ───────────────────────────────────
   // Firestore caps a document at 1,048,487 bytes. Both attachments are
@@ -129,7 +139,80 @@ class NewProductService {
   }
 
   // ── ADD ───────────────────────────────────────────────────────────────
+  // If a product with the same name (and branch) already exists, this
+  // bumps that existing item's quantity instead of creating a duplicate
+  // row — matches the request "adding a product that's already listed
+  // should update the quantity, not add a second entry".
   static Future<NewProduct> addNewProduct(NewProduct product) async {
+    final trimmedName = product.productName.trim();
+
+    if (trimmedName.isNotEmpty) {
+      final existingSnap =
+      await _col.where('productName', isEqualTo: trimmedName).get();
+      final branchMatches = existingSnap.docs
+          .where((d) => (d.data()['branch'] as String?) == product.branch)
+          .toList();
+      final matches = branchMatches.isNotEmpty ? branchMatches : existingSnap.docs;
+
+      if (matches.isNotEmpty) {
+        final existingDoc = matches.first;
+        final existing = NewProduct.fromFirestore(existingDoc);
+        final newQuantity = existing.quantity + product.quantity;
+        final newAvailable = existing.availableQuantityForSale + product.quantity;
+
+        await existingDoc.reference.update({
+          'quantity': newQuantity,
+          'availableQuantityForSale': newAvailable,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        final updated = existing.copyWith(
+          quantity: newQuantity,
+          availableQuantityForSale: newAvailable,
+          updatedAt: DateTime.now(),
+        );
+
+        // Keep the in-memory cache in sync (replace, don't duplicate).
+        if (_cache != null) {
+          final idx = _cache!.indexWhere((p) => p.productId == existing.productId);
+          if (idx != -1) _cache![idx] = updated;
+        }
+
+        ActivityLogService.logEdit(
+          module: 'New Products',
+          itemName: trimmedName,
+          before: {'Quantity': existing.quantity},
+          after: {'Quantity': newQuantity},
+        );
+
+        // Mirror the same quantity bump into Inventory instead of a fresh
+        // Inventory row; only create a new one there if no match exists.
+        try {
+          final merged = await InventoryService.incrementQuantityByName(
+            name: trimmedName,
+            delta: product.quantity,
+            branch: _branchIdFromLabel(product.branch),
+          );
+          if (!merged) {
+            await InventoryService().addProduct(
+              name: trimmedName,
+              category: product.category,
+              location: product.storageLocation,
+              quantity: product.quantity,
+              description: product.description,
+              branch: _branchIdFromLabel(product.branch),
+              addedBy: product.addedBy,
+              skipDownstreamSync: true,
+            );
+          }
+        } catch (_) {
+          // Cross-module sync failures must never block the primary update.
+        }
+
+        return updated;
+      }
+    }
+
     final data = {
       ...product.toMap(),
       'createdAt': FieldValue.serverTimestamp(),

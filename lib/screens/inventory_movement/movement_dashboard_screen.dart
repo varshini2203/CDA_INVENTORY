@@ -1,12 +1,10 @@
 // lib/screens/inventory_movement/movement_dashboard_screen.dart
 //
-// Home screen for the Enterprise Inventory Movement module. Reuses the
-// existing design tokens/widgets from lib/shared/inventory_ui.dart (the
-// same ones the Purchases/Stock screens already use) so this module looks
-// native to the app instead of introducing a second visual language.
+// Home screen for the Enterprise Inventory Movement module — v2. Cards and
+// list rows now reflect the simple Check Out / Check In model: no more
+// Pending / Approved / Overdue states.
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/access/access_scope.dart';
 import '../../models/inventory_movement.dart';
@@ -79,11 +77,10 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
             );
           }
           final all = snapshot.data ?? const <InventoryMovement>[];
-          final active = all.where((m) => m.isActive).length;
-          final out = all.where((m) => m.isOut).length;
-          final overdue = all.where((m) => m.isOverdue).length;
-          final returnedToday = all.where((m) => m.isReturnedToday).length;
-          final pending = all.where((m) => m.isPending).length;
+          final total = all.length;
+          final open = all.where((m) => m.isOpen).length;
+          final inToday = all.where((m) => m.isCheckedInToday).length;
+          final outToday = all.where((m) => m.isCheckedOutToday).length;
           final recent = all.take(8).toList();
 
           return RefreshIndicator(
@@ -107,26 +104,18 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                   children: [
                     _DashboardCard(
                       icon: Icons.compare_arrows_rounded,
-                      label: 'Active',
-                      value: '$active',
+                      label: 'Total',
+                      value: '$total',
                       color: AppColors.navy,
-                      onTap: () => _openHistory(status: 'All'),
+                      onTap: () => _openHistory(direction: 'All'),
                     ),
                     const SizedBox(width: 8),
                     _DashboardCard(
                       icon: Icons.north_east_rounded,
-                      label: 'Items Out',
-                      value: '$out',
+                      label: 'Still Out',
+                      value: '$open',
                       color: AppColors.coral,
-                      onTap: () => _openHistory(status: MovementStatus.dispatched),
-                    ),
-                    const SizedBox(width: 8),
-                    _DashboardCard(
-                      icon: Icons.warning_amber_rounded,
-                      label: 'Overdue',
-                      value: '$overdue',
-                      color: overdue > 0 ? const Color(0xFFE8374A) : Colors.grey.shade400,
-                      onTap: () => _openHistory(status: MovementStatus.dispatched, overdueOnly: true),
+                      onTap: () => _openHistory(direction: 'Open'),
                     ),
                   ],
                 ),
@@ -134,19 +123,19 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                 Row(
                   children: [
                     _DashboardCard(
-                      icon: Icons.assignment_turned_in_rounded,
-                      label: 'Returned Today',
-                      value: '$returnedToday',
+                      icon: Icons.south_west_rounded,
+                      label: 'Checked In Today',
+                      value: '$inToday',
                       color: AppColors.green,
-                      onTap: () => _openHistory(status: MovementStatus.returned, dateFilter: 'Today'),
+                      onTap: () => _openHistory(direction: 'Checked In', dateFilter: 'Today'),
                     ),
                     const SizedBox(width: 8),
                     _DashboardCard(
-                      icon: Icons.pending_actions_rounded,
-                      label: 'Pending',
-                      value: '$pending',
-                      color: pending > 0 ? AppColors.amber : Colors.grey.shade400,
-                      onTap: () => _openHistory(status: MovementStatus.pending),
+                      icon: Icons.north_east_rounded,
+                      label: 'Checked Out Today',
+                      value: '$outToday',
+                      color: AppColors.amber,
+                      onTap: () => _openHistory(direction: 'Checked Out', dateFilter: 'Today'),
                     ),
                   ],
                 ),
@@ -156,7 +145,7 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
                     const SectionLabel('RECENT MOVEMENTS'),
                     const Spacer(),
                     TextButton(
-                      onPressed: () => _openHistory(status: 'All'),
+                      onPressed: () => _openHistory(direction: 'All'),
                       child: const Text('View All',
                           style: TextStyle(color: AppColors.teal, fontWeight: FontWeight.w700)),
                     ),
@@ -192,18 +181,16 @@ class _MovementDashboardScreenState extends State<MovementDashboardScreen> {
   }
 
   void _openHistory({
-    String status = 'All',
+    String direction = 'All',
     String dateFilter = 'All',
-    bool overdueOnly = false,
   }) {
     Navigator.push(
       context,
       MaterialPageRoute(
         settings: const RouteSettings(name: 'Movement History'),
         builder: (_) => MovementHistoryScreen(
-          initialStatus: status,
+          initialDirection: direction,
           initialDateFilter: dateFilter,
-          overdueOnly: overdueOnly,
         ),
       ),
     );
@@ -285,7 +272,7 @@ class _MovementTile extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Movement?'),
-        content: Text('Delete the request for "${movement.productName}"? This cannot be undone.'),
+        content: Text('Delete this movement (${movement.itemsSummary})? This cannot be undone.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
@@ -311,9 +298,6 @@ class _MovementTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final badge = _statusBadge(movement);
-    final canEdit = movement.isPending;
-    final canDelete = !movement.isDispatched && !movement.isReturned;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -337,7 +321,7 @@ class _MovementTile extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
-                        movement.isOut ? Icons.north_east_rounded : Icons.south_west_rounded,
+                        movement.isOpen ? Icons.north_east_rounded : Icons.south_west_rounded,
                         color: AppColors.navy,
                         size: 20,
                       ),
@@ -347,20 +331,30 @@ class _MovementTile extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(movement.productName,
+                          Text(movement.itemsSummary,
                               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.navy),
                               overflow: TextOverflow.ellipsis),
                           const SizedBox(height: 2),
-                          Text('Qty ${movement.quantity} · ${movement.movementType} · To ${movement.to}',
+                          Text('Qty ${movement.totalQuantity} · ${movement.movementType} · ${movement.from} → ${movement.to}',
                               style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                              overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 2),
+                          Text('Used by ${movement.usedBy.isEmpty ? '—' : movement.usedBy}',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                               overflow: TextOverflow.ellipsis),
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
-                    badge,
+                    _statusBadge(movement),
                   ],
                 ),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(child: _timeStamp(Icons.north_east_rounded, 'Out', movement.checkedOutAt, movement.checkedOutBy, AppColors.coral)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _timeStamp(Icons.south_west_rounded, 'In', movement.checkedInAt, movement.checkedInBy, AppColors.green)),
+                ]),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -373,24 +367,22 @@ class _MovementTile extends StatelessWidget {
                       constraints: _iconBtnConstraints,
                       padding: EdgeInsets.zero,
                     ),
-                    if (canEdit)
-                      IconButton(
-                        onPressed: () => _edit(context),
-                        tooltip: 'Edit',
-                        icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.navy),
-                        visualDensity: VisualDensity.compact,
-                        constraints: _iconBtnConstraints,
-                        padding: EdgeInsets.zero,
-                      ),
-                    if (canDelete)
-                      IconButton(
-                        onPressed: () => _delete(context),
-                        tooltip: 'Delete',
-                        icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.coral),
-                        visualDensity: VisualDensity.compact,
-                        constraints: _iconBtnConstraints,
-                        padding: EdgeInsets.zero,
-                      ),
+                    IconButton(
+                      onPressed: () => _edit(context),
+                      tooltip: 'Edit',
+                      icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.navy),
+                      visualDensity: VisualDensity.compact,
+                      constraints: _iconBtnConstraints,
+                      padding: EdgeInsets.zero,
+                    ),
+                    IconButton(
+                      onPressed: () => _delete(context),
+                      tooltip: 'Delete',
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.coral),
+                      visualDensity: VisualDensity.compact,
+                      constraints: _iconBtnConstraints,
+                      padding: EdgeInsets.zero,
+                    ),
                   ],
                 ),
               ],
@@ -402,32 +394,43 @@ class _MovementTile extends StatelessWidget {
   }
 }
 
+Widget _timeStamp(IconData icon, String label, DateTime? at, String? by, Color color) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+    child: Row(children: [
+      Icon(icon, size: 13, color: at != null ? color : Colors.grey.shade400),
+      const SizedBox(width: 5),
+      Expanded(
+        child: Text(
+          at == null ? '$label —' : '$label ${_fmtDateTime(at)}',
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: at != null ? color : Colors.grey.shade400),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    ]),
+  );
+}
+
+String _fmtDateTime(DateTime d) {
+  final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
+  final m = d.minute.toString().padLeft(2, '0');
+  final p = d.hour < 12 ? 'AM' : 'PM';
+  return '${d.day}-${d.month}  $h:$m$p';
+}
+
 Widget _statusBadge(InventoryMovement m) {
   Color c;
-  String label = m.status;
-  if (m.isOverdue) {
-    c = const Color(0xFFE8374A);
-    label = 'Overdue';
+  String label;
+  if (m.isCheckedIn) {
+    c = AppColors.green;
+    label = 'Checked In';
+  } else if (m.isOpen) {
+    c = AppColors.coral;
+    label = 'Out';
   } else {
-    switch (m.status) {
-      case MovementStatus.pending:
-        c = AppColors.amber;
-        break;
-      case MovementStatus.approved:
-        c = const Color(0xFF1E5FC8);
-        break;
-      case MovementStatus.dispatched:
-        c = AppColors.coral;
-        break;
-      case MovementStatus.returned:
-        c = AppColors.green;
-        break;
-      case MovementStatus.rejected:
-        c = Colors.grey;
-        break;
-      default:
-        c = Colors.grey;
-    }
+    c = Colors.grey;
+    label = m.statusLabel;
   }
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -451,7 +454,7 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 12),
           Text('No movements yet', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
-          Text('Create the first inventory movement request to get started.',
+          Text('Create the first inventory movement to get started.',
               textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
           const SizedBox(height: 16),
           EditGuard(

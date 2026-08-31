@@ -267,6 +267,9 @@ class StockService {
     required String date,
     String remarks  = '',
     String category = 'consumable',
+    // 'inventory' (default — manual Stock In, bulk import, or synced from
+    // the Inventory module) or 'new_product' (synced from New Products).
+    String source   = 'inventory',
   }) async {
     final itemId  = _itemDocId(productName, branch);
     final itemRef = _items.doc(itemId);
@@ -298,6 +301,7 @@ class StockService {
         'category':     category,
         'min_stock':    10,
         'unit':         'pcs',
+        'source':       source,
         'updated_at':   now,
       });
     } else {

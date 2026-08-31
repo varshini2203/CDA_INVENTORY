@@ -11,6 +11,7 @@ import 'package:cda_inventory/data/seed_adambakkam_inventory_dashboard.dart';
 import 'package:cda_inventory/services/seed_guard_service.dart';
 import 'package:cda_inventory/screens/bulk_import/bulk_import_screen.dart';
 import 'package:cda_inventory/screens/inventory/bulk_operations_screen.dart'; // 🆕 Bulk Operations module
+import 'inventory_history_screen.dart';
 
 class InventoryDashboard extends StatefulWidget {
   const InventoryDashboard({super.key});
@@ -1064,6 +1065,19 @@ class _InventoryDashboardState extends State<InventoryDashboard>
               ),
             );
             if (mounted) _loadInventoryOnce();
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.history_rounded),
+          tooltip: 'History',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                settings: const RouteSettings(name: 'Inventory History'),
+                builder: (_) => const InventoryHistoryScreen(),
+              ),
+            );
           },
         ),
         IconButton(

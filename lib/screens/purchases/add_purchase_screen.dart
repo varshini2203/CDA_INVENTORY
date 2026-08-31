@@ -20,6 +20,7 @@ import 'package:cda_inventory/models/product.dart';
 import 'package:cda_inventory/services/purchase_service.dart';
 import 'package:cda_inventory/services/purchase_pdf_service.dart';
 import 'package:cda_inventory/services/product_service.dart';
+import 'package:cda_inventory/constants/payment_modes.dart';
 
 // ── One editable row in the item table ────────────────────────────────────
 class _ItemRow {
@@ -94,7 +95,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
 
   DateTime _billDate = DateTime.now();
   String _stateOfSupply = 'Tamil Nadu';
-  String _paymentType = 'Cash';
+  String _paymentType = kDefaultPaymentMode;
   String _termsTitle = 'Purchase Bill';
   bool _roundOffEnabled = true;
   bool _showDescriptionField = false;
@@ -172,7 +173,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
       _shippingController.text = p.shipping.toStringAsFixed(0);
       _termsNotesController.text = p.termsNotes ?? '';
       _termsTitle = p.termsTitle;
-      _paymentType = p.paymentType;
+      _paymentType = resolvePaymentMode(p.paymentType);
       _stateOfSupply = p.stateOfSupply;
       _roundOffEnabled = p.roundOffEnabled;
       _selectedBranch = p.branch.isNotEmpty ? p.branch : _branchOptions.first;

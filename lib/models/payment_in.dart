@@ -38,7 +38,7 @@ class PaymentIn {
   final String customerName;
   final String phone;
   final double amount; // total amount received
-  final String paymentMode; // Cash, Bank Transfer, UPI, Cheque, Card
+  final String paymentMode; // one of kPaymentModes (see constants/payment_modes.dart)
   final String referenceNumber;
   final String branch;
   final String paymentDate;

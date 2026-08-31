@@ -168,6 +168,43 @@ class InventoryService {
     clearCache();
   }
 
+  /// Finds an existing Inventory doc matching [name] (and [branch] if
+  /// given) and bumps its quantity by [delta] instead of creating a new
+  /// row. Returns true if a match was found and updated; false means the
+  /// caller should fall back to creating a fresh Inventory item instead.
+  static Future<bool> incrementQuantityByName({
+    required String name,
+    required int delta,
+    int? branch,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || delta == 0) return false;
+    final snap = await FirebaseFirestore.instance
+        .collection('inventory')
+        .where('name', isEqualTo: trimmed)
+        .get();
+    var docs = snap.docs;
+    if (branch != null) {
+      final branchMatches =
+      docs.where((d) => ((d.data())['branch'] as num?)?.toInt() == branch).toList();
+      if (branchMatches.isNotEmpty) docs = branchMatches;
+    }
+    if (docs.isEmpty) return false;
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in docs) {
+      final current = (doc.data()['quantity'] as num?)?.toInt() ?? 0;
+      batch.update(doc.reference, {
+        'quantity': current + delta,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    clearCache();
+    return true;
+  }
+
+
   // ── BULK SEED ──────────────────────────────────────────────────────────────
   // [branchOverride] forces every item written in this call to carry that
   // branch number, regardless of whatever (or nothing) is in each raw map's

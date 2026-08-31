@@ -15,6 +15,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'invoice_line_item.dart';
 import 'customer_details.dart';
+import '../constants/payment_modes.dart';
 
 class Purchase {
   final String? id;          // Firestore document ID (String, not int)
@@ -36,7 +37,7 @@ class Purchase {
   final CustomerDetails? party;      // "Search by Name/Phone"
   final String? partyPhone;
   final String stateOfSupply;
-  final String paymentType;          // 'Cash' | 'Bank Transfer' | 'UPI' | 'Cheque' | 'Card' | 'Credit'
+  final String paymentType;          // one of kPaymentModes (see constants/payment_modes.dart)
   final double shipping;
   final bool roundOffEnabled;
   final String termsTitle;           // e.g. 'Purchase Bill'
@@ -44,9 +45,7 @@ class Purchase {
   final String? description;
   final String? imageUrl;
 
-  static const List<String> paymentTypes = [
-    'Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Card', 'Credit',
-  ];
+  static const List<String> paymentTypes = kPaymentModes;
   static const List<String> termsTitles = ['Purchase Bill', 'Purchase Order', 'Purchase Return'];
 
   Purchase({
@@ -64,7 +63,7 @@ class Purchase {
     this.party,
     this.partyPhone,
     this.stateOfSupply = 'Tamil Nadu',
-    this.paymentType = 'Cash',
+    this.paymentType = kDefaultPaymentMode,
     this.shipping = 0.0,
     this.roundOffEnabled = true,
     this.termsTitle = 'Purchase Bill',
@@ -122,7 +121,7 @@ class Purchase {
           : null,
       partyPhone: d['party_phone']?.toString(),
       stateOfSupply: d['state_of_supply']?.toString() ?? 'Tamil Nadu',
-      paymentType: d['payment_type']?.toString() ?? 'Cash',
+      paymentType: resolvePaymentMode(d['payment_type']?.toString()),
       shipping: (d['shipping'] as num?)?.toDouble() ?? 0.0,
       roundOffEnabled: d['round_off_enabled'] ?? true,
       termsTitle: d['terms_title']?.toString() ?? 'Purchase Bill',

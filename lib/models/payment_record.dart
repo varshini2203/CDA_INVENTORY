@@ -1,9 +1,11 @@
 // lib/models/payment_record.dart
+import '../constants/payment_modes.dart';
+
 class PaymentRecord {
   final String id;
   final double amount;
   final DateTime date;
-  final String method;      // 'Cash' | 'Bank Transfer' | 'UPI' | 'Cheque' | 'Card'
+  final String method;      // one of kPaymentModes (see constants/payment_modes.dart)
   final String? reference;  // transaction/cheque number
   final String? notes;
 
@@ -22,7 +24,7 @@ class PaymentRecord {
     date: (m['date'] is String)
         ? DateTime.tryParse(m['date']) ?? DateTime.now()
         : (m['date']?.toDate() ?? DateTime.now()),
-    method: m['method']?.toString() ?? 'Cash',
+    method: resolvePaymentMode(m['method']?.toString()),
     reference: m['reference']?.toString(),
     notes: m['notes']?.toString(),
   );

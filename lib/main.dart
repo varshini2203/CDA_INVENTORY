@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -47,6 +48,16 @@ Future<void> main() async {
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Some networks (VPNs, proxies, certain WiFi setups) block or drop the
+  // QUIC/WebChannel transport Firestore's web client prefers, which shows
+  // up as ERR_QUIC_PROTOCOL_ERROR / stuck "Listen" streams and can leave
+  // screens that wait on a Firestore read looking blank. This makes the
+  // client auto-detect that case and transparently fall back to
+  // long-polling instead, with no visible difference to the user.
+  FirebaseFirestore.instance.settings = const Settings(
+    webExperimentalAutoDetectLongPolling: true,
   );
 
   // Full push-notification pipeline (FCM + system tray while foregrounded +

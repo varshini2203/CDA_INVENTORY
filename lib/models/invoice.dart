@@ -4,6 +4,7 @@ import 'invoice_line_item.dart';
 import 'customer_details.dart';
 import 'payment_record.dart';
 import 'recurring_config.dart';
+import '../constants/payment_modes.dart';
 
 class Invoice {
   final String? id;
@@ -47,14 +48,14 @@ class Invoice {
   final String? branch;
 
   // ── New: Sale-invoice style fields ──
-  final String paymentMode;      // 'Credit' | 'Cash'
+  final String paymentMode;      // one of kPaymentModes (see constants/payment_modes.dart)
   final double shipping;
   final bool roundOffEnabled;
   final String termsTitle;       // e.g. 'Sale Invoice'
   final String? termsNotes;      // e.g. 'Thanks for doing business with us!'
 
   static const List<String> statusOptions = ['Pending', 'Paid'];
-  static const List<String> paymentMethods = ['Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Card'];
+  static const List<String> paymentMethods = kPaymentModes;
   static const List<String> recurringFrequencies = ['Weekly', 'Monthly', 'Quarterly', 'Yearly'];
 
   Invoice({
@@ -80,7 +81,7 @@ class Invoice {
     this.addedBy,
     this.addedAt,
     this.branch,
-    this.paymentMode = 'Credit',
+    this.paymentMode = kDefaultPaymentMode,
     this.shipping = 0.0,
     this.roundOffEnabled = false,
     this.termsTitle = 'Sale Invoice',
@@ -181,7 +182,7 @@ class Invoice {
       addedBy: data['added_by']?.toString(),
       addedAt: (data['added_at'] as Timestamp?)?.toDate(),
       branch: data['branch']?.toString(),
-      paymentMode: data['payment_mode']?.toString() ?? 'Credit',
+      paymentMode: resolvePaymentMode(data['payment_mode']?.toString()),
       shipping: (data['shipping'] as num?)?.toDouble() ?? 0.0,
       roundOffEnabled: data['round_off_enabled'] ?? false,
       termsTitle: data['terms_title']?.toString() ?? 'Sale Invoice',

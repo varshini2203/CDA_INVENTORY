@@ -1,20 +1,16 @@
 // lib/services/inventory_movement_service.dart
 //
-// Service layer for the Enterprise Inventory Movement module. Follows the
-// exact same conventions already used across the app (StockService,
-// ProductService, DroneService):
-//   - static methods, no DI container
-//   - manual read -> validate -> batch-write instead of runTransaction
-//     (kept web-compatible, matching every other service in this codebase)
-//   - an in-memory cache for the unfiltered list, cleared on every write
-//   - every mutating action is mirrored into ActivityLogService and
-//     StaffRewardService, exactly like StockService.addStockIn/addStockOut
+// Service layer for the Enterprise Inventory Movement module — v2.
 //
-// Quantity is kept in sync with the existing `products` collection (the
-// same collection ProductService reads/writes) so nothing about the
-// existing Product model or ProductService needed to change:
-//   - Dispatch (Approved -> Dispatched)  : products.quantity -= movement.quantity
-//   - Return   (Dispatched -> Returned)  : products.quantity += movement.quantity
+//   - Movements can carry multiple line items; stock is adjusted per item.
+//   - No approval workflow. Two independent actions only:
+//       Check Out : products.quantity -= item.quantity  (per line item)
+//       Check In  : products.quantity += item.quantity  (per line item)
+//     Each is stamped with date/time + who the instant it happens — either
+//     right at creation (whichever action the user picked) or later from
+//     the detail screen (the other side, if it hasn't happened yet).
+//   - Manually-typed items (no productId) don't touch `products` at all —
+//     same behaviour as before.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -22,6 +18,9 @@ import '../constants/gamification_constants.dart';
 import '../models/inventory_movement.dart';
 import 'activity_log_service.dart';
 import 'staff_reward_service.dart';
+
+/// Which action to perform immediately at creation time.
+enum MovementAction { checkOut, checkIn }
 
 class InventoryMovementService {
   static const String _module = 'Inventory Movement';
@@ -33,9 +32,6 @@ class InventoryMovementService {
   static CollectionReference get _products => _db.collection('products');
 
   // ── IN-MEMORY CACHE (unfiltered movement list) ───────────────────────────
-  // Mirrors StockService's `_allItemsCache` pattern: the Dashboard, History
-  // and Pending-Approvals screens all need the full collection, so fetch
-  // once and reuse instead of every screen triggering its own read.
   static List<InventoryMovement>? _allCache;
 
   static void clearCache() => _allCache = null;
@@ -62,8 +58,7 @@ class InventoryMovementService {
     return InventoryMovement.fromDoc(doc);
   }
 
-  // ── Real-time stream — used by the dashboard & history screens so
-  // approvals/dispatches/returns made from another device show up live. ────
+  // ── Real-time stream — used by the dashboard & history screens. ─────────
   static Stream<List<InventoryMovement>> streamAll() {
     return _movements.snapshots().map((s) {
       final list = s.docs.map(InventoryMovement.fromDoc).toList()
@@ -72,9 +67,6 @@ class InventoryMovementService {
           final tb = b.createdAt?.millisecondsSinceEpoch ?? 0;
           return tb.compareTo(ta);
         });
-      // Keep the one-shot cache warm too, so switching between the
-      // streamed dashboard and a fetchAll()-based screen doesn't force an
-      // extra read.
       _allCache = list;
       return list;
     });
@@ -87,29 +79,21 @@ class InventoryMovementService {
   }
 
   static MovementDashboardData _aggregate(List<InventoryMovement> all) {
-    final active = all.where((m) => m.isActive).length;
-    final out = all.where((m) => m.isOut).length;
-    final overdue = all.where((m) => m.isOverdue).length;
-    final returnedToday = all.where((m) => m.isReturnedToday).length;
-    final pending = all.where((m) => m.isPending).length;
-
     return MovementDashboardData(
-      totalActiveMovements: active,
-      itemsOut: out,
-      overdueReturns: overdue,
-      returnedToday: returnedToday,
-      pendingApprovals: pending,
+      totalMovements: all.length,
+      checkedOutOpen: all.where((m) => m.isOpen).length,
+      checkedInToday: all.where((m) => m.isCheckedInToday).length,
+      checkedOutToday: all.where((m) => m.isCheckedOutToday).length,
       recent: all.take(8).toList(),
     );
   }
 
-  // ── Filtered history (Today / This Week / This Month / Type / Status /
-  // Destination) — filtered client-side over the cached full list, same
-  // approach as StockService's history filters. ───────────────────────────
+  // ── Filtered history (Today / This Week / This Month / Type / Direction /
+  // Destination) — filtered client-side over the cached full list. ─────────
   static Future<List<InventoryMovement>> fetchHistory({
     String dateFilter = 'All', // All | Today | This Week | This Month
     String? movementType, // null/'All' = no filter
-    String? status, // null/'All' = no filter
+    String? direction, // null/'All' | 'Checked Out' | 'Checked In' | 'Open'
     String? destination, // free-text contains match on `to`
     bool forceRefresh = false,
   }) async {
@@ -143,8 +127,18 @@ class InventoryMovementService {
       if (movementType != null && movementType != 'All' && m.movementType != movementType) {
         return false;
       }
-      if (status != null && status != 'All' && m.status != status) {
-        return false;
+      if (direction != null && direction != 'All') {
+        switch (direction) {
+          case 'Checked Out':
+            if (!m.isCheckedOut) return false;
+            break;
+          case 'Checked In':
+            if (!m.isCheckedIn) return false;
+            break;
+          case 'Open':
+            if (!m.isOpen) return false;
+            break;
+        }
       }
       if (destination != null && destination.trim().isNotEmpty) {
         if (!m.to.toLowerCase().contains(destination.trim().toLowerCase())) {
@@ -155,324 +149,156 @@ class InventoryMovementService {
     }).toList();
   }
 
-  // ── CREATE — Movement request, starts life as Pending ────────────────────
+  // ── CREATE — one or more line items, plus an immediate Check Out or
+  // Check In action (no approval step, no waiting). ────────────────────────
   static Future<InventoryMovement> createMovement({
-    required String productId,
-    required String productName,
-    required int quantity,
+    required List<MovementItem> items,
     required String movementType,
     required String from,
     required String to,
     String purpose = '',
     String remarks = '',
-    required String takenBy,
-    String usedBy = '',
+    required String usedBy,
+    required MovementAction action,
+    required String actedBy, // who is checking it in/out (current user)
     required String createdBy,
-    DateTime? expectedReturnAt,
+    DateTime? when, // manual date/time for the check-out/in stamp; defaults to now
   }) async {
-    if (quantity <= 0) {
-      throw Exception('Quantity must be greater than zero.');
+    if (items.isEmpty) {
+      throw Exception('Add at least one item.');
+    }
+    for (final item in items) {
+      if (item.quantity <= 0) {
+        throw Exception('Every item needs a quantity greater than zero.');
+      }
+    }
+    final totalQuantity = items.fold<int>(0, (sum, i) => sum + i.quantity);
+
+    final movRef = _movements.doc();
+    final now = Timestamp.fromDate(when ?? DateTime.now());
+
+    // Read current stock for every item that has a productId, so we can
+    // validate + adjust it in the same batch as the movement write.
+    final withProductId = items.where((i) => i.productId.isNotEmpty).toList();
+    final prodSnaps = await Future.wait(
+      withProductId.map((i) => _products.doc(i.productId).get()),
+    );
+
+    final batch = _db.batch();
+
+    for (var idx = 0; idx < withProductId.length; idx++) {
+      final item = withProductId[idx];
+      final snap = prodSnaps[idx];
+      if (!snap.exists) continue; // product removed since — skip stock touch
+      final currentQty = ((snap.data() as Map<String, dynamic>)['quantity'] as num?)?.toInt() ?? 0;
+      int newQty;
+      if (action == MovementAction.checkOut) {
+        if (currentQty < item.quantity) {
+          throw Exception(
+              'Insufficient stock for "${item.productName}". Available: $currentQty, Requested: ${item.quantity}');
+        }
+        newQty = currentQty - item.quantity;
+      } else {
+        newQty = currentQty + item.quantity;
+      }
+      batch.update(snap.reference, {
+        'quantity': newQty,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     }
 
     final movement = InventoryMovement(
-      id: '',
-      productId: productId,
-      productName: productName,
-      quantity: quantity,
+      id: movRef.id,
+      items: items,
+      totalQuantity: totalQuantity,
       movementType: movementType,
       from: from,
       to: to,
       purpose: purpose,
       remarks: remarks,
-      takenBy: takenBy,
       usedBy: usedBy,
       createdBy: createdBy,
-      expectedReturnAt: expectedReturnAt,
     );
 
-    final ref = await _movements.add(movement.toCreateMap());
+    final createMap = movement.toCreateMap();
+    if (action == MovementAction.checkOut) {
+      createMap['checked_out_at'] = now;
+      createMap['checked_out_by'] = actedBy;
+    } else {
+      createMap['checked_in_at'] = now;
+      createMap['checked_in_by'] = actedBy;
+    }
+    batch.set(movRef, createMap);
+    await batch.commit();
     clearCache();
 
+    final actionLabel = action == MovementAction.checkOut ? 'Checked Out' : 'Checked In';
     ActivityLogService.logAdd(
       module: _module,
-      itemName: productName,
+      itemName: movement.itemsSummary,
       data: {
-        'Quantity': quantity,
+        'Total Quantity': totalQuantity,
+        'Items': items.length,
         'Type': movementType,
         'From': from,
         'To': to,
-        'Taken By': takenBy,
-        'Purpose': purpose,
-        if (expectedReturnAt != null) 'Expected Return': expectedReturnAt,
+        'Used By': usedBy,
+        'Action': actionLabel,
       },
     );
 
     StaffRewardService.recordActivity(
       action: StaffAction.stockUpdate,
       module: _module,
-      refId: 'movement_${ref.id}_create',
+      refId: 'movement_${movRef.id}_create',
     );
 
-    return InventoryMovement(
-      id: ref.id,
-      productId: movement.productId,
-      productName: movement.productName,
-      quantity: movement.quantity,
-      movementType: movement.movementType,
-      from: movement.from,
-      to: movement.to,
-      purpose: movement.purpose,
-      remarks: movement.remarks,
-      takenBy: movement.takenBy,
-      usedBy: movement.usedBy,
-      createdBy: movement.createdBy,
-      expectedReturnAt: movement.expectedReturnAt,
-    );
+    return InventoryMovement.fromDoc(await movRef.get());
   }
 
-  // ── APPROVE — Pending -> Approved ─────────────────────────────────────────
-  static Future<void> approveMovement({
-    required String id,
-    required String approvedBy,
-  }) async {
-    final snap = await _movements.doc(id).get();
-    if (!snap.exists) throw Exception('Movement not found.');
-    final m = InventoryMovement.fromDoc(snap);
-    if (!m.isPending) {
-      throw Exception('Only pending movements can be approved.');
-    }
-
-    final now = Timestamp.fromDate(DateTime.now());
-    await _movements.doc(id).update({
-      'status': MovementStatus.approved,
-      'approved_at': now,
-      'approved_by': approvedBy,
-    });
-    clearCache();
-
-    ActivityLogService.logEdit(
-      module: _module,
-      itemName: m.productName,
-      before: {'Status': MovementStatus.pending},
-      after: {'Status': MovementStatus.approved, 'Approved By': approvedBy},
-    );
-  }
-
-  // ── REJECT — Pending -> Rejected ──────────────────────────────────────────
-  static Future<void> rejectMovement({
-    required String id,
-    required String rejectedBy,
-    String reason = '',
-  }) async {
-    final snap = await _movements.doc(id).get();
-    if (!snap.exists) throw Exception('Movement not found.');
-    final m = InventoryMovement.fromDoc(snap);
-    if (!m.isPending) {
-      throw Exception('Only pending movements can be rejected.');
-    }
-
-    await _movements.doc(id).update({
-      'status': MovementStatus.rejected,
-      'rejection_reason': reason,
-      'approved_by': rejectedBy, // who actioned it
-      'approved_at': Timestamp.fromDate(DateTime.now()),
-    });
-    clearCache();
-
-    ActivityLogService.logEdit(
-      module: _module,
-      itemName: m.productName,
-      before: {'Status': MovementStatus.pending},
-      after: {'Status': MovementStatus.rejected, 'Reason': reason, 'Rejected By': rejectedBy},
-    );
-  }
-
-  // ── DISPATCH — Approved -> Dispatched, decrements product stock ──────────
-  // Manual read -> validate -> batch write, same pattern as
-  // StockService.addStockOut (web-compatible, no runTransaction).
-  static Future<void> dispatchMovement({
-    required String id,
-    required String dispatchedBy,
-  }) async {
-    final movRef = _movements.doc(id);
-    final movSnap = await movRef.get();
-    if (!movSnap.exists) throw Exception('Movement not found.');
-    final m = InventoryMovement.fromDoc(movSnap);
-    if (!m.isApproved) {
-      throw Exception('Only approved movements can be dispatched.');
-    }
-
-    // Manually-entered items (typed in instead of picked from the product
-    // list) have no productId, so there's no stock record to decrement —
-    // just move the workflow forward without touching `products`.
-    DocumentReference? prodRef;
-    int? currentQty;
-    int? newQty;
-    if (m.productId.isNotEmpty) {
-      prodRef = _products.doc(m.productId);
-      final prodSnap = await prodRef.get();
-      if (prodSnap.exists) {
-        final prodData = prodSnap.data() as Map<String, dynamic>;
-        currentQty = (prodData['quantity'] as num?)?.toInt() ?? 0;
-        if (currentQty < m.quantity) {
-          throw Exception(
-              'Insufficient stock for "${m.productName}". Available: $currentQty, Requested: ${m.quantity}');
-        }
-        newQty = currentQty - m.quantity;
-      } else {
-        prodRef = null; // product was removed since the request was made
-      }
-    }
-    final now = Timestamp.fromDate(DateTime.now());
-
-    final batch = _db.batch();
-    if (prodRef != null && newQty != null) {
-      batch.update(prodRef, {
-        'quantity': newQty,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-    batch.update(movRef, {
-      'status': MovementStatus.dispatched,
-      'dispatched_at': now,
-      'dispatched_by': dispatchedBy,
-    });
-    await batch.commit();
-    clearCache();
-
-    ActivityLogService.logEdit(
-      module: _module,
-      itemName: m.productName,
-      before: {'Status': MovementStatus.approved, if (currentQty != null) 'Stock Qty': currentQty},
-      after: {
-        'Status': MovementStatus.dispatched,
-        if (newQty != null) 'Stock Qty': newQty,
-        'Dispatched By': dispatchedBy,
-      },
-    );
-
-    StaffRewardService.recordActivity(
-      action: StaffAction.stockUpdate,
-      module: _module,
-      refId: 'movement_${id}_dispatch',
-    );
-  }
-
-  // ── RETURN — Dispatched -> Returned, restores product stock ──────────────
-  static Future<void> returnMovement({
-    required String id,
-    required String returnedBy,
-  }) async {
-    final movRef = _movements.doc(id);
-    final movSnap = await movRef.get();
-    if (!movSnap.exists) throw Exception('Movement not found.');
-    final m = InventoryMovement.fromDoc(movSnap);
-    if (!m.isDispatched) {
-      throw Exception('Only dispatched (out) movements can be returned.');
-    }
-
-    final prodRef = m.productId.isEmpty ? null : _products.doc(m.productId);
-    final prodSnap = prodRef != null ? await prodRef.get() : null;
-    final currentQty = (prodSnap != null && prodSnap.exists)
-        ? ((prodSnap.data() as Map<String, dynamic>)['quantity'] as num?)?.toInt() ?? 0
-        : 0;
-    final newQty = currentQty + m.quantity;
-    final now = Timestamp.fromDate(DateTime.now());
-
-    final batch = _db.batch();
-    if (prodRef != null && prodSnap != null && prodSnap.exists) {
-      batch.update(prodRef, {
-        'quantity': newQty,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-    batch.update(movRef, {
-      'status': MovementStatus.returned,
-      'returned_at': now,
-      'returned_by': returnedBy,
-    });
-    await batch.commit();
-    clearCache();
-
-    ActivityLogService.logEdit(
-      module: _module,
-      itemName: m.productName,
-      before: {'Status': MovementStatus.dispatched, if (prodRef != null) 'Stock Qty': currentQty},
-      after: {
-        'Status': MovementStatus.returned,
-        if (prodRef != null) 'Stock Qty': newQty,
-        'Returned By': returnedBy,
-      },
-    );
-
-    StaffRewardService.recordActivity(
-      action: StaffAction.stockUpdate,
-      module: _module,
-      refId: 'movement_${id}_return',
-    );
-  }
-
-  // ── CHECK IN — common toggle, usable by admin + employee alike. Stamps
-  // the current date/time + who did it. Idempotent guard: can't check in
-  // twice without checking out first. ──────────────────────────────────────
-  static Future<void> checkIn({
-    required String id,
-    required String checkedInBy,
-  }) async {
-    final snap = await _movements.doc(id).get();
-    if (!snap.exists) throw Exception('Movement not found.');
-    final m = InventoryMovement.fromDoc(snap);
-    if (m.isCheckedIn) {
-      throw Exception('Already checked in.');
-    }
-
-    final now = Timestamp.fromDate(DateTime.now());
-    await _movements.doc(id).update({
-      'checked_in_at': now,
-      'checked_in_by': checkedInBy,
-      // Reset any previous check-out so a fresh cycle can start.
-      'checked_out_at': null,
-      'checked_out_by': null,
-    });
-    clearCache();
-
-    ActivityLogService.logEdit(
-      module: _module,
-      itemName: m.productName,
-      before: {'Checked In': 'No'},
-      after: {'Checked In': 'Yes', 'Checked In By': checkedInBy},
-    );
-
-    StaffRewardService.recordActivity(
-      action: StaffAction.stockUpdate,
-      module: _module,
-      refId: 'movement_${id}_checkin',
-    );
-  }
-
-  // ── CHECK OUT — same toggle button, second tap. Only valid once
-  // currently checked in. ───────────────────────────────────────────────────
+  // ── CHECK OUT — from the detail screen, for a movement that was created
+  // as (or already is) a Check In and hasn't gone out yet. ─────────────────
   static Future<void> checkOut({
     required String id,
     required String checkedOutBy,
+    DateTime? when, // manual date/time for the check-out stamp; defaults to now
   }) async {
-    final snap = await _movements.doc(id).get();
-    if (!snap.exists) throw Exception('Movement not found.');
-    final m = InventoryMovement.fromDoc(snap);
-    if (!m.isCheckedIn) {
-      throw Exception('Must be checked in before checking out.');
+    final movRef = _movements.doc(id);
+    final movSnap = await movRef.get();
+    if (!movSnap.exists) throw Exception('Movement not found.');
+    final m = InventoryMovement.fromDoc(movSnap);
+    if (m.isCheckedOut) {
+      throw Exception('Already checked out.');
     }
 
-    final now = Timestamp.fromDate(DateTime.now());
-    await _movements.doc(id).update({
-      'checked_out_at': now,
-      'checked_out_by': checkedOutBy,
-    });
+    final withProductId = m.items.where((i) => i.productId.isNotEmpty).toList();
+    final prodSnaps = await Future.wait(
+      withProductId.map((i) => _products.doc(i.productId).get()),
+    );
+
+    final batch = _db.batch();
+    for (var idx = 0; idx < withProductId.length; idx++) {
+      final item = withProductId[idx];
+      final snap = prodSnaps[idx];
+      if (!snap.exists) continue;
+      final currentQty = ((snap.data() as Map<String, dynamic>)['quantity'] as num?)?.toInt() ?? 0;
+      if (currentQty < item.quantity) {
+        throw Exception(
+            'Insufficient stock for "${item.productName}". Available: $currentQty, Requested: ${item.quantity}');
+      }
+      batch.update(snap.reference, {
+        'quantity': currentQty - item.quantity,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    final now = Timestamp.fromDate(when ?? DateTime.now());
+    batch.update(movRef, {'checked_out_at': now, 'checked_out_by': checkedOutBy});
+    await batch.commit();
     clearCache();
 
     ActivityLogService.logEdit(
       module: _module,
-      itemName: m.productName,
+      itemName: m.itemsSummary,
       before: {'Checked Out': 'No'},
       after: {'Checked Out': 'Yes', 'Checked Out By': checkedOutBy},
     );
@@ -484,75 +310,146 @@ class InventoryMovementService {
     );
   }
 
-  // ── UPDATE — edit a mistaken Pending entry (product, qty, destination,
-  // etc). Same restriction as delete: once a movement has actually moved
-  // stock (Dispatched/Returned) it's part of the audit trail and can no
-  // longer be edited — only Pending/Approved/Rejected requests can. ───────
+  // ── CHECK IN — from the detail screen, closes out an open (checked out,
+  // not yet checked in) movement and restores stock. ───────────────────────
+  static Future<void> checkIn({
+    required String id,
+    required String checkedInBy,
+    DateTime? when, // manual date/time for the check-in stamp; defaults to now
+  }) async {
+    final movRef = _movements.doc(id);
+    final movSnap = await movRef.get();
+    if (!movSnap.exists) throw Exception('Movement not found.');
+    final m = InventoryMovement.fromDoc(movSnap);
+    if (m.isCheckedIn) {
+      throw Exception('Already checked in.');
+    }
+
+    final withProductId = m.items.where((i) => i.productId.isNotEmpty).toList();
+    final prodSnaps = await Future.wait(
+      withProductId.map((i) => _products.doc(i.productId).get()),
+    );
+
+    final batch = _db.batch();
+    for (var idx = 0; idx < withProductId.length; idx++) {
+      final item = withProductId[idx];
+      final snap = prodSnaps[idx];
+      if (!snap.exists) continue;
+      final currentQty = ((snap.data() as Map<String, dynamic>)['quantity'] as num?)?.toInt() ?? 0;
+      batch.update(snap.reference, {
+        'quantity': currentQty + item.quantity,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    final now = Timestamp.fromDate(when ?? DateTime.now());
+    batch.update(movRef, {'checked_in_at': now, 'checked_in_by': checkedInBy});
+    await batch.commit();
+    clearCache();
+
+    ActivityLogService.logEdit(
+      module: _module,
+      itemName: m.itemsSummary,
+      before: {'Checked In': 'No'},
+      after: {'Checked In': 'Yes', 'Checked In By': checkedInBy},
+    );
+
+    StaffRewardService.recordActivity(
+      action: StaffAction.stockUpdate,
+      module: _module,
+      refId: 'movement_${id}_checkin',
+    );
+  }
+
+  // ── UPDATE — edit the details of a movement (type/from/to/purpose/
+  // remarks/used by only). Items and their quantities are locked once a
+  // movement is created, since editing them after stock has already moved
+  // would need a separate reconciliation step. ─────────────────────────────
   static Future<void> updateMovement({
     required String id,
-    required String productId,
-    required String productName,
-    required int quantity,
     required String movementType,
     required String from,
     required String to,
     String purpose = '',
     String remarks = '',
-    required String takenBy,
-    String usedBy = '',
-    DateTime? expectedReturnAt,
+    required String usedBy,
+    DateTime? checkedOutAt, // pass to manually correct the Check Out stamp
+    DateTime? checkedInAt, // pass to manually correct the Check In stamp
+    List<MovementItem>? items, // only honoured if this movement currently has NO items —
+    // safe to backfill since no stock was ever touched for it
   }) async {
-    if (quantity <= 0) {
-      throw Exception('Quantity must be greater than zero.');
-    }
     final snap = await _movements.doc(id).get();
     if (!snap.exists) throw Exception('Movement not found.');
     final m = InventoryMovement.fromDoc(snap);
-    if (m.isDispatched || m.isReturned) {
-      throw Exception('Cannot edit a movement that has already moved stock.');
-    }
 
-    await _movements.doc(id).update({
-      'product_id': productId,
-      'product_name': productName,
-      'quantity': quantity,
+    final updateMap = <String, dynamic>{
       'movement_type': movementType,
       'from': from,
       'to': to,
       'purpose': purpose,
       'remarks': remarks,
-      'taken_by': takenBy,
       'used_by': usedBy,
-      'expected_return_at':
-      expectedReturnAt != null ? Timestamp.fromDate(expectedReturnAt) : null,
-    });
+    };
+    if (checkedOutAt != null) {
+      updateMap['checked_out_at'] = Timestamp.fromDate(checkedOutAt);
+    }
+    if (checkedInAt != null) {
+      updateMap['checked_in_at'] = Timestamp.fromDate(checkedInAt);
+    }
+    if (m.items.isEmpty && items != null && items.isNotEmpty) {
+      updateMap['items'] = items.map((i) => i.toMap()).toList();
+      updateMap['total_quantity'] = items.fold<int>(0, (sum, i) => sum + i.quantity);
+    }
+
+    await _movements.doc(id).update(updateMap);
     clearCache();
 
     ActivityLogService.logEdit(
       module: _module,
-      itemName: productName,
-      before: {'Quantity': m.quantity, 'To': m.to, 'Type': m.movementType},
-      after: {'Quantity': quantity, 'To': to, 'Type': movementType},
+      itemName: m.itemsSummary,
+      before: {'To': m.to, 'Type': m.movementType},
+      after: {'To': to, 'Type': movementType},
     );
   }
 
-  // ── DELETE (admin cleanup of a mistaken Pending/Rejected entry only —
-  // never allowed once stock has actually moved, to keep the audit trail
-  // and stock counts consistent). ─────────────────────────────────────────
+  // ── DELETE — always reverses whatever net stock effect this movement had
+  // before removing it, so deleting never leaves stock counts wrong:
+  //   only Checked Out          -> add the quantity back
+  //   only Checked In           -> take the quantity back out
+  //   both Checked Out & In     -> net zero, nothing to reverse
   static Future<void> deleteMovement(String id) async {
     final snap = await _movements.doc(id).get();
     if (!snap.exists) return;
     final m = InventoryMovement.fromDoc(snap);
-    if (m.isDispatched || m.isReturned) {
-      throw Exception('Cannot delete a movement that has already moved stock.');
+
+    final withProductId = m.items.where((i) => i.productId.isNotEmpty).toList();
+    if (withProductId.isNotEmpty && (m.isCheckedOut ^ m.isCheckedIn)) {
+      final reverseIsAdd = m.isCheckedOut && !m.isCheckedIn; // was taken out -> give back
+      final prodSnaps = await Future.wait(
+        withProductId.map((i) => _products.doc(i.productId).get()),
+      );
+      final batch = _db.batch();
+      for (var idx = 0; idx < withProductId.length; idx++) {
+        final item = withProductId[idx];
+        final snapP = prodSnaps[idx];
+        if (!snapP.exists) continue;
+        final currentQty = ((snapP.data() as Map<String, dynamic>)['quantity'] as num?)?.toInt() ?? 0;
+        final newQty = reverseIsAdd ? currentQty + item.quantity : currentQty - item.quantity;
+        batch.update(snapP.reference, {
+          'quantity': newQty < 0 ? 0 : newQty,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      batch.delete(_movements.doc(id));
+      await batch.commit();
+    } else {
+      await _movements.doc(id).delete();
     }
-    await _movements.doc(id).delete();
     clearCache();
 
     ActivityLogService.logDelete(
       module: _module,
-      itemName: m.productName,
-      data: {'Quantity': m.quantity, 'Status': m.status},
+      itemName: m.itemsSummary,
+      data: {'Total Quantity': m.totalQuantity, 'Status': m.statusLabel},
     );
   }
 }

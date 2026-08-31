@@ -11,11 +11,13 @@ import 'package:printing/printing.dart';
 import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/models/invoice_line_item.dart';
 import 'package:cda_inventory/models/customer_details.dart';
+import 'package:cda_inventory/models/payment_record.dart';
 import 'package:cda_inventory/models/product.dart';
 import 'package:cda_inventory/services/invoice_service.dart';
 import 'package:cda_inventory/services/invoice_pdf_service.dart';
 import 'package:cda_inventory/services/product_service.dart';
 import 'package:cda_inventory/widgets/reports/branch_filter_bar.dart';
+import 'package:cda_inventory/constants/payment_modes.dart';
 
 class AddInvoiceScreen extends StatefulWidget {
   final Invoice? invoiceToEdit;
@@ -91,7 +93,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   List<CustomerDetails> _customerSuggestions = [];
   List<Product> _productSuggestions = [];
 
-  String _paymentMode = 'Credit'; // 'Credit' | 'Cash'
+  String _paymentMode = kDefaultPaymentMode;
   // Which branch this invoice belongs to. Previously there was no field for
   // this at all, so every new invoice silently saved branch: null — which
   // is why filtering Reports by "CDA Admin" or "CDA Ops" always showed 0
@@ -156,10 +158,12 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       _customerName = inv.customer?.name ?? inv.vendorName;
       _phoneController.text = inv.customer?.phone ?? '';
       _stateOfSupply = inv.customer?.placeOfSupply ?? 'Tamil Nadu';
-      _paymentMode = inv.paymentMode;
+      _paymentMode = resolvePaymentMode(inv.paymentMode);
       _selectedBranch = normalizeBranch(inv.branch) ?? kBranch1;
       _termsTitle = inv.termsTitle;
       _termsNotesController.text = inv.termsNotes ?? _termsNotesController.text;
+      _descriptionController.text = inv.notes ?? '';
+      _showDescriptionField = (inv.notes ?? '').isNotEmpty;
       _shippingController.text = inv.shipping.toStringAsFixed(2);
       _roundOffEnabled = inv.roundOffEnabled;
       _invoiceDate = inv.purchaseDateTime ?? DateTime.now();
@@ -293,13 +297,36 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
 
   Invoice _buildInvoiceFromForm() {
     final lineItems = _validRows.map((r) => r.toLineItem()).toList();
+
+    // There's no separate Payment-In step any more: a sale invoice is only
+    // ever saved once its amount has been received, so we record a single
+    // payment for the full invoice total (using whatever payment mode was
+    // picked above) right here. That keeps "Received" and "Balance" correct
+    // everywhere without a second screen. On edit we reuse the original
+    // payment's id/date (if any) and just re-amount it, so re-saving an
+    // invoice after changing items/prices keeps the received amount in sync
+    // with the new total instead of drifting out of balance.
+    final existingPayment =
+    (_isEditMode && widget.invoiceToEdit!.payments.isNotEmpty)
+        ? widget.invoiceToEdit!.payments.first
+        : null;
+    final payment = PaymentRecord(
+      id: existingPayment?.id ?? 'pay_${DateTime.now().millisecondsSinceEpoch}',
+      amount: _grandTotal,
+      date: existingPayment?.date ?? _invoiceDate,
+      method: _paymentMode,
+    );
+
     return Invoice(
       id: widget.invoiceToEdit?.id,
       invoiceNo: _invoiceNoController.text.trim(),
       vendorName: _customerName.trim(),
       purchaseDate:
       '${_invoiceDate.day.toString().padLeft(2, '0')}-${_invoiceDate.month.toString().padLeft(2, '0')}-${_invoiceDate.year}',
-      status: _isEditMode ? widget.invoiceToEdit!.status : 'Pending',
+      status: 'Paid',
+      notes: _descriptionController.text.trim().isEmpty
+          ? null
+          : _descriptionController.text.trim(),
       lineItems: lineItems,
       customer: CustomerDetails(
         name: _customerName.trim(),
@@ -307,7 +334,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
         placeOfSupply: _stateOfSupply,
       ),
       gstEnabled: false,
-      payments: _isEditMode ? widget.invoiceToEdit!.payments : const [],
+      payments: [payment],
       addedBy: widget.invoiceToEdit?.addedBy,
       addedAt: _isEditMode ? widget.invoiceToEdit!.addedAt : DateTime.now(),
       branch: _selectedBranch,
@@ -655,37 +682,62 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   }
 
   Widget _paymentModeToggle() {
-    final isCash = _paymentMode == 'Cash';
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: kNavy,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(children: [
-        const Text('Sale',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
-        const Spacer(),
-        Text('Credit',
-            style: TextStyle(
-              color: isCash ? Colors.white38 : kTeal,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            )),
-        Switch(
-          value: isCash,
-          activeColor: kTeal,
-          inactiveThumbColor: kTeal,
-          inactiveTrackColor: kTeal.withOpacity(0.35),
-          onChanged: (v) => setState(() => _paymentMode = v ? 'Cash' : 'Credit'),
-        ),
-        Text('Cash',
-            style: TextStyle(
-              color: isCash ? kTeal : Colors.white38,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            )),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Sale',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
+          const SizedBox(height: 12),
+          const Text('PAYMENT MODE',
+              style: TextStyle(
+                color: Colors.white60,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                letterSpacing: 1.0,
+              )),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: DropdownButton<String>(
+              value: _paymentMode,
+              isExpanded: true,
+              dropdownColor: Colors.white,
+              underline: const SizedBox.shrink(),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: kNavy),
+              style: const TextStyle(color: kNavy, fontWeight: FontWeight.w700, fontSize: 13),
+              items: kPaymentModes
+                  .map((m) => DropdownMenuItem<String>(
+                value: m,
+                child: Text(
+                  m,
+                  style: const TextStyle(
+                    color: kNavy,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) setState(() => _paymentMode = v);
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 

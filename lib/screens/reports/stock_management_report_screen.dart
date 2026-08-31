@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import 'package:cda_inventory/core/access/access_scope.dart';
 import 'package:cda_inventory/models/stock.dart';
 import 'package:cda_inventory/services/stock_service.dart';
+import 'package:cda_inventory/services/new_product_service.dart';
 import 'package:cda_inventory/services/excel_export_service.dart'
     hide MonthlySummary, DroneReportRow, ReportService;
 import 'package:cda_inventory/services/pdf_export_service.dart';
@@ -32,8 +33,17 @@ class StockManagementReportScreen extends StatefulWidget {
 
 class _StockManagementReportScreenState extends State<StockManagementReportScreen> {
   List<StockItem> _allItems = [];
+  // Composite "name|branch" keys (lowercased) of every item currently in
+  // the New Products module. Older stock_items docs predate the `source`
+  // field, so a match against this set is the fallback signal for "is
+  // this a New Product" — the stored `source` field is authoritative
+  // once present. Branch is included in the key (not just name) because
+  // this catalog reuses generic/placeholder names like "(0#+)" across
+  // many unrelated branches and items, so a name-only match massively
+  // over-counts New Products and starves the Inventory bucket.
+  Set<String> _newProductKeys = {};
   String? _selectedBranch;
-  String? _selectedCategory; // null = All, 'consumable', 'fixed_asset'
+  String? _selectedSource; // null = All, 'inventory', 'new_product'
   bool _lowStockOnly = false;
   // Absolute quantity threshold (0, 1, or 2). When set, takes priority over
   // _lowStockOnly — the two are mutually exclusive in the UI.
@@ -42,10 +52,18 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
   bool _busy = false;
   String? _error;
 
+  static String _key(String name, String branch) =>
+      '${name.trim().toLowerCase()}|${(normalizeBranch(branch) ?? branch).trim().toLowerCase()}';
+
+  bool _isNewProduct(StockItem item) =>
+      item.isNewProduct || _newProductKeys.contains(_key(item.productName, item.branch));
+
   List<StockItem> get _rows {
     var list = filterByBranch(_allItems, _selectedBranch, (r) => r.branch);
-    if (_selectedCategory != null) {
-      list = list.where((i) => i.category == _selectedCategory).toList();
+    if (_selectedSource == 'new_product') {
+      list = list.where(_isNewProduct).toList();
+    } else if (_selectedSource == 'inventory') {
+      list = list.where((i) => !_isNewProduct(i)).toList();
     }
     if (_threshold != null) {
       list = list.where((i) => i.quantity <= _threshold!).toList();
@@ -78,8 +96,20 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
     });
     try {
       final items = await StockService.fetchItems(forceRefresh: forceRefresh);
+      // Best-effort: powers the New Products / Inventory split for stock
+      // rows that predate the `source` field. A failure here shouldn't
+      // block the report — it just falls back to each item's own
+      // `source` (defaulting to Inventory).
+      Set<String> newProductKeys = _newProductKeys;
+      try {
+        final newProducts =
+        await NewProductService.getNewProducts(forceRefresh: forceRefresh);
+        newProductKeys =
+            newProducts.map((p) => _key(p.productName, p.branch)).toSet();
+      } catch (_) {}
       setState(() {
         _allItems = items;
+        _newProductKeys = newProductKeys;
         _loading = false;
       });
     } catch (e) {
@@ -200,9 +230,9 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
       Row(children: [
         _categoryChip('All', null),
         const SizedBox(width: 8),
-        _categoryChip('Consumables', 'consumable'),
+        _categoryChip('Inventory', 'inventory'),
         const SizedBox(width: 8),
-        _categoryChip('Fixed Assets', 'fixed_asset'),
+        _categoryChip('New Products', 'new_product'),
         const Spacer(),
         GestureDetector(
           onTap: () => setState(() {
@@ -267,9 +297,9 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
   }
 
   Widget _categoryChip(String label, String? value) {
-    final isSelected = _selectedCategory == value;
+    final isSelected = _selectedSource == value;
     return GestureDetector(
-      onTap: () => setState(() => _selectedCategory = value),
+      onTap: () => setState(() => _selectedSource = value),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
@@ -332,7 +362,7 @@ class _StockManagementReportScreenState extends State<StockManagementReportScree
             Text(item.productName,
                 style: const TextStyle(color: kNavy, fontWeight: FontWeight.w700, fontSize: 14),
                 overflow: TextOverflow.ellipsis),
-            Text(item.category == 'fixed_asset' ? 'Fixed Asset' : 'Consumable',
+            Text(_isNewProduct(item) ? 'New Product' : 'Inventory',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
             Text('${branchDisplayName(item.branch)}${item.location != null && item.location!.isNotEmpty ? '  •  ${item.location}' : ''}',
                 style: TextStyle(color: Colors.grey.shade400, fontSize: 10.5)),

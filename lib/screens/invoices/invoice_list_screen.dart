@@ -4,12 +4,10 @@
 // search + Add Sale bar, filter chips (status / date / firm / user),
 // a Total Sales Amount summary card, and a full Transactions table.
 //
-// Payment-In is now wired in two places:
-//   1. A "Payment-In" button in the top bar (general receipt entry, no
-//      customer preselected).
-//   2. A "Receive Payment" row action (in the "⋮" menu) on any invoice
-//      that still has a balance due — this pre-fills that invoice's
-//      customer name on the Add Payment-In screen.
+// There's no separate Payment-In step: an invoice is only ever saved once
+// its amount has been received (see AddInvoiceScreen), so every invoice is
+// "Paid" the moment it's created and the Total Sales card's "Received"
+// figure is simply the sum of invoice amounts.
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -22,7 +20,6 @@ import 'package:cda_inventory/services/invoice_pdf_service.dart';
 import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/screens/invoices/add_invoice_screen.dart';
 import 'package:cda_inventory/utils/status_helpers.dart';
-import 'package:cda_inventory/screens/sales/add_payment_in_screen.dart';
 
 class InvoiceListScreen extends StatefulWidget {
   const InvoiceListScreen({super.key});
@@ -378,20 +375,6 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     if (result == true) _loadInvoices();
   }
 
-  // ── Payment-In: general (top bar) and per-invoice (row menu) ───────────
-  void _navigateToPaymentIn({String? customerName}) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        settings: const RouteSettings(name: 'Payment-In'),
-        builder: (_) => AddPaymentInScreen(initialCustomerName: customerName),
-      ),
-    );
-    // A Payment-In can change an invoice's balance/status, so refresh
-    // regardless of the returned value.
-    _loadInvoices(forceRefresh: true);
-  }
-
   // ═══════════════════════════════════════════════════════════════════════
   // BUILD
   // ═══════════════════════════════════════════════════════════════════════
@@ -512,37 +495,17 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _navigateToPaymentIn(),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: kBlue,
-                  side: const BorderSide(color: kBlue),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.currency_rupee_rounded, size: 16),
-                label: const Text('Payment-In', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _navigateToAddInvoice,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kRed,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Add Sale', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-              ),
-            ),
-          ],
+        ElevatedButton.icon(
+          onPressed: _navigateToAddInvoice,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: kRed,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Add Sale', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
         ),
       ],
     );
@@ -787,7 +750,6 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
       onDelete: _showDeleteConfirmDialog,
       onPrint: _printInvoice,
       onShare: _shareInvoice,
-      onReceivePayment: (inv) => _navigateToPaymentIn(customerName: _partyName(inv)),
     );
   }
 
@@ -909,7 +871,6 @@ class _InvoiceTable extends StatelessWidget {
   final void Function(Invoice) onDelete;
   final void Function(Invoice) onPrint;
   final void Function(Invoice) onShare;
-  final void Function(Invoice) onReceivePayment;
 
   const _InvoiceTable({
     required this.invoices,
@@ -921,7 +882,6 @@ class _InvoiceTable extends StatelessWidget {
     required this.onDelete,
     required this.onPrint,
     required this.onShare,
-    required this.onReceivePayment,
   });
 
   static const double wDate    = 88;
@@ -934,6 +894,12 @@ class _InvoiceTable extends StatelessWidget {
   static const double wStatus  = 84;
   static const double wActions = 110;
 
+  // Horizontal gap inserted between every column so adjacent values
+  // (e.g. Balance's "₹0" and Status's "Paid") never sit flush against
+  // each other. There are 8 gaps between the 9 columns.
+  static const double _colGap = 16;
+  static const int _gapCount = 8;
+
   // +28 accounts for the 14px horizontal padding on each side of the
   // header/data row Containers, which isn't otherwise included in the
   // fixed-width SizedBox wrapping the table (this was causing a
@@ -942,7 +908,9 @@ class _InvoiceTable extends StatelessWidget {
 
   double get _totalWidth =>
       wDate + wInvNo + wParty + wTxn + wPayType + wAmount + wBalance + wStatus + wActions +
-          _rowHorizontalPadding;
+          (_colGap * _gapCount) + _rowHorizontalPadding;
+
+  static const SizedBox _gap = SizedBox(width: _colGap);
 
   @override
   Widget build(BuildContext context) {
@@ -975,13 +943,21 @@ class _InvoiceTable extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(children: [
         SizedBox(width: wDate, child: const Text('Date', style: style)),
+        _gap,
         SizedBox(width: wInvNo, child: const Text('Invoice no', style: style)),
+        _gap,
         SizedBox(width: wParty, child: const Text('Party Name', style: style)),
+        _gap,
         SizedBox(width: wTxn, child: const Text('Transaction', style: style)),
+        _gap,
         SizedBox(width: wPayType, child: const Text('Payment Type', style: style)),
+        _gap,
         SizedBox(width: wAmount, child: const Text('Amount', style: style, textAlign: TextAlign.right)),
+        _gap,
         SizedBox(width: wBalance, child: const Text('Balance', style: style, textAlign: TextAlign.right)),
+        _gap,
         SizedBox(width: wStatus, child: const Text('Status', style: style)),
+        _gap,
         SizedBox(width: wActions, child: const Text('Actions', style: style)),
       ]),
     );
@@ -990,7 +966,6 @@ class _InvoiceTable extends StatelessWidget {
   Widget _dataRow(BuildContext context, Invoice inv, int index) {
     final status = inv.effectiveStatus;
     final color = statusColor(status);
-    final hasBalance = inv.balanceDue > 0.01;
     return InkWell(
       onTap: () => onView(inv),
       child: Container(
@@ -1001,6 +976,7 @@ class _InvoiceTable extends StatelessWidget {
             width: wDate,
             child: Text(inv.purchaseDate, style: const TextStyle(fontSize: 12.5, color: _InvoiceListScreenState.kTextDark)),
           ),
+          _gap,
           SizedBox(
             width: wInvNo,
             child: Text(
@@ -1009,6 +985,7 @@ class _InvoiceTable extends StatelessWidget {
               style: const TextStyle(fontSize: 12.5, color: _InvoiceListScreenState.kTextDark),
             ),
           ),
+          _gap,
           SizedBox(
             width: wParty,
             child: Text(
@@ -1017,10 +994,12 @@ class _InvoiceTable extends StatelessWidget {
               style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: _InvoiceListScreenState.kTextDark),
             ),
           ),
+          _gap,
           const SizedBox(
             width: wTxn,
             child: Text('Sale', style: TextStyle(fontSize: 12.5, color: _InvoiceListScreenState.kTextSub)),
           ),
+          _gap,
           SizedBox(
             width: wPayType,
             child: Text(
@@ -1029,22 +1008,26 @@ class _InvoiceTable extends StatelessWidget {
               style: const TextStyle(fontSize: 12.5, color: _InvoiceListScreenState.kTextSub),
             ),
           ),
+          _gap,
           SizedBox(
             width: wAmount,
             child: Text(money0.format(inv.displayAmount),
                 textAlign: TextAlign.right,
                 style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: _InvoiceListScreenState.kTextDark)),
           ),
+          _gap,
           SizedBox(
             width: wBalance,
             child: Text(money0.format(inv.balanceDue),
                 textAlign: TextAlign.right,
                 style: const TextStyle(fontSize: 12.5, color: _InvoiceListScreenState.kTextSub)),
           ),
+          _gap,
           SizedBox(
             width: wStatus,
             child: Text(status, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: color)),
           ),
+          _gap,
           SizedBox(
             width: wActions,
             child: Row(children: [
@@ -1057,20 +1040,10 @@ class _InvoiceTable extends StatelessWidget {
                   if (v == 'view') onView(inv);
                   if (v == 'edit') onEdit(inv);
                   if (v == 'delete') onDelete(inv);
-                  if (v == 'payment') onReceivePayment(inv);
                 },
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'view', child: Text('View')),
                   const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                  if (hasBalance)
-                    const PopupMenuItem(
-                      value: 'payment',
-                      child: Row(children: [
-                        Icon(Icons.currency_rupee_rounded, size: 16, color: _InvoiceListScreenState.kGreen),
-                        SizedBox(width: 8),
-                        Text('Receive Payment'),
-                      ]),
-                    ),
                   const PopupMenuItem(value: 'delete', child: Text('Delete')),
                 ],
               ),

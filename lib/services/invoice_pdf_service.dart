@@ -324,6 +324,13 @@ class InvoicePdfService {
                           style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
                       pw.SizedBox(height: 3),
                       pw.Text(_amountInWords(inv.grandTotal), style: const pw.TextStyle(fontSize: 9)),
+                      if (inv.notes != null && inv.notes!.trim().isNotEmpty) ...[
+                        pw.SizedBox(height: 14),
+                        pw.Text('Description',
+                            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 3),
+                        pw.Text(inv.notes!.trim(), style: const pw.TextStyle(fontSize: 9)),
+                      ],
                       pw.SizedBox(height: 14),
                       pw.Text('Terms and Conditions',
                           style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
@@ -339,6 +346,22 @@ class InvoicePdfService {
                   child: pw.Column(
                     children: [
                       _skylynkTotalRow('Sub Total', 'Rs. ${inv.subtotal.toStringAsFixed(2)}'),
+                      if (inv.gstEnabled && inv.isInterState)
+                        _skylynkTotalRow('IGST (${_trimPercent(inv.igstPercent)}%)',
+                            'Rs. ${inv.igstAmount.toStringAsFixed(2)}'),
+                      if (inv.gstEnabled && !inv.isInterState) ...[
+                        _skylynkTotalRow('CGST (${_trimPercent(inv.cgstPercent)}%)',
+                            'Rs. ${inv.cgstAmount.toStringAsFixed(2)}'),
+                        _skylynkTotalRow('SGST (${_trimPercent(inv.sgstPercent)}%)',
+                            'Rs. ${inv.sgstAmount.toStringAsFixed(2)}'),
+                      ],
+                      if (inv.usesLineItems && inv.lineTaxTotal > 0 && !inv.gstEnabled)
+                        _skylynkTotalRow('Tax', 'Rs. ${inv.lineTaxTotal.toStringAsFixed(2)}'),
+                      if (inv.shipping > 0)
+                        _skylynkTotalRow('Shipping', 'Rs. ${inv.shipping.toStringAsFixed(2)}'),
+                      if (inv.roundOffEnabled && inv.roundOffAmount != 0)
+                        _skylynkTotalRow('Round Off',
+                            '${inv.roundOffAmount >= 0 ? '+' : '-'}Rs. ${inv.roundOffAmount.abs().toStringAsFixed(2)}'),
                       pw.Container(
                         margin: const pw.EdgeInsets.symmetric(vertical: 4),
                         padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -626,6 +649,11 @@ class InvoicePdfService {
       ],
     ),
   );
+
+  // Drops a trailing '.0' (9.0 -> '9') but keeps real decimals (9.5 -> '9.5'),
+  // for tax-percentage labels like 'CGST (9%)'.
+  static String _trimPercent(double value) =>
+      value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toString();
 
   static pw.Widget _cell(String text, {bool bold = false, PdfColor? color}) => pw.Padding(
     padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 6),

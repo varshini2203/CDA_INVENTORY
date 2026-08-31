@@ -4,7 +4,7 @@ class PaymentOut {
   final String? id;
   final String vendorName;
   final double amount;
-  final String paymentMode; // Cash, Bank Transfer, UPI, Cheque
+  final String paymentMode; // one of kPaymentModes (see constants/payment_modes.dart)
   final String referenceNumber;
   final String branch;
   final String paymentDate;

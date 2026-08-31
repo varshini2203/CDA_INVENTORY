@@ -1,16 +1,9 @@
 // lib/screens/inventory_movement/movement_detail_screen.dart
 //
-// Full detail view of a single movement, with a single common CHECK IN /
-// CHECK OUT toggle button — usable by admin AND employee alike (no
-// role-gating, unlike the old Approve/Reject/Dispatch/Return flow).
-//
-// Tap 1 -> "Check In"  : current date + time auto-captured, who did it
-//                        auto-captured from the logged-in user.
-// Tap 2 -> "Check Out" : current date + time auto-captured, who did it
-//                        auto-captured from the logged-in user.
-//
-// Timeline section shows Check In (date/time) and Check Out (date/time)
-// automatically, same pattern as the Drone In/Out module.
+// Full detail view of a single movement — v2. Shows every line item, and
+// two independent buttons: Check Out and Check In. Whichever hasn't
+// happened yet is available; each stamps its own date/time + who the
+// instant it's tapped. No approval step, no pending/approved states.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -66,24 +59,38 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
     return access?.name.isNotEmpty == true ? access!.name : (access?.email ?? 'User');
   }
 
-  // Single toggle handler — decides Check In vs Check Out from current state.
-  // Common to admin + employee, no access-level gating.
-  Future<void> _toggle() async {
-    final m = _movement;
-    if (m == null) return;
-    final who = _currentUserName();
+  Future<DateTime?> _pickDateTime() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(2015),
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (date == null || !mounted) return null;
+    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(now));
+    if (time == null) return null;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
 
-    if (!m.isCheckedIn) {
-      await _act(
-            () => InventoryMovementService.checkIn(id: widget.movementId, checkedInBy: who),
-        successMsg: 'Checked In',
-      );
-    } else {
-      await _act(
-            () => InventoryMovementService.checkOut(id: widget.movementId, checkedOutBy: who),
-        successMsg: 'Checked Out',
-      );
-    }
+  Future<void> _doCheckOut() async {
+    final who = _currentUserName();
+    final when = await _pickDateTime();
+    if (when == null || !mounted) return;
+    await _act(
+          () => InventoryMovementService.checkOut(id: widget.movementId, checkedOutBy: who, when: when),
+      successMsg: 'Checked Out',
+    );
+  }
+
+  Future<void> _doCheckIn() async {
+    final who = _currentUserName();
+    final when = await _pickDateTime();
+    if (when == null || !mounted) return;
+    await _act(
+          () => InventoryMovementService.checkIn(id: widget.movementId, checkedInBy: who, when: when),
+      successMsg: 'Checked In',
+    );
   }
 
   @override
@@ -122,17 +129,36 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
               children: [
                 Row(children: [
                   Expanded(
-                    child: Text(m.productName,
+                    child: Text(m.itemsSummary,
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
                   ),
                   _statusPill(m),
                 ]),
                 const SizedBox(height: 6),
-                Text('Qty ${m.quantity} · ${m.movementType}',
+                Text('Total Qty ${m.totalQuantity} · ${m.movementType}',
                     style: const TextStyle(color: Colors.white70, fontSize: 13)),
               ],
             ),
           ),
+          const SizedBox(height: 20),
+          const SectionLabel('ITEMS'),
+          const SizedBox(height: 10),
+          FormCard(children: [
+            for (var i = 0; i < m.items.length; i++)
+              Padding(
+                padding: EdgeInsets.only(bottom: i == m.items.length - 1 ? 0 : 10),
+                child: Row(children: [
+                  Expanded(
+                    child: Text(m.items[i].productName,
+                        style: const TextStyle(fontSize: 13.5, color: AppColors.navy, fontWeight: FontWeight.w600)),
+                  ),
+                  Text('Qty ${m.items[i].quantity}',
+                      style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            if (m.items.isEmpty)
+              Text('No items', style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
+          ]),
           const SizedBox(height: 20),
           const SectionLabel('MOVEMENT DETAILS'),
           const SizedBox(height: 10),
@@ -140,7 +166,6 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
             _kv('From', m.from),
             _kv('To', m.to),
             _kv('Purpose', m.purpose.isEmpty ? '—' : m.purpose),
-            _kv('Taken By', m.takenBy),
             _kv('Used By', m.usedBy.isEmpty ? '—' : m.usedBy),
             _kv('Remarks', m.remarks.isEmpty ? '—' : m.remarks, isLast: true),
           ]),
@@ -149,38 +174,56 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
           const SizedBox(height: 10),
           FormCard(children: [
             _kv('Created', _fmt(m.createdAt), sub: m.createdBy),
-            _kv('Check In', _fmt(m.checkedInAt), sub: m.checkedInBy),
-            _kv('Check Out', _fmt(m.checkedOutAt), sub: m.checkedOutBy, isLast: true),
+            _kv('Checked Out', _fmt(m.checkedOutAt), sub: m.checkedOutBy),
+            _kv('Checked In', _fmt(m.checkedInAt), sub: m.checkedInBy, isLast: true),
           ]),
           const SizedBox(height: 28),
-          _actionButton(m),
+          _actionButtons(m),
           const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  // Single common toggle — same button for admin and employee.
-  Widget _actionButton(InventoryMovement m) {
-    if (m.isCheckedOut) {
-      return _infoNote('Checked out on ${_fmt(m.checkedOutAt)} by ${m.checkedOutBy ?? '—'}.');
+  // Two independent buttons — whichever action hasn't happened yet is
+  // available; each is a one-way stamp (no un-doing from here).
+  Widget _actionButtons(InventoryMovement m) {
+    if (m.isCheckedOut && m.isCheckedIn) {
+      return _infoNote(
+          'Checked out on ${_fmt(m.checkedOutAt)} by ${m.checkedOutBy ?? '—'}, '
+              'and checked in on ${_fmt(m.checkedInAt)} by ${m.checkedInBy ?? '—'}.');
     }
-
-    final isIn = m.isCheckedIn;
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: _busy ? null : _toggle,
-        icon: Icon(isIn ? Icons.logout_rounded : Icons.login_rounded, size: 18),
-        label: Text(isIn ? 'Check Out' : 'Check In'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isIn ? AppColors.coral : AppColors.green,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return Row(children: [
+      if (!m.isCheckedOut)
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _busy ? null : _doCheckOut,
+            icon: const Icon(Icons.north_east_rounded, size: 18),
+            label: const Text('Check Out'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.coral,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
         ),
-      ),
-    );
+      if (!m.isCheckedOut && !m.isCheckedIn) const SizedBox(width: 12),
+      if (!m.isCheckedIn)
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _busy ? null : _doCheckIn,
+            icon: const Icon(Icons.south_west_rounded, size: 18),
+            label: const Text('Check In'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+    ]);
   }
 
   Widget _infoNote(String text) => Container(
@@ -233,15 +276,15 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
   Widget _statusPill(InventoryMovement m) {
     Color c;
     String label;
-    if (m.isCheckedOut) {
+    if (m.isCheckedIn) {
       c = AppColors.green;
-      label = 'Checked Out';
-    } else if (m.isCheckedIn) {
-      c = AppColors.coral;
       label = 'Checked In';
+    } else if (m.isCheckedOut) {
+      c = AppColors.coral;
+      label = 'Checked Out';
     } else {
       c = AppColors.amber;
-      label = 'Not Checked In';
+      label = 'Draft';
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

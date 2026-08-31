@@ -20,6 +20,7 @@ import 'package:cda_inventory/services/payment_in_service.dart';
 import 'package:cda_inventory/services/invoice_service.dart';
 import 'package:cda_inventory/services/payment_in_pdf_service.dart';
 import 'package:cda_inventory/shared/inventory_ui.dart';
+import 'package:cda_inventory/constants/payment_modes.dart';
 
 class AddPaymentInScreen extends StatefulWidget {
   final String? initialCustomerName;
@@ -39,14 +40,14 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
   final dateController = TextEditingController();
 
   String selectedBranch = kBranches.first;
-  String selectedMode = 'Cash';
+  String selectedMode = kDefaultPaymentMode;
   bool _isLoading = false;
   bool _isLoadingInvoices = true;
   String? _attachmentName;
   Uint8List? _attachmentBytes;
   String? _existingAttachmentBase64;
 
-  static const modes = ['Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Card'];
+  static const modes = kPaymentModes;
 
   final InvoiceService _invoiceService = InvoiceService();
   List<Invoice> _allInvoices = [];
@@ -84,7 +85,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
       notesController.text = p.notes;
       dateController.text = p.paymentDate;
       selectedBranch = kBranches.contains(p.branch) ? p.branch : kBranches.first;
-      selectedMode = modes.contains(p.paymentMode) ? p.paymentMode : 'Cash';
+      selectedMode = resolvePaymentMode(p.paymentMode);
       _attachmentName = p.attachmentName;
       _existingAttachmentBase64 = p.attachmentBase64;
     }
@@ -265,7 +266,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
     _allocationControllers.clear();
     setState(() {
       selectedBranch = kBranches.first;
-      selectedMode = 'Cash';
+      selectedMode = kDefaultPaymentMode;
       _attachmentName = null;
       _attachmentBytes = null;
       _existingAttachmentBase64 = null;
