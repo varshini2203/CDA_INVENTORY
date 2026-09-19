@@ -1,6 +1,7 @@
 // lib/constants/drone_service_options.dart
 
 const List<String> kServiceTypes = [
+  'Drone Service',
   'Battery Service',
   'Motor Repair',
   'Propeller Replacement',

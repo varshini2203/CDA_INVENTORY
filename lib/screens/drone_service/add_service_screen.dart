@@ -30,6 +30,10 @@ class AddServiceScreen extends StatefulWidget {
 class _AddServiceScreenState extends State<AddServiceScreen> {
   final _formKey = GlobalKey<FormState>();
   final _droneNameCtrl = TextEditingController();
+  final _customerNameCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _addressCtrl = TextEditingController();
+  final _issueCtrl = TextEditingController();
   final _technicianCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _costCtrl = TextEditingController();
@@ -69,6 +73,10 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     final e = widget.existing;
     if (e != null) {
       _droneNameCtrl.text = e.droneName;
+      _customerNameCtrl.text = e.customerName ?? '';
+      _phoneCtrl.text = e.customerPhone ?? '';
+      _addressCtrl.text = e.customerAddress ?? '';
+      _issueCtrl.text = e.issueDescription ?? '';
       _technicianCtrl.text = e.technician;
       _notesCtrl.text = e.notes ?? '';
       _costCtrl.text = e.cost?.toString() ?? '';
@@ -101,6 +109,10 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
   @override
   void dispose() {
     _droneNameCtrl.dispose();
+    _customerNameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _addressCtrl.dispose();
+    _issueCtrl.dispose();
     _technicianCtrl.dispose();
     _notesCtrl.dispose();
     _costCtrl.dispose();
@@ -213,6 +225,10 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
       createdBy: widget.existing?.createdBy ?? currentUserName,
       checkedInAt: _checkedInAt,
       checkedOutAt: _checkedOutAt,
+      customerName: _customerNameCtrl.text.trim(),
+      customerPhone: _phoneCtrl.text.trim(),
+      customerAddress: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
+      issueDescription: _issueCtrl.text.trim().isEmpty ? null : _issueCtrl.text.trim(),
     );
 
     final result = _isEdit
@@ -259,13 +275,9 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
           children: [
             _sectionHeader('Drone / Asset', Icons.airplanemode_active_rounded),
             const SizedBox(height: 12),
-            _fleetLoading
-                ? const LinearProgressIndicator(color: kTeal)
-                : _buildDroneField(),
-            const SizedBox(height: 14),
             _field(
               controller: _droneNameCtrl,
-              label: 'Drone / Asset Name',
+              label: 'Drone Model / Drone Name',
               hint: 'e.g. Alpha-01 or "Battery Bank A"',
               icon: Icons.badge_outlined,
               validator: (v) => v == null || v.trim().isEmpty ? 'Name is required' : null,
@@ -292,9 +304,43 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
             ],
             const SizedBox(height: 14),
             _buildBranchDropdown(),
-            const SizedBox(height: 14),
-            _buildPrioritySelector(),
+            // ── Priority selector (Low / Normal / High / Urgent) removed ──
             // ── "Schedule" section (Scheduled Date & Time picker) removed ──
+            const SizedBox(height: 24),
+            _sectionHeader('Customer Details', Icons.person_outline_rounded),
+            const SizedBox(height: 12),
+            _field(
+              controller: _customerNameCtrl,
+              label: 'Customer Name',
+              hint: 'e.g. Ramesh Kumar',
+              icon: Icons.person_outline_rounded,
+              validator: (v) => v == null || v.trim().isEmpty ? 'Customer name is required' : null,
+            ),
+            const SizedBox(height: 14),
+            _field(
+              controller: _phoneCtrl,
+              label: 'Phone Number',
+              hint: 'e.g. 9876543210',
+              icon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+              validator: (v) => v == null || v.trim().isEmpty ? 'Phone number is required' : null,
+            ),
+            const SizedBox(height: 14),
+            _field(
+              controller: _addressCtrl,
+              label: 'Address',
+              hint: 'Customer address',
+              icon: Icons.location_on_outlined,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 14),
+            _field(
+              controller: _issueCtrl,
+              label: 'Issue',
+              hint: 'Describe the issue reported by the customer…',
+              icon: Icons.report_problem_outlined,
+              maxLines: 3,
+            ),
             const SizedBox(height: 24),
             _sectionHeader('Assignment', Icons.person_pin_outlined),
             const SizedBox(height: 12),
@@ -607,38 +653,6 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade200)),
     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kTeal, width: 1.5)),
   );
-
-  Widget _buildPrioritySelector() {
-    Color colorFor(String p) {
-      switch (p) {
-        case 'Low': return kGreen;
-        case 'High': return kAmber;
-        case 'Urgent': return kCoral;
-        default: return kNavy;
-      }
-    }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: kServicePriorities.map((p) {
-        final selected = _priority == p;
-        final c = colorFor(p);
-        return GestureDetector(
-          onTap: () => setState(() => _priority = p),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: selected ? c.withValues(alpha: 0.14) : Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: selected ? c : Colors.grey.shade200, width: selected ? 1.5 : 1),
-            ),
-            child: Text(p, style: TextStyle(color: selected ? c : Colors.grey.shade500, fontWeight: FontWeight.w700, fontSize: 12.5)),
-          ),
-        );
-      }).toList(),
-    );
-  }
 
   Widget _buildSubmitButton() {
     return Container(

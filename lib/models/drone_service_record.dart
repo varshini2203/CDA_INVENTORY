@@ -28,6 +28,15 @@ class DroneServiceRecord {
   final DateTime? updatedAt;
   final String? createdBy;
 
+  // ── Customer details ────────────────────────────────────────────────────
+  final String? customerName;
+  final String? customerPhone;
+  final String? customerAddress;
+  // Free-text description of the reported issue, typed in by whoever is
+  // booking the service (distinct from `serviceType`, which is the fixed
+  // dropdown category).
+  final String? issueDescription;
+
   // ── Drone-in / drone-out tracking ──────────────────────────────────────
   // Distinct from `scheduledAt`/`completedAt` (which are the booking's
   // planned/finished timestamps): these capture the physical hand-over —
@@ -58,6 +67,10 @@ class DroneServiceRecord {
     this.checkedInBy,
     this.checkedOutAt,
     this.checkedOutBy,
+    this.customerName,
+    this.customerPhone,
+    this.customerAddress,
+    this.issueDescription,
   });
 
   // ── Firestore → Dart ───────────────────────────────────────────────────
@@ -100,6 +113,10 @@ class DroneServiceRecord {
           ? (j['checked_out_at'] as Timestamp).toDate()
           : null,
       checkedOutBy: j['checked_out_by']?.toString(),
+      customerName: j['customer_name']?.toString(),
+      customerPhone: j['customer_phone']?.toString(),
+      customerAddress: j['customer_address']?.toString(),
+      issueDescription: j['issue_description']?.toString(),
     );
   }
 
@@ -123,6 +140,10 @@ class DroneServiceRecord {
     'checked_in_by': checkedInBy,
     'checked_out_at': checkedOutAt != null ? Timestamp.fromDate(checkedOutAt!) : null,
     'checked_out_by': checkedOutBy,
+    'customer_name': customerName,
+    'customer_phone': customerPhone,
+    'customer_address': customerAddress,
+    'issue_description': issueDescription,
   };
 
   DroneServiceRecord copyWith({
@@ -145,6 +166,10 @@ class DroneServiceRecord {
     String? checkedInBy,
     DateTime? checkedOutAt,
     String? checkedOutBy,
+    String? customerName,
+    String? customerPhone,
+    String? customerAddress,
+    String? issueDescription,
     bool clearCheckedInAt = false,
     bool clearCheckedOutAt = false,
   }) =>
@@ -168,6 +193,10 @@ class DroneServiceRecord {
         checkedInBy: clearCheckedInAt ? null : (checkedInBy ?? this.checkedInBy),
         checkedOutAt: clearCheckedOutAt ? null : (checkedOutAt ?? this.checkedOutAt),
         checkedOutBy: clearCheckedOutAt ? null : (checkedOutBy ?? this.checkedOutBy),
+        customerName: customerName ?? this.customerName,
+        customerPhone: customerPhone ?? this.customerPhone,
+        customerAddress: customerAddress ?? this.customerAddress,
+        issueDescription: issueDescription ?? this.issueDescription,
       );
 
   bool get isOverdue =>
