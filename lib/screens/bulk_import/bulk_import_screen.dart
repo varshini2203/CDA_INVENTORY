@@ -52,6 +52,7 @@ import 'package:flutter/material.dart';
 
 import 'package:cda_inventory/services/inventory_sync_service.dart';
 import 'package:cda_inventory/services/stock_service.dart';
+import 'package:cda_inventory/services/current_user_service.dart';
 import 'package:cda_inventory/services/bulk_import/dynamic_bulk_import_engine.dart';
 import 'package:cda_inventory/services/bulk_import/dynamic_import_parser.dart';
 import 'package:cda_inventory/services/bulk_import/import_field_config.dart';
@@ -179,7 +180,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
           config: config,
           parseResult: parsed,
           fileName: picked.name,
-          importedBy: 'Bulk Import',
+          importedBy: CurrentUserService.nameSync,
         ),
       ),
     );
@@ -271,7 +272,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
           quantity: quantity,
           branchLabel: branch,
           location: (row.values['location'] ?? '').toString(),
-          addedBy: 'Bulk Import',
+          addedBy: CurrentUserService.nameSync,
         );
         success++;
       } catch (e) {

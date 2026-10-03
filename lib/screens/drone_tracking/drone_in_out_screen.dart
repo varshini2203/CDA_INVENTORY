@@ -6,13 +6,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import '../../models/drone.dart';
 import '../../services/drone_service.dart';
+import '../../services/current_user_service.dart';
 import '../../services/drone_reminder_service.dart';
 import '../../constants/drone_categories.dart';
-import '../../core/access/access_scope.dart';
 import '../../data/seed_drones.dart';
 import '../../widgets/common/serial_scan_screen.dart';
 import 'add_drone_entry_screen.dart';
@@ -158,7 +157,9 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
 
   Future<void> _toggleStatus(Drone drone) async {
     final newStatus = drone.status == 'IN' ? 'OUT' : 'IN';
-    final currentUserName = context.read<CurrentAccess>().access?.name;
+    // Logged-in user's name — never typed manually.
+    final currentUserName = await CurrentUserService.getName();
+    if (!mounted) return;
 
     final entry = await showDialog<_DroneActionEntry>(
       context: context,
@@ -170,18 +171,21 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
     );
     if (entry == null) return; // cancelled
 
+    // Handled By — always the logged-in user (auto-fetched, never typed).
+    final handledBy = currentUserName;
+
     HapticFeedback.lightImpact();
 
     // Optimistic local update
     setState(() {
       drone.status = newStatus;
-      drone.pilotName = entry.usedBy;
+      drone.pilotName = handledBy;
     });
 
     final result = await _service.updateStatus(
       drone.id,
       newStatus,
-      performedBy: entry.usedBy,
+      performedBy: handledBy, // service re-resolves from login and saves it
       actionTime: entry.time,
       purpose: entry.purpose,
     );
@@ -192,7 +196,7 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
           ? ' for ${entry.purpose}'
           : '';
       _showSnack(
-        '${drone.name} marked $newStatus by ${entry.usedBy}$purposeSuffix',
+        '${drone.name} marked $newStatus — handled by $handledBy$purposeSuffix',
         icon: newStatus == 'IN' ? Icons.flight_land : Icons.flight_takeoff,
         color: newStatus == 'IN' ? kTeal : kAmber,
       );
@@ -1502,7 +1506,7 @@ class _DroneCardState extends State<_DroneCard>
                             const Icon(Icons.person_outline,
                                 color: kPurple, size: 14),
                             const SizedBox(width: 6),
-                            Text(widget.drone.pilotName!,
+                            Text('Handled by: ${widget.drone.pilotName!}',
                                 style: const TextStyle(
                                     color: kPurple,
                                     fontSize: 13,
@@ -1998,18 +2002,20 @@ class _DroneActionDialogState extends State<_DroneActionDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Used by',
+            const Text('Handled By (auto)',
                 style: TextStyle(
                     color: kNavy, fontWeight: FontWeight.w600, fontSize: 13)),
             const SizedBox(height: 6),
             TextField(
               controller: _nameCtrl,
-              onChanged: (_) => setState(() {}),
-              autofocus: widget.defaultName == null || widget.defaultName!.isEmpty,
-              style: const TextStyle(color: kNavy, fontSize: 14),
+              readOnly: true, // auto-filled from login — not editable
+              enableInteractiveSelection: false,
+              style: const TextStyle(color: kNavy, fontSize: 14, fontWeight: FontWeight.w600),
               decoration: InputDecoration(
-                hintText: 'Name of the person doing this',
+                hintText: 'Detected from your login',
+                helperText: 'Filled automatically from your login',
                 prefixIcon: const Icon(Icons.person_outline, size: 20),
+                suffixIcon: const Icon(Icons.lock_outline_rounded, size: 18),
                 isDense: true,
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10)),
@@ -2074,7 +2080,7 @@ class _DroneActionDialogState extends State<_DroneActionDialog> {
               ? () => Navigator.pop(
               context,
               _DroneActionEntry(
-                  usedBy: _nameCtrl.text.trim(),
+                  usedBy: widget.defaultName ?? _nameCtrl.text.trim(),
                   time: _when,
                   purpose: isIn ? null : _purpose))
               : null,

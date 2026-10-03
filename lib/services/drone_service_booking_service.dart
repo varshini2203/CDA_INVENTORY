@@ -11,6 +11,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/drone_service_record.dart';
 import 'activity_log_service.dart';
+import 'drone_service_alert_service.dart';
 
 class ApiResult<T> {
   final T? data;
@@ -112,6 +113,7 @@ class DroneServiceBookingService {
       final ref = await _services.add(data);
       final saved = record.copyWith(id: ref.id, createdAt: DateTime.now());
       clearCache();
+      DroneServiceAlertService.instance.schedule(saved);
       ActivityLogService.logAdd(
         module: 'Drone Services',
         itemName: '${record.serviceType} — ${record.droneName}',
@@ -137,6 +139,7 @@ class DroneServiceBookingService {
     try {
       await _services.doc(before.id).update(after.toFirestore());
       clearCache();
+      DroneServiceAlertService.instance.schedule(after.copyWith(id: before.id));
       ActivityLogService.logEdit(
         module: 'Drone Services',
         itemName: '${after.serviceType} — ${after.droneName}',
@@ -171,6 +174,9 @@ class DroneServiceBookingService {
       };
       await _services.doc(id).update(updates);
       clearCache();
+      if (status == 'Completed' || status == 'Cancelled') {
+        DroneServiceAlertService.instance.cancel(id);
+      }
       ActivityLogService.logEdit(
         module: 'Drone Services',
         itemName: itemName ?? id,
@@ -235,6 +241,7 @@ class DroneServiceBookingService {
       };
       await _services.doc(record.id).update(updates);
       clearCache();
+      DroneServiceAlertService.instance.cancel(record.id);
       ActivityLogService.logEdit(
         module: 'Drone Services',
         itemName: '${record.serviceType} — ${record.droneName}',
@@ -257,6 +264,7 @@ class DroneServiceBookingService {
     try {
       await _services.doc(record.id).delete();
       clearCache();
+      DroneServiceAlertService.instance.cancel(record.id);
       ActivityLogService.logDelete(
         module: 'Drone Services',
         itemName: '${record.serviceType} — ${record.droneName}',
@@ -287,7 +295,7 @@ class DroneServiceBookingService {
         'in_progress': list.where((s) => s.status == 'In Progress').length,
         'completed': list.where((s) => s.status == 'Completed').length,
         'cancelled': list.where((s) => s.status == 'Cancelled').length,
-        'overdue': list.where((s) => s.isOverdue).length,
+        'overdue': list.where((s) => s.isPastSchedule).length,
       });
     } catch (e) {
       return ApiResult.err(_firestoreError(e));

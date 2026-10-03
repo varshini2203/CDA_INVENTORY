@@ -5,12 +5,15 @@
 // CDA Admin / CDA Ops), a list view and a calendar view, and an "Add
 // Service" flow. Theme matched to the Drone In/Out & Invoice pages.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import '../../models/drone_service_record.dart';
 import '../../services/drone_service_booking_service.dart';
+import '../../services/drone_service_alert_service.dart';
 import '../../constants/drone_categories.dart';
+import '../../services/current_user_service.dart';
 import '../../constants/drone_service_options.dart';
 import '../../core/access/access_scope.dart';
 import 'add_service_screen.dart';
@@ -51,10 +54,95 @@ class _DroneServiceDashboardScreenState
   static const Color kGreen = Color(0xFF00B894);
   static const Color kPurple = Color(0xFF6C63FF);
 
+  // ── Overdue alert state ────────────────────────────────────────────────
+  // ids already announced with a pop-up this session, so the dialog only
+  // appears again when a *new* service goes past its scheduled date.
+  final Set<String> _alertedIds = {};
+  Timer? _overdueTimer;
+  bool _alertOpen = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+    // Re-check every minute so a service that crosses its scheduled time
+    // while this screen is open triggers the alert without a refresh.
+    _overdueTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!mounted) return;
+      setState(() {}); // refresh "overdue by …" labels
+      _checkOverdue();
+    });
+  }
+
+  @override
+  void dispose() {
+    _overdueTimer?.cancel();
+    super.dispose();
+  }
+
+  List<DroneServiceRecord> get _overdue => DroneServiceAlertService.overdueOf(
+      _branchFilter == DroneServiceBookingService.branchAll
+          ? _all
+          : _all.where((s) => s.branch == _branchFilter).toList());
+
+  /// Pops the alert dialog when there are overdue services we haven't
+  /// announced yet. [force] re-opens it on demand (banner tap).
+  Future<void> _checkOverdue({bool force = false}) async {
+    if (!mounted || _alertOpen) return;
+    final list = DroneServiceAlertService.overdueOf(_all);
+    if (list.isEmpty) return;
+    final fresh = list.where((s) => !_alertedIds.contains(s.id)).toList();
+    if (fresh.isEmpty && !force) return;
+    _alertedIds.addAll(list.map((s) => s.id));
+    _alertOpen = true;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _OverdueAlertDialog(
+        items: list,
+        onView: (r) {
+          Navigator.pop(context);
+          _openDetail(r);
+        },
+      ),
+    );
+    _alertOpen = false;
+  }
+
+  Widget _buildOverdueBanner() {
+    final list = _overdue;
+    if (list.isEmpty) return const SizedBox.shrink();
+    final worst = list.first.overdueBy;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _checkOverdue(force: true),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: kCoral.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: kCoral.withValues(alpha: 0.5)),
+          ),
+          child: Row(children: [
+            const Icon(Icons.notification_important_rounded, color: kCoral, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  '${list.length} service${list.length == 1 ? '' : 's'} past the scheduled date',
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: kNavy),
+                ),
+                const SizedBox(height: 2),
+                Text('Longest overdue: ${DroneServiceAlertService.formatOverdue(worst)} · tap to view',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700)),
+              ]),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: kCoral),
+          ]),
+        ),
+      ),
+    );
   }
 
   Future<void> _load({bool forceRefresh = false}) async {
@@ -72,6 +160,15 @@ class _DroneServiceDashboardScreenState
         _error = result.error;
       }
     });
+    if (result.success) {
+      // Re-arm device notifications for open bookings, then alert in-app.
+      for (final r in _all) {
+        if (r.status == 'Scheduled' || r.status == 'In Progress') {
+          DroneServiceAlertService.instance.schedule(r);
+        }
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkOverdue());
+    }
   }
 
   Color _statusColor(String status) {
@@ -167,14 +264,16 @@ class _DroneServiceDashboardScreenState
       return;
     }
     final isCheckingIn = !r.isDroneCheckedIn;
-    final currentUserName = context.read<CurrentAccess>().access?.name;
+    // Logged-in user's name — never typed manually.
+    final currentUserName = await CurrentUserService.getName();
+    if (!mounted) return;
 
     final entry = await showDialog<_CheckInOutEntry>(
       context: context,
       builder: (_) => _CheckInOutDialog(
         record: r,
         isCheckingIn: isCheckingIn,
-        defaultName: isCheckingIn ? currentUserName : (r.checkedInBy ?? currentUserName),
+        defaultName: currentUserName,
       ),
     );
     if (entry == null) return;
@@ -298,6 +397,7 @@ class _DroneServiceDashboardScreenState
               SliverFillRemaining(child: _ErrorView(message: _error!, onRetry: () => _load(forceRefresh: true)))
             else ...[
                 SliverToBoxAdapter(child: _viewMode == 'history' ? _buildHistoryStatsRow() : _buildStatsRow()),
+                SliverToBoxAdapter(child: _buildOverdueBanner()),
                 SliverToBoxAdapter(child: _buildBranchFilterRow()),
                 SliverToBoxAdapter(child: _buildViewToggle()),
                 if (_viewMode == 'list') ...[
@@ -844,6 +944,24 @@ class _ServiceCard extends StatelessWidget {
                           Flexible(child: Text(record.technician, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500))),
                         ],
                       ]),
+                      if (record.isPastSchedule) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF6B6B).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFFF6B6B)),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Overdue by ${DroneServiceAlertService.formatOverdue(record.overdueBy)}',
+                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFFFF6B6B)),
+                            ),
+                          ]),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1337,10 +1455,13 @@ class _CheckInOutDialogState extends State<_CheckInOutDialog> {
             const SizedBox(height: 20),
             TextField(
               controller: _nameCtrl,
-              style: const TextStyle(color: kNavy, fontSize: 14),
+              readOnly: true, // auto-filled from login — not editable
+              enableInteractiveSelection: false,
+              style: const TextStyle(color: kNavy, fontSize: 14, fontWeight: FontWeight.w600),
               cursorColor: _accent,
               decoration: InputDecoration(
-                labelText: widget.isCheckingIn ? 'Received by' : 'Handed over by',
+                suffixIcon: const Icon(Icons.lock_outline_rounded, size: 18),
+                labelText: widget.isCheckingIn ? 'Received by (auto)' : 'Handed over by (auto)',
                 labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                 prefixIcon: Icon(Icons.person_outline_rounded, color: _accent, size: 20),
                 filled: true,
@@ -1679,5 +1800,76 @@ class _ServiceMonthCalendarState extends State<ServiceMonthCalendar> {
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     return '${months[d.month - 1]} ${d.year}';
+  }
+}
+
+// ── OVERDUE ALERT DIALOG ─────────────────────────────────────────────────
+// Shown when one or more open services have gone past their scheduled date.
+
+class _OverdueAlertDialog extends StatelessWidget {
+  final List<DroneServiceRecord> items;
+  final void Function(DroneServiceRecord) onView;
+  const _OverdueAlertDialog({required this.items, required this.onView});
+
+  static const Color kNavy = Color(0xFF0A1628);
+  static const Color kCoral = Color(0xFFFF6B6B);
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = DateFormat('d MMM, h:mm a');
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      title: Row(children: [
+        const Icon(Icons.notification_important_rounded, color: kCoral),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            items.length == 1 ? 'Service overdue' : '${items.length} services overdue',
+            style: const TextStyle(color: kNavy, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ]),
+      content: SizedBox(
+        width: 380,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 360),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const Divider(height: 14),
+            itemBuilder: (_, i) {
+              final r = items[i];
+              return InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => onView(r),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${r.serviceType} — ${r.droneName}',
+                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: kNavy)),
+                    const SizedBox(height: 3),
+                    Text('Scheduled ${fmt.format(r.scheduledAt)}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Overdue by ${DroneServiceAlertService.formatOverdue(r.overdueBy)}'
+                          '${r.technician.isNotEmpty ? '  ·  ${r.technician}' : ''}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kCoral),
+                    ),
+                  ]),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Dismiss'),
+        ),
+      ],
+    );
   }
 }

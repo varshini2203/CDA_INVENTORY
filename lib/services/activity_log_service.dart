@@ -34,6 +34,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 import '../models/app_access_models.dart';
+import 'current_user_service.dart';
 
 class ActivityLogService {
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -55,12 +56,14 @@ class ActivityLogService {
     _cachedUid = uid;
     _cachedName = name;
     _cachedRole = role;
+    CurrentUserService.setCurrent(uid: uid, name: name);
   }
 
   static void clearCurrentUser() {
     _cachedUid = null;
     _cachedName = 'Unknown';
     _cachedRole = 'employee';
+    CurrentUserService.clear();
   }
 
   // ── Screen visits (unchanged — wired via AccessRouteObserver) ───────────

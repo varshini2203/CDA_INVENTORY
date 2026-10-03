@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import '../../services/inventory_service.dart';
+import '../../services/current_user_service.dart';
+import '../../widgets/common/auto_user_field.dart';
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -71,6 +73,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
     setState(() => isLoading = true);
 
     try {
+      // Logged-in user's name — never typed manually.
+      final currentUser = await CurrentUserService.getName();
+
       // ── Firestore: returns InventoryItem with auto-generated String id ──
       await InventoryService().addProduct(
         name: nameController.text.trim(),
@@ -79,7 +84,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         quantity: int.parse(quantityController.text.trim()),
         description: descriptionController.text.trim(),
         branch: selectedBranch,             // 🆕 which branch this item belongs to
-        addedBy: addedByController.text.trim(),   // 🆕 who added this item
+        addedBy: currentUser,   // auto-fetched from login
       );
 
       if (!mounted) return;
@@ -181,11 +186,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
               const SizedBox(height: 16),
               _sectionLabel("Added By"),   // 🆕 new section
               _buildCard([
-                _field(
+                AutoUserField(
                   controller: addedByController,
-                  label: "Your Name",
-                  icon: Icons.person_outline,
-                  validator: (v) => v!.isEmpty ? "Enter your name" : null,
+                  label: "Added By (auto)",
                 ),
               ]),
 

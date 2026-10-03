@@ -31,6 +31,8 @@ class Drone {
   final String? purpose; // why the drone was taken OUT: Training/Testing/Service/Expo/Workshop/...
   final DateTime? checkedOutAt; // when status last became 'OUT' — used for the 4-hour overdue reminder
   final DateTime? checkedInAt; // when status last became 'IN' — kept alongside checkedOutAt purely for display ("In: ... · Out: ...") so both dates stay visible regardless of current status
+  final String? addedBy; // auto-filled from login when the drone is registered — never typed
+  final String? updatedBy; // auto-filled from login on every edit / IN-OUT action
   final bool reminderAcknowledged; // true once someone has seen/dismissed the overdue reminder for this OUT session
 
   Drone({
@@ -52,6 +54,8 @@ class Drone {
     this.purpose,
     this.checkedOutAt,
     this.checkedInAt,
+    this.addedBy,
+    this.updatedBy,
     this.reminderAcknowledged = false,
   });
 
@@ -140,6 +144,8 @@ class Drone {
       checkedInAt: j['checked_in_at'] is Timestamp
           ? (j['checked_in_at'] as Timestamp).toDate()
           : null,
+      addedBy: j['added_by']?.toString(),
+      updatedBy: j['updated_by']?.toString(),
       reminderAcknowledged: j['reminder_acknowledged'] as bool? ?? false,
     );
   }
@@ -170,6 +176,8 @@ class Drone {
     'checked_in_at': checkedInAt != null
         ? Timestamp.fromDate(checkedInAt!)
         : null,
+    'added_by': addedBy,
+    'updated_by': updatedBy,
     'reminder_acknowledged': reminderAcknowledged,
   };
 
@@ -194,6 +202,8 @@ class Drone {
     String? purpose,
     DateTime? checkedOutAt,
     DateTime? checkedInAt,
+    String? addedBy,
+    String? updatedBy,
     bool? reminderAcknowledged,
   }) =>
       Drone(
@@ -215,6 +225,8 @@ class Drone {
         purpose: purpose ?? this.purpose,
         checkedOutAt: checkedOutAt ?? this.checkedOutAt,
         checkedInAt: checkedInAt ?? this.checkedInAt,
+        addedBy: addedBy ?? this.addedBy,
+        updatedBy: updatedBy ?? this.updatedBy,
         reminderAcknowledged: reminderAcknowledged ?? this.reminderAcknowledged,
       );
 }

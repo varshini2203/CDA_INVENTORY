@@ -27,6 +27,7 @@
 import '../../models/inventory_model.dart';
 import '../../models/new_product.dart';
 import '../activity_log_service.dart';
+import '../current_user_service.dart';
 import '../inventory_service.dart';
 import '../inventory_sync_service.dart';
 import '../new_product_service.dart';
@@ -174,7 +175,8 @@ final ModuleImportConfig inventoryImportConfig = ModuleImportConfig(
       quantity: _asInt(row, 'quantity', 1),
       description: _asText(row, 'description'),
       branch: _normalizeInventoryBranch(_asText(row, 'branch')),
-      addedBy: _asText(row, 'addedBy', 'Bulk Import'),
+      // Always the logged-in user — an "Added By" column in the file is ignored.
+      addedBy: CurrentUserService.nameSync,
     );
     final map = item.toMap();
     // The engine stamps its own timestamps uniformly across every module.
@@ -427,7 +429,8 @@ final ModuleImportConfig newProductsImportConfig = ModuleImportConfig(
       storageLocation: _asText(row, 'storageLocation'),
       minimumStockLevel: _asInt(row, 'minimumStockLevel'),
       status: _asText(row, 'status', 'In Stock'),
-      addedBy: _asText(row, 'addedBy', 'Bulk Import'),
+      // Always the logged-in user — an "Added By" column in the file is ignored.
+      addedBy: CurrentUserService.nameSync,
       employeeId: _asText(row, 'employeeId'),
       department: _asText(row, 'department'),
       remarks: _asText(row, 'remarks'),

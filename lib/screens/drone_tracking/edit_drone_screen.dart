@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../../models/drone.dart';
 import '../../services/drone_service.dart';
+import '../../widgets/common/auto_user_field.dart';
 import '../../constants/drone_categories.dart';
 
 class EditDroneScreen extends StatefulWidget {
@@ -119,9 +120,9 @@ class _EditDroneScreenState extends State<EditDroneScreen>
       model: _modelCtrl.text.trim(),
       serialNumber: _serialCtrl.text.trim(),
       status: _status,
-      pilotName: _pilotCtrl.text.trim().isEmpty
-          ? null
-          : _pilotCtrl.text.trim(),
+      // Not typed — kept as-is here; DroneService stamps the logged-in
+      // user as "used by" / "updated by" when the status actually changes.
+      pilotName: widget.drone.pilotName,
       category: _category,
       batteryLevel: _battery.round(),
       flightHours:
@@ -277,10 +278,12 @@ class _EditDroneScreenState extends State<EditDroneScreen>
                     _buildSectionHeader(
                         'Assignment', Icons.person_pin_outlined),
                     const SizedBox(height: 12),
-                    _buildField(
-                        controller: _pilotCtrl,
-                        label: 'used by (optional)',
-                        icon: Icons.person_outline),
+                    AutoUserField(
+                      controller: _pilotCtrl,
+                      label: 'Used By (auto)',
+                      accent: kTeal,
+                      preferExisting: true,
+                    ),
                     const SizedBox(height: 14),
                     _buildCategoryDropdown(),
                     const SizedBox(height: 14),
@@ -318,7 +321,7 @@ class _EditDroneScreenState extends State<EditDroneScreen>
                     const SizedBox(height: 28),
                     _buildSubmitButton(),
                     const SizedBox(height: 40),
-                ],
+                  ],
                 ),
               ),
             ),
@@ -763,9 +766,12 @@ class _EditDroneScreenState extends State<EditDroneScreen>
     String? Function(String?)? validator,
     int maxLines = 1,
     TextInputType? keyboardType,
+    bool readOnly = false,
   }) {
     return TextFormField(
       controller: controller,
+      readOnly: readOnly,
+      enableInteractiveSelection: !readOnly,
       validator: validator,
       maxLines: maxLines,
       keyboardType: keyboardType,

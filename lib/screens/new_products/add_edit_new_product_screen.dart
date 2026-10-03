@@ -8,6 +8,8 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:cda_inventory/models/new_product.dart';
 import 'package:cda_inventory/services/new_product_service.dart';
+import 'package:cda_inventory/services/current_user_service.dart';
+import 'package:cda_inventory/widgets/common/auto_user_field.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  ADD / EDIT NEW PRODUCT SCREEN
@@ -304,6 +306,14 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
     setState(() => _saving = true);
 
     try {
+      // Logged-in user's name — never typed manually. When editing, the
+      // original creator is kept (blank legacy records get current user).
+      final currentUser = await CurrentUserService.getName();
+      final originalAdder = widget.existing?.addedBy.trim() ?? '';
+      final addedBy = (_isEdit && originalAdder.isNotEmpty)
+          ? originalAdder
+          : currentUser;
+
       final productImage = _newProductImageBytes != null
           ? NewProductService.encodeImageForFirestore(_newProductImageBytes!)
           : _existingProductImage;
@@ -344,7 +354,7 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
         // Stock status is derived, not chosen — kept on the record purely
         // as a convenient, queryable snapshot of the status at save time.
         status: _previewStockStatus,
-        addedBy: _addedBy.text.trim(),
+        addedBy: addedBy,
         employeeId: _employeeId.text.trim(),
         department: _department.text.trim(),
         productImage: productImage,
@@ -637,12 +647,10 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
                 const SizedBox(height: 16),
                 _sectionLabel('Added By'),
                 _buildCard([
-                  _field(
+                  AutoUserField(
                     controller: _addedBy,
-                    label: 'Added By *',
-                    icon: Icons.person_outline,
-                    validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Enter your name' : null,
+                    label: 'Added By (auto)',
+                    preferExisting: _isEdit,
                   ),
                   const SizedBox(height: 14),
                   _field(

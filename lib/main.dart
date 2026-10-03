@@ -25,6 +25,7 @@ import 'providers/language_provider.dart';
 import 'core/access/access_scope.dart';
 import 'core/access/access_route_observer.dart';
 import 'services/drone_reminder_service.dart';
+import 'services/drone_service_alert_service.dart';
 import 'services/push_notification_service.dart';
 import 'widgets/in_app_notification_banner.dart';
 
@@ -67,6 +68,8 @@ Future<void> main() async {
   // Local notifications used for the "did you forget to bring the drone
   // back?" 1-hour reminder — see lib/services/drone_reminder_service.dart.
   await DroneReminderService.instance.init();
+  // Drone Services: alert when a service passes its scheduled date.
+  await DroneServiceAlertService.instance.init();
 
   runApp(const ChennaiDroneInventoryApp());
 }

@@ -10,10 +10,11 @@
 // instead of asking the user to pick it.
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../models/drone.dart';
 import '../../models/drone_service_record.dart';
 import '../../services/drone_service.dart';
+import '../../services/current_user_service.dart';
+import '../../widgets/common/auto_user_field.dart';
 import '../../services/drone_service_booking_service.dart';
 import '../../constants/drone_categories.dart';
 import '../../constants/drone_service_options.dart';
@@ -30,11 +31,8 @@ class AddServiceScreen extends StatefulWidget {
 class _AddServiceScreenState extends State<AddServiceScreen> {
   final _formKey = GlobalKey<FormState>();
   final _droneNameCtrl = TextEditingController();
-  final _customerNameCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _addressCtrl = TextEditingController();
-  final _issueCtrl = TextEditingController();
   final _technicianCtrl = TextEditingController();
+  final _addedByCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _costCtrl = TextEditingController();
   // Free-text service name when the user picks "Other" in the Service
@@ -53,6 +51,10 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
   // ── Drone In/Out tracking state ──────────────────────────────────────
   DateTime? _checkedInAt;
   DateTime? _checkedOutAt;
+
+  // Scheduled date & time — the alert fires if the service is still open
+  // after this moment. Defaults to tomorrow, same time.
+  DateTime _scheduledAt = DateTime.now().add(const Duration(days: 1));
 
   List<Drone> _fleet = [];
   bool _fleetLoading = true;
@@ -73,11 +75,8 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     final e = widget.existing;
     if (e != null) {
       _droneNameCtrl.text = e.droneName;
-      _customerNameCtrl.text = e.customerName ?? '';
-      _phoneCtrl.text = e.customerPhone ?? '';
-      _addressCtrl.text = e.customerAddress ?? '';
-      _issueCtrl.text = e.issueDescription ?? '';
       _technicianCtrl.text = e.technician;
+      _addedByCtrl.text = e.createdBy ?? '';
       _notesCtrl.text = e.notes ?? '';
       _costCtrl.text = e.cost?.toString() ?? '';
       // If the saved serviceType isn't one of the fixed options (i.e. it was
@@ -93,6 +92,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
       _linkedDroneId = e.droneId;
       _checkedInAt = e.checkedInAt;
       _checkedOutAt = e.checkedOutAt;
+      _scheduledAt = e.scheduledAt;
     }
     _loadFleet();
   }
@@ -109,11 +109,8 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
   @override
   void dispose() {
     _droneNameCtrl.dispose();
-    _customerNameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _addressCtrl.dispose();
-    _issueCtrl.dispose();
     _technicianCtrl.dispose();
+    _addedByCtrl.dispose();
     _notesCtrl.dispose();
     _costCtrl.dispose();
     _customServiceTypeCtrl.dispose();
@@ -197,10 +194,9 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
-    final currentUserName = context.read<CurrentAccess>().access?.name;
-    // Scheduled Date & Time is no longer collected from the user — keep the
-    // original value when editing, otherwise default to "now".
-    final effectiveScheduledAt = widget.existing?.scheduledAt ?? DateTime.now();
+    // Logged-in user's name — never typed manually.
+    final currentUserName = await CurrentUserService.getName();
+    final effectiveScheduledAt = _scheduledAt;
 
     // When "Other" is picked, save the manually typed name instead of the
     // literal word "Other" so it reads correctly everywhere (reports,
@@ -222,13 +218,11 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
       technician: _technicianCtrl.text.trim(),
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       cost: double.tryParse(_costCtrl.text.trim()),
-      createdBy: widget.existing?.createdBy ?? currentUserName,
+      createdBy: (widget.existing?.createdBy?.trim().isNotEmpty ?? false)
+          ? widget.existing!.createdBy
+          : currentUserName,
       checkedInAt: _checkedInAt,
       checkedOutAt: _checkedOutAt,
-      customerName: _customerNameCtrl.text.trim(),
-      customerPhone: _phoneCtrl.text.trim(),
-      customerAddress: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
-      issueDescription: _issueCtrl.text.trim().isEmpty ? null : _issueCtrl.text.trim(),
     );
 
     final result = _isEdit
@@ -275,9 +269,13 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
           children: [
             _sectionHeader('Drone / Asset', Icons.airplanemode_active_rounded),
             const SizedBox(height: 12),
+            _fleetLoading
+                ? const LinearProgressIndicator(color: kTeal)
+                : _buildDroneField(),
+            const SizedBox(height: 14),
             _field(
               controller: _droneNameCtrl,
-              label: 'Drone Model / Drone Name',
+              label: 'Drone / Asset Name',
               hint: 'e.g. Alpha-01 or "Battery Bank A"',
               icon: Icons.badge_outlined,
               validator: (v) => v == null || v.trim().isEmpty ? 'Name is required' : null,
@@ -304,43 +302,12 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
             ],
             const SizedBox(height: 14),
             _buildBranchDropdown(),
-            // ── Priority selector (Low / Normal / High / Urgent) removed ──
-            // ── "Schedule" section (Scheduled Date & Time picker) removed ──
+            const SizedBox(height: 14),
+            _buildPrioritySelector(),
             const SizedBox(height: 24),
-            _sectionHeader('Customer Details', Icons.person_outline_rounded),
+            _sectionHeader('Schedule', Icons.event_outlined),
             const SizedBox(height: 12),
-            _field(
-              controller: _customerNameCtrl,
-              label: 'Customer Name',
-              hint: 'e.g. Ramesh Kumar',
-              icon: Icons.person_outline_rounded,
-              validator: (v) => v == null || v.trim().isEmpty ? 'Customer name is required' : null,
-            ),
-            const SizedBox(height: 14),
-            _field(
-              controller: _phoneCtrl,
-              label: 'Phone Number',
-              hint: 'e.g. 9876543210',
-              icon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone,
-              validator: (v) => v == null || v.trim().isEmpty ? 'Phone number is required' : null,
-            ),
-            const SizedBox(height: 14),
-            _field(
-              controller: _addressCtrl,
-              label: 'Address',
-              hint: 'Customer address',
-              icon: Icons.location_on_outlined,
-              maxLines: 2,
-            ),
-            const SizedBox(height: 14),
-            _field(
-              controller: _issueCtrl,
-              label: 'Issue',
-              hint: 'Describe the issue reported by the customer…',
-              icon: Icons.report_problem_outlined,
-              maxLines: 3,
-            ),
+            _buildScheduleField(),
             const SizedBox(height: 24),
             _sectionHeader('Assignment', Icons.person_pin_outlined),
             const SizedBox(height: 12),
@@ -350,6 +317,13 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
               hint: 'e.g. Ramesh Kumar',
               icon: Icons.engineering_outlined,
               validator: (v) => v == null || v.trim().isEmpty ? 'Technician is required' : null,
+            ),
+            const SizedBox(height: 14),
+            AutoUserField(
+              controller: _addedByCtrl,
+              label: 'Added By (auto)',
+              accent: kTeal,
+              preferExisting: _isEdit,
             ),
             const SizedBox(height: 14),
             _field(
@@ -568,6 +542,50 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     );
   }
 
+  Future<void> _pickScheduled() async {
+    final picked = await _pickDateTime(initial: _scheduledAt);
+    if (picked != null) setState(() => _scheduledAt = picked);
+  }
+
+  Widget _buildScheduleField() {
+    final overdue = _scheduledAt.isBefore(DateTime.now());
+    String two(int n) => n.toString().padLeft(2, '0');
+    final label =
+        '${two(_scheduledAt.day)}/${two(_scheduledAt.month)}/${_scheduledAt.year}  ${two(_scheduledAt.hour)}:${two(_scheduledAt.minute)}';
+    return InkWell(
+      onTap: _pickScheduled,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: overdue ? kCoral : Colors.grey.shade200),
+        ),
+        child: Row(children: [
+          Icon(Icons.event_available_rounded, color: overdue ? kCoral : kTeal, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Scheduled date & time',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: const TextStyle(color: kNavy, fontSize: 15, fontWeight: FontWeight.w600)),
+              if (overdue)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text('This time has already passed — it will show as overdue.',
+                      style: TextStyle(fontSize: 11, color: kCoral)),
+                ),
+            ]),
+          ),
+          Icon(Icons.edit_calendar_rounded, size: 18, color: Colors.grey.shade500),
+        ]),
+      ),
+    );
+  }
+
   Widget _buildDroneField() {
     if (_fleet.isEmpty) {
       return Text('No registered drones found — you can still type a name below.',
@@ -653,6 +671,38 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade200)),
     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kTeal, width: 1.5)),
   );
+
+  Widget _buildPrioritySelector() {
+    Color colorFor(String p) {
+      switch (p) {
+        case 'Low': return kGreen;
+        case 'High': return kAmber;
+        case 'Urgent': return kCoral;
+        default: return kNavy;
+      }
+    }
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: kServicePriorities.map((p) {
+        final selected = _priority == p;
+        final c = colorFor(p);
+        return GestureDetector(
+          onTap: () => setState(() => _priority = p),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? c.withValues(alpha: 0.14) : Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: selected ? c : Colors.grey.shade200, width: selected ? 1.5 : 1),
+            ),
+            child: Text(p, style: TextStyle(color: selected ? c : Colors.grey.shade500, fontWeight: FontWeight.w700, fontSize: 12.5)),
+          ),
+        );
+      }).toList(),
+    );
+  }
 
   Widget _buildSubmitButton() {
     return Container(

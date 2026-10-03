@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';           // for FieldVal
 import 'package:intl/intl.dart';                                  // for date/time formatting
 import 'package:cda_inventory/models/consumable.dart';         // ← absolute import
 import 'package:cda_inventory/services/consumable_service.dart'; // ← absolute import
+import 'package:cda_inventory/services/current_user_service.dart';
+import 'package:cda_inventory/widgets/common/auto_user_field.dart';
 
 class EditConsumableScreen extends StatefulWidget {
   final Consumable item;
@@ -98,8 +100,7 @@ class _EditConsumableScreenState extends State<EditConsumableScreen> {
         selectedBranch                     != _normalizeBranch(widget.item.branch) ||
         quantityController.text.trim()     != widget.item.quantity.toString() ||
         minimumStockController.text.trim() != widget.item.minimumStock.toString() ||
-        descriptionController.text.trim()  != widget.item.description ||
-        addedByController.text.trim()      != (widget.item.addedBy ?? '');
+        descriptionController.text.trim()  != widget.item.description;
   }
 
   Future<void> _save() async {
@@ -107,6 +108,9 @@ class _EditConsumableScreenState extends State<EditConsumableScreen> {
     setState(() => _isSaving = true);
 
     try {
+      // Logged-in user's name — never typed manually.
+      final currentUser = await CurrentUserService.getName();
+
       await ConsumableService.updateConsumable(widget.item.id, {
         'name':         nameController.text.trim(),
         'category':     selectedCategory,
@@ -114,7 +118,7 @@ class _EditConsumableScreenState extends State<EditConsumableScreen> {
         'minimumStock': int.parse(minimumStockController.text.trim()),
         'description':  descriptionController.text.trim(),
         'branch':       selectedBranch,
-        'addedBy':      addedByController.text.trim(),          // who made this change
+        'addedBy':      currentUser,                            // auto-fetched from login
         'updatedAt':    FieldValue.serverTimestamp(),            // correct server time, not device time
       });
 
@@ -485,14 +489,9 @@ class _EditConsumableScreenState extends State<EditConsumableScreen> {
                 _sectionLabel('ADDED BY'),
                 const SizedBox(height: 10),
                 _card(children: [
-                  _buildField(
+                  AutoUserField(
                     controller: addedByController,
-                    label: 'Your Name',
-                    hint: 'Enter your name',
-                    icon: Icons.person_outline,
-                    onChanged: (_) => setState(() {}),
-                    validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Name is required' : null,
+                    label: 'Added By (auto)',
                   ),
                   const SizedBox(height: 12),
                   _buildDateTimeRow(),           // shows last-updated / created date & time

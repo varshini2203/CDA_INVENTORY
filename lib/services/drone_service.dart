@@ -21,6 +21,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/drone.dart';
 import 'activity_log_service.dart';
+import 'current_user_service.dart';
 
 // ─── API RESULT WRAPPER (unchanged) ──────────────────────────────────────────
 
@@ -49,10 +50,6 @@ class DroneService {
       _drones.doc(droneId).collection('history');
 
   // ── BRANCH OPTIONS ───────────────────────────────────────────────────────
-  // Used by BranchDropdown (lib/widgets/drone_entry_form_fields.dart).
-  // 'branchAll' is a sentinel meaning "no branch filter / not scoped to a
-  // branch" — it is never itself written to a drone document's `branch`
-  // field, only used as the dropdown's "All Branch" option value.
   static const String branchAll = 'ALL';
   static const List<String> branches = <String>['CDA Admin', 'CDA Ops'];
 
@@ -60,12 +57,6 @@ class DroneService {
   static const Duration overdueThreshold = Duration(hours: 4);
 
   // ── IN-MEMORY CACHE (full drone list, ordered by last_updated) ──────────
-  // Every screen that lists drones needs the same "all drones, most recently
-  // updated first" data — the status/category filters and search were
-  // already applied in memory downstream in most cases, so there is no
-  // correctness reason to hit Firestore again for them. This mirrors the
-  // caching pattern already used in StockService: fetch once, reuse until a
-  // write invalidates it, and never query Firestore again for filtering.
   static List<Drone>? _dronesCache;
 
   static void clearCache() {
@@ -94,11 +85,6 @@ class DroneService {
     bool forceRefresh = false,
   }) async {
     try {
-      // Base list now comes from the shared cache instead of a fresh
-      // Firestore query every call. Status/category, which used to be
-      // server-side `where()` clauses, are applied in memory below —
-      // same result, since they were just narrowing an already
-      // last_updated-ordered query.
       List<Drone> list = await _fetchAllDrones(forceRefresh: forceRefresh);
 
       if (status != null && status != 'ALL') {
@@ -136,7 +122,6 @@ class DroneService {
             break;
           case 'recent':
           default:
-          // Already ordered by last_updated desc from the cached fetch
             break;
         }
       }
@@ -147,7 +132,7 @@ class DroneService {
     }
   }
 
-  // ── REAL-TIME STREAM (bonus — use in StreamBuilder if desired) ─────────────
+  // ── REAL-TIME STREAM ───────────────────────────────────────────────────────
 
   Stream<List<Drone>> dronesStream({String? status}) {
     Query<Map<String, dynamic>> query = _drones;
@@ -162,16 +147,6 @@ class DroneService {
   }
 
   // ── OVERDUE DRONES (Drone Reminders screen + bell/flyover) ─────────────────
-  // A drone is "overdue" when it is currently OUT, has been for 4+ hours
-  // (measured from checked_out_at, falling back to last_updated for older
-  // records written before that field existed), and nobody has tapped
-  // "Got it" for this OUT session yet (reminder_acknowledged == false).
-  //
-  // Note: like the rest of this file, this only re-evaluates when the
-  // underlying Firestore query re-emits (i.e. on a write). It does not tick
-  // every second/minute on its own — that's fine for the badge/list contents
-  // (which only change on a status/ack write), the on-screen duration text
-  // is recomputed per rebuild by the UI itself.
   Stream<List<Drone>> overdueDronesStream() {
     return _drones
         .where('status', isEqualTo: 'OUT')
@@ -198,16 +173,9 @@ class DroneService {
     });
   }
 
-  /// Convenience projection of [overdueDronesStream] for badge counts (the
-  /// AppBar bell + full-screen flyover on the dashboard).
   Stream<int> overdueDronesCountStream() =>
       overdueDronesStream().map((list) => list.length);
 
-  /// Dismisses the overdue reminder for a single drone (the "Got it" button
-  /// on the Drone Reminders screen) without requiring the drone to actually
-  /// be marked IN. It re-arms automatically the next time this drone is
-  /// marked OUT again, since updateStatus() resets this flag to false on
-  /// every fresh OUT.
   Future<ApiResult<bool>> acknowledgeReminder(String droneId) async {
     try {
       await _drones.doc(droneId).update({'reminder_acknowledged': true});
@@ -219,34 +187,24 @@ class DroneService {
   }
 
   // ── ADD DRONE ──────────────────────────────────────────────────────────────
-  // Writes the drone document AND an initial history entry reflecting the
-  // status the drone was registered with. Without this, a drone added with
-  // status 'OUT' (for example) would never show up as a "Drone OUT" event
-  // in the monthly Reports page, since that report only reads the `history`
-  // sub-collection, not the drone document's `status` field.
-
   Future<ApiResult<Drone>> addDrone(Drone drone, {DateTime? actionTime}) async {
     try {
+      // Logged-in user — auto-fetched, never typed. Saved with the record.
+      final who = await CurrentUserService.getName();
       final data = drone.toFirestore();
-      // actionTime lets the caller (Register New Drone screen) backdate the
-      // IN/OUT status to when it actually started instead of "now". This
-      // timestamp is what the 4-hour overdue-reminder countdown and the
-      // monthly Drone IN/OUT report key off of, so setting it here once is
-      // enough — nothing else needs to be touched afterwards.
+      data['added_by'] = who;
+      data['updated_by'] = who;
+      data['pilot_name'] = who;
+
       final ts =
       actionTime != null ? Timestamp.fromDate(actionTime) : FieldValue.serverTimestamp();
       data['created_at'] = ts;
       data['last_updated'] = ts;
 
       final status = drone.status.toUpperCase();
-      // If the drone is being registered as OUT and the caller didn't
-      // already set checkedOutAt explicitly on the Drone object, fall back
-      // to actionTime so the overdue countdown starts from the chosen time.
       if (status == 'OUT' && drone.checkedOutAt == null) {
         data['checked_out_at'] = ts;
       }
-      // Same idea for IN — stamps checked_in_at so the "In: ..." half of
-      // the In/Out card display has something to show from day one.
       if (status == 'IN' && drone.checkedInAt == null) {
         data['checked_in_at'] = ts;
       }
@@ -257,7 +215,8 @@ class DroneService {
       if (status.isNotEmpty) {
         await _history(ref.id).add({
           'drone_id': ref.id,
-          'pilot': drone.pilotName ?? 'Unknown',
+          'pilot': who,
+          'added_by': who,
           'status': status,
           'notes': 'Initial registration',
           'timestamp': ts,
@@ -266,6 +225,9 @@ class DroneService {
 
       final doc = drone.copyWith(
         id: ref.id,
+        addedBy: who,
+        updatedBy: who,
+        pilotName: who,
         lastUpdated: actionTime ?? DateTime.now(),
         checkedOutAt: status == 'OUT' ? (drone.checkedOutAt ?? actionTime) : drone.checkedOutAt,
         checkedInAt: status == 'IN' ? (drone.checkedInAt ?? actionTime) : drone.checkedInAt,
@@ -278,7 +240,8 @@ class DroneService {
           'model': drone.model,
           'serial_number': drone.serialNumber,
           'status': drone.status,
-          'pilot': drone.pilotName,
+          'pilot': who,
+          'added_by': who,
           'battery_level': drone.batteryLevel,
         },
       );
@@ -289,21 +252,27 @@ class DroneService {
   }
 
   // ── UPDATE DRONE ───────────────────────────────────────────────────────────
-  // The Edit Drone screen allows changing the status field directly (rather
-  // than via the dedicated toggle button that calls updateStatus()). If the
-  // status actually changed, we log a history entry here too — otherwise
-  // that IN/OUT transition is invisible to the monthly Reports page.
-
   Future<ApiResult<Drone>> updateDrone(Drone drone) async {
     try {
-      // Fetch the current status BEFORE overwriting, so we can tell whether
-      // this update represents an actual IN/OUT transition.
       final beforeDoc = await _drones.doc(drone.id).get();
       final beforeStatus =
       beforeDoc.data()?['status']?.toString().toUpperCase();
 
+      // Logged-in user — auto-fetched, never typed.
+      final who = await CurrentUserService.getName();
       final updates = drone.toFirestore();
       updates['last_updated'] = FieldValue.serverTimestamp();
+      // added_by is set once at registration — never overwrite it on edit.
+      updates.remove('added_by');
+      updates['updated_by'] = who;
+      // "Used by" only changes when the IN/OUT status really changes.
+      final statusChanged =
+          drone.status.toUpperCase() != (beforeStatus ?? '');
+      if (statusChanged) {
+        updates['pilot_name'] = who;
+      } else {
+        updates.remove('pilot_name');
+      }
 
       await _drones.doc(drone.id).update(updates);
 
@@ -311,14 +280,19 @@ class DroneService {
       if (afterStatus.isNotEmpty && afterStatus != beforeStatus) {
         await _history(drone.id).add({
           'drone_id': drone.id,
-          'pilot': drone.pilotName ?? 'Unknown',
+          'pilot': who,
+          'updated_by': who,
           'status': afterStatus,
           'notes': 'Status updated via edit',
           'timestamp': FieldValue.serverTimestamp(),
         });
       }
 
-      final doc = drone.copyWith(lastUpdated: DateTime.now());
+      final doc = drone.copyWith(
+        lastUpdated: DateTime.now(),
+        updatedBy: who,
+        pilotName: statusChanged ? who : drone.pilotName,
+      );
       clearCache();
       final beforeData = beforeDoc.data() ?? {};
       ActivityLogService.logEdit(
@@ -332,7 +306,8 @@ class DroneService {
         },
         after: {
           'status': drone.status,
-          'pilot': drone.pilotName,
+          'pilot': statusChanged ? who : drone.pilotName,
+          'updated_by': who,
           'battery_level': drone.batteryLevel,
           'model': drone.model,
         },
@@ -347,7 +322,6 @@ class DroneService {
 
   Future<ApiResult<bool>> deleteDrone(String id) async {
     try {
-      // Delete history sub-collection first (Firestore doesn't cascade)
       final droneDoc = await _drones.doc(id).get();
       final droneData = droneDoc.data() ?? {};
       final historySnap = await _history(id).get();
@@ -372,38 +346,20 @@ class DroneService {
     }
   }
 
-  // ── UPDATE STATUS ──────────────────────────────────────────────────────────
-  // Also writes a history entry into the sub-collection. This is the
-  // dedicated toggle-button path and was already correct.
-  //
-  // Additionally responsible for the bookkeeping the overdue-reminder
-  // system depends on:
-  //   - Marking OUT: stamps checked_out_at with this action's timestamp,
-  //     stores `purpose`, and resets reminder_acknowledged to false so a
-  //     fresh 4-hour countdown (and reminder eligibility) starts for this
-  //     OUT session.
-  //   - Marking IN: clears checked_out_at/purpose. overdueDronesStream()
-  //     only queries status == 'OUT' anyway, so this is just hygiene for
-  //     the next time the drone goes OUT.
-
+  // ── UPDATE STATUS (IN / OUT toggle) ────────────────────────────────────────
   Future<ApiResult<Drone>> updateStatus(
       String id,
       String status, {
         String? note,
         int? batteryLevel,
-        // Who actually performed this IN/OUT action (defaults to the
-        // drone's currently assigned pilot_name if not supplied, kept for
-        // backward compatibility with older call sites).
-        String? performedBy,
-        // Lets the person registering the entry backdate/forward-date it
-        // instead of always stamping "now". Falls back to serverTimestamp()
-        // when omitted.
+        String? performedBy, // ignored — always replaced by the logged-in user
         DateTime? actionTime,
-        // Why the drone is being taken OUT (Training/Testing/Service/...).
-        // Ignored when marking IN.
         String? purpose,
       }) async {
     try {
+      // Always the logged-in user — any caller-supplied name is ignored so
+      // a name can never be typed/spoofed.
+      performedBy = await CurrentUserService.getName();
       final ts = actionTime != null
           ? Timestamp.fromDate(actionTime)
           : FieldValue.serverTimestamp();
@@ -414,25 +370,18 @@ class DroneService {
         'status': upperStatus,
         'last_updated': ts,
         if (batteryLevel != null) 'battery_level': batteryLevel,
-        if (performedBy != null && performedBy.isNotEmpty)
-          'pilot_name': performedBy,
+        'pilot_name': performedBy,
+        'updated_by': performedBy,
         if (isOut) ...{
           'purpose': purpose,
           'checked_out_at': ts,
           'reminder_acknowledged': false,
         } else ...{
           'purpose': null,
-          // NOTE: checked_out_at is intentionally NOT cleared here anymore.
-          // It's kept so the "In: ... · Out: ..." display on the Drone
-          // In/Out card can still show the last OUT time even after the
-          // drone has been brought back IN. overdueDronesStream() only
-          // queries docs where status == 'OUT', so a stale checked_out_at
-          // on an IN drone is never read for the overdue calculation.
           'checked_in_at': ts,
         },
       };
 
-      // Fetch current pilot name for the history record
       final currentDoc = await _drones.doc(id).get();
       final currentData = currentDoc.data() ?? {};
       final pilot = (performedBy != null && performedBy.isNotEmpty)
@@ -445,6 +394,7 @@ class DroneService {
       batch.set(_history(id).doc(), {
         'drone_id': id,
         'pilot': pilot,
+        'updated_by': pilot,
         'status': upperStatus,
         'notes': note,
         'purpose': isOut ? purpose : null,
@@ -471,19 +421,7 @@ class DroneService {
     }
   }
 
-  // ── BACKFILL: derive missing In/Out timestamps from history ───────────
-  // checked_in_at / checked_out_at are new fields — any drone whose last
-  // IN or OUT toggle happened before this app update was shipped won't
-  // have one (or both) of them set yet, so the "In: ... · Out: ..." card
-  // display shows only whichever half it does have. This walks each such
-  // drone's own history sub-collection (which has always been written on
-  // every status change) and fills in the missing field from the most
-  // recent matching entry there — no manual re-toggling required.
-  //
-  // Safe to call as often as you like: a drone with both fields already
-  // set is skipped with zero extra reads, so once every drone has been
-  // backfilled once this becomes a no-op pass over the in-memory list.
-  // Returns the number of drone docs actually updated.
+  // ── BACKFILL: derive missing In/Out timestamps from history ───────────────
   Future<int> backfillCheckInOutTimestamps(List<Drone> drones) async {
     var updatedCount = 0;
     for (final d in drones) {
@@ -495,8 +433,6 @@ class DroneService {
         DateTime? inAt = d.checkedInAt;
         DateTime? outAt = d.checkedOutAt;
         for (final h in historyResult.data!) {
-          // historyResult.data! is newest-first, so the first match for
-          // each status is the most recent one.
           if (inAt == null && h.status == 'IN' && h.timestamp != null) {
             inAt = h.timestamp;
           }
@@ -561,19 +497,11 @@ class DroneService {
     }
   }
 
-  /// Combined Check-In / Check-Out history across every drone in the fleet,
-  /// newest first. Used by the "Drone In/Out History" screen so staff can
-  /// see who used which drone and when, without opening each drone one by
-  /// one. Uses a Firestore `collectionGroup` query across every drone's
-  /// `history` sub-collection, then sorts client-side (no `orderBy` on the
-  /// query itself, so no composite/collection-group index needs to be
-  /// created in the Firebase console for this to work).
+  /// Combined Check-In / Check-Out history across every drone, newest first.
   Future<ApiResult<List<DroneHistory>>> getAllHistory() async {
     try {
       final snap = await _db.collectionGroup('history').get();
       final list = snap.docs.map((doc) {
-        // The parent of a history doc is drones/{droneId}/history, so its
-        // parent's parent is the drones/{droneId} document itself.
         final droneId = doc.reference.parent.parent?.id ?? '';
         return DroneHistory.fromFirestore(
             doc as DocumentSnapshot<Map<String, dynamic>>, droneId);

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import 'package:cda_inventory/models/fixed_asset.dart';
 import 'package:cda_inventory/services/fixed_asset_service.dart';
+import 'package:cda_inventory/services/current_user_service.dart';
+import 'package:cda_inventory/widgets/common/auto_user_field.dart';
 
 class AddFixedProductScreen extends StatefulWidget {
   final FixedAsset? existing;
@@ -133,6 +135,14 @@ class _AddFixedProductScreenState extends State<AddFixedProductScreen> {
 
     setState(() => _saving = true);
 
+    // Logged-in user's name — never typed manually. When editing, the
+    // original creator is kept; if it was never recorded, use current user.
+    final currentUser = await CurrentUserService.getName();
+    final originalCreator = widget.existing?.createdBy?.trim() ?? '';
+    final createdBy = (_isEdit && originalCreator.isNotEmpty)
+        ? originalCreator
+        : currentUser;
+
     final existingCategory = widget.existing?.category.trim();
 
     final data = <String, dynamic>{
@@ -145,7 +155,7 @@ class _AddFixedProductScreenState extends State<AddFixedProductScreen> {
           ? existingCategory
           : 'Fixed Asset',
       'status': _selectedStatus,
-      'createdBy': _addedByController.text.trim(),
+      'createdBy': createdBy,
       'createdAt': Timestamp.fromDate(_addedOn),
     };
 
@@ -219,16 +229,11 @@ class _AddFixedProductScreenState extends State<AddFixedProductScreen> {
                 children: [
                   _sectionLabel('Added By'),
                   _buildCard([
-                    _field(
+                    AutoUserField(
                       controller: _addedByController,
-                      label: 'Your Name',
+                      label: 'Added By (auto)',
                       icon: Icons.person_outline_rounded,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Enter your name';
-                        }
-                        return null;
-                      },
+                      preferExisting: _isEdit,
                     ),
                     const SizedBox(height: 14),
                     _buildDateField(),

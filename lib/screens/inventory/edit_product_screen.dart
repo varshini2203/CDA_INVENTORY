@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';   // 🆕 for date/time formatting
 import '../../models/inventory_model.dart';
 import '../../services/inventory_service.dart';
+import '../../services/current_user_service.dart';
+import '../../widgets/common/auto_user_field.dart';
 import 'product_details_screen.dart';
 
 class EditProductScreen extends StatefulWidget {
@@ -100,6 +102,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
     setState(() => isLoading = true);
 
     try {
+      // Logged-in user's name — never typed manually.
+      final currentUser = await CurrentUserService.getName();
+
       // ── Firestore: id is a String doc ID ──────────────────────────────────
       await InventoryService().updateProduct(
         id: widget.product.id,          // String, not int
@@ -109,7 +114,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         quantity: int.parse(quantityController.text.trim()),
         description: descriptionController.text.trim(),
         branch: selectedBranch,          // 🆕 which branch this item belongs to
-        addedBy: addedByController.text.trim(),   // 🆕 who made this change
+        addedBy: currentUser,   // auto-fetched from login
       );
 
       if (!mounted) return;
@@ -218,11 +223,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
               const SizedBox(height: 16),
               _sectionLabel("Added By"),   // 🆕 new section
               _buildCard([
-                _field(
+                AutoUserField(
                   controller: addedByController,
-                  label: "Your Name",
-                  icon: Icons.person_outline,
-                  validator: (v) => v!.isEmpty ? "Enter your name" : null,
+                  label: "Added By (auto)",
                 ),
                 const SizedBox(height: 12),      // 🆕
                 _buildDateTimeRow(),               // 🆕 shows last-updated / created date & time

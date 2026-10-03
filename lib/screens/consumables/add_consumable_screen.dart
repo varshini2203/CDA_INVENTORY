@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cda_inventory/models/consumable.dart';          // ← absolute import
 import 'package:cda_inventory/services/consumable_service.dart'; // ← absolute import
+import 'package:cda_inventory/services/current_user_service.dart';
+import 'package:cda_inventory/widgets/common/auto_user_field.dart';
 
 class AddConsumableScreen extends StatefulWidget {
   const AddConsumableScreen({super.key});
@@ -59,6 +61,9 @@ class _AddConsumableScreenState extends State<AddConsumableScreen> {
     setState(() => _isSaving = true);
 
     try {
+      // Logged-in user's name — never typed manually.
+      final currentUser = await CurrentUserService.getName();
+
       await ConsumableService.addConsumable({
         'name':         nameController.text.trim(),
         'category':     selectedCategory,
@@ -66,7 +71,7 @@ class _AddConsumableScreenState extends State<AddConsumableScreen> {
         'minimumStock': int.parse(minimumStockController.text.trim()),
         'description':  descriptionController.text.trim(),
         'branch':       selectedBranch,
-        'addedBy':      addedByController.text.trim(),
+        'addedBy':      currentUser,
       });
 
       if (!mounted) return;
@@ -415,13 +420,9 @@ class _AddConsumableScreenState extends State<AddConsumableScreen> {
               _sectionLabel('ADDED BY'),
               const SizedBox(height: 10),
               _card(children: [
-                _buildField(
+                AutoUserField(
                   controller: addedByController,
-                  label: 'Your Name',
-                  hint: 'Who is adding this item?',
-                  icon: Icons.person_outline,
-                  validator: (v) =>
-                  v == null || v.trim().isEmpty ? 'Enter your name' : null,
+                  label: 'Added By (auto)',
                 ),
               ]),
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cda_inventory/services/stock_service.dart';
+import 'package:cda_inventory/services/current_user_service.dart';
+import 'package:cda_inventory/widgets/common/auto_user_field.dart';
 
 class StockOutScreen extends StatefulWidget {
   final String? initialProductName;
@@ -74,12 +76,14 @@ class _StockOutScreenState extends State<StockOutScreen> {
     }
     setState(() => _saving = true);
     try {
+      // Logged-in user's name — never typed manually.
+      final currentUser = await CurrentUserService.getName();
       // StockService.addStockOut uses a Firestore transaction — it validates
       // stock availability and throws a descriptive Exception if insufficient.
       await StockService.addStockOut(
         productName: _productController.text.trim(),
         quantity:    int.parse(_quantityController.text.trim()),
-        usedBy:      _personController.text.trim(),
+        usedBy:      currentUser,
         purpose:     _purposeController.text.trim(),
         branch:      _selectedBranch,
         date:        _formattedDate,
@@ -216,13 +220,10 @@ class _StockOutScreenState extends State<StockOutScreen> {
               const SizedBox(height: 10),
 
               _card(children: [
-                _field(
+                AutoUserField(
                   controller: _personController,
-                  label: 'Used By',
+                  label: 'Used By (auto)',
                   icon: Icons.person_rounded,
-                  capitalization: TextCapitalization.words,
-                  validator: (v) =>
-                  v == null || v.trim().isEmpty ? 'Required' : null,
                 ),
                 const SizedBox(height: 14),
                 _field(

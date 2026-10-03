@@ -25,6 +25,7 @@ import 'package:provider/provider.dart';
 import 'package:cda_inventory/models/inventory_model.dart';
 import 'package:cda_inventory/services/inventory_service.dart';
 import 'package:cda_inventory/services/inventory_bulk_operations_service.dart';
+import 'package:cda_inventory/services/current_user_service.dart';
 import 'package:cda_inventory/core/access/access_scope.dart';
 import 'package:cda_inventory/screens/bulk_import/bulk_import_screen.dart';
 
@@ -197,15 +198,8 @@ class _BulkOperationsScreenState extends State<BulkOperationsScreen> {
   bool get _allVisibleSelected =>
       _filtered.isNotEmpty && _filtered.every((i) => _selectedIds.contains(i.id));
 
-  String? get _performedBy {
-    try {
-      final access = context.read<CurrentAccess>().access;
-      if (access == null) return null;
-      return access.name.isNotEmpty ? access.name : access.email;
-    } catch (_) {
-      return null;
-    }
-  }
+  // Auto-fetched from login — never typed manually.
+  String? get _performedBy => CurrentUserService.nameSync;
 
   bool get _canEdit {
     try {

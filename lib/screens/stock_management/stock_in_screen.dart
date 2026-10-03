@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cda_inventory/services/stock_service.dart';
+import 'package:cda_inventory/services/current_user_service.dart';
+import 'package:cda_inventory/widgets/common/auto_user_field.dart';
 
 class StockInScreen extends StatefulWidget {
   final String? initialProductName;
@@ -80,11 +82,13 @@ class _StockInScreenState extends State<StockInScreen> {
     }
     setState(() => _saving = true);
     try {
+      // Logged-in user's name — never typed manually.
+      final currentUser = await CurrentUserService.getName();
       // StockService.addStockIn writes to Firestore directly — no HTTP call.
       await StockService.addStockIn(
         productName: _productController.text.trim(),
         quantity:    int.parse(_quantityController.text.trim()),
-        receivedBy:  _personController.text.trim(),
+        receivedBy:  currentUser,
         branch:      _selectedBranch,
         date:        _formattedDate,
         remarks:     _remarksController.text.trim(),
@@ -270,13 +274,10 @@ class _StockInScreenState extends State<StockInScreen> {
               const SizedBox(height: 10),
 
               _card(children: [
-                _field(
+                AutoUserField(
                   controller: _personController,
-                  label: 'Received By',
+                  label: 'Received By (auto)',
                   icon: Icons.person_rounded,
-                  capitalization: TextCapitalization.words,
-                  validator: (v) =>
-                  v == null || v.trim().isEmpty ? 'Required' : null,
                 ),
                 const SizedBox(height: 14),
                 _dropdownField(

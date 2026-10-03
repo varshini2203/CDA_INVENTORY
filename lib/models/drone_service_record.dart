@@ -202,6 +202,16 @@ class DroneServiceRecord {
   bool get isOverdue =>
       status == 'Scheduled' && scheduledAt.isBefore(DateTime.now());
 
+  /// True when the booking is still open (Scheduled / In Progress) but its
+  /// scheduled date & time has already passed — drives the overdue alert.
+  bool get isPastSchedule =>
+      (status == 'Scheduled' || status == 'In Progress') &&
+          scheduledAt.isBefore(DateTime.now());
+
+  /// How far past the scheduled date the booking is (zero if not overdue).
+  Duration get overdueBy =>
+      isPastSchedule ? DateTime.now().difference(scheduledAt) : Duration.zero;
+
   /// True once the drone has physically arrived for this service and has
   /// not yet been handed back out.
   bool get isDroneCheckedIn => checkedInAt != null && checkedOutAt == null;

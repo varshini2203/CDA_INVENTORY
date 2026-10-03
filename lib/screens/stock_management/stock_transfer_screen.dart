@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:cda_inventory/models/stock.dart';
 import 'package:cda_inventory/services/stock_service.dart';
+import 'package:cda_inventory/services/current_user_service.dart';
+import 'package:cda_inventory/widgets/common/auto_user_field.dart';
 
 class StockTransferScreen extends StatefulWidget {
   final StockItem item;
@@ -57,12 +59,14 @@ class _StockTransferScreenState extends State<StockTransferScreen> {
     }
     setState(() => _saving = true);
     try {
+      // Logged-in user's name — never typed manually.
+      final currentUser = await CurrentUserService.getName();
       await StockService.transferStock(
         productName:   widget.item.productName,
         fromBranch:    widget.item.branch,
         toBranch:      _toBranch,
         quantity:      int.parse(_quantityController.text.trim()),
-        transferredBy: _personController.text.trim(),
+        transferredBy: currentUser,
         remarks:       _remarksController.text.trim(),
       );
       if (!mounted) return;
@@ -212,16 +216,10 @@ class _StockTransferScreenState extends State<StockTransferScreen> {
               const SizedBox(height: 10),
 
               _card(children: [
-                TextFormField(
+                AutoUserField(
                   controller: _personController,
-                  textCapitalization: TextCapitalization.words,
-                  style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF0A1628)),
-                  decoration: _inputDecoration('Transferred By', Icons.person_rounded),
-                  validator: (v) =>
-                  v == null || v.trim().isEmpty ? 'Required' : null,
+                  label: 'Transferred By (auto)',
+                  icon: Icons.person_rounded,
                 ),
               ]),
 

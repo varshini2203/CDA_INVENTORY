@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:cda_inventory/models/stock.dart';
 import 'package:cda_inventory/services/stock_service.dart';
+import 'package:cda_inventory/services/current_user_service.dart';
+import 'package:cda_inventory/widgets/common/auto_user_field.dart';
 
 class StockAdjustScreen extends StatefulWidget {
   final StockItem item;
@@ -55,11 +57,13 @@ class _StockAdjustScreenState extends State<StockAdjustScreen> {
     if (widget.item.id == null) return;
     setState(() => _saving = true);
     try {
+      // Logged-in user's name — never typed manually.
+      final currentUser = await CurrentUserService.getName();
       await StockService.adjustStock(
         itemId:      widget.item.id!,
         newQuantity: _newQuantity!,
         reason:      _reason,
-        adjustedBy:  _adjustedByController.text.trim(),
+        adjustedBy:  currentUser,
       );
       if (mounted) {
         _showSnack('Stock adjusted successfully');
@@ -203,11 +207,10 @@ class _StockAdjustScreenState extends State<StockAdjustScreen> {
                   onChanged: (v) => setState(() => _reason = v ?? _reason),
                 ),
                 const SizedBox(height: 14),
-                TextFormField(
+                AutoUserField(
                   controller: _adjustedByController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: _inputDecoration('Adjusted By', Icons.person_rounded),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  label: 'Adjusted By (auto)',
+                  icon: Icons.person_rounded,
                 ),
               ]),
               const SizedBox(height: 28),

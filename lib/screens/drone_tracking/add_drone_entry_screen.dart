@@ -4,6 +4,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../../services/drone_service.dart';
+import '../../services/current_user_service.dart';
+import '../../widgets/common/auto_user_field.dart';
 import '../../models/drone.dart';
 import '../../constants/drone_categories.dart';
 
@@ -219,9 +221,8 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
       uin: _uinCtrl.text.trim(),
       droneClass: _droneClass,
       status: _status,
-      pilotName: _pilotCtrl.text.trim().isEmpty
-          ? null
-          : _pilotCtrl.text.trim(),
+      // Logged-in user (auto) — DroneService also re-resolves this on save.
+      pilotName: await CurrentUserService.getName(),
       category: _category,
       batteryLevel: _battery.round(),
       flightHours: double.tryParse(_hoursCtrl.text.trim()) ?? 0,
@@ -355,11 +356,11 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
                     _buildSectionHeader(
                         'Assignment', Icons.person_pin_outlined),
                     const SizedBox(height: 12),
-                    _buildField(
-                        controller: _pilotCtrl,
-                        label: 'used by (optional)',
-                        hint: 'e.g. Name',
-                        icon: Icons.person_outline),
+                    AutoUserField(
+                      controller: _pilotCtrl,
+                      label: 'Used By (auto)',
+                      accent: kTeal,
+                    ),
                     const SizedBox(height: 14),
                     _buildCategoryDropdown(),
                     const SizedBox(height: 14),
@@ -1106,9 +1107,12 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
     String? Function(String?)? validator,
     int maxLines = 1,
     TextInputType? keyboardType,
+    bool readOnly = false,
   }) {
     return TextFormField(
       controller: controller,
+      readOnly: readOnly,
+      enableInteractiveSelection: !readOnly,
       validator: validator,
       maxLines: maxLines,
       keyboardType: keyboardType,

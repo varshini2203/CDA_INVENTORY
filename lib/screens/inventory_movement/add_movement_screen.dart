@@ -15,15 +15,15 @@
 // locked in once stock has already moved.
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/access/access_scope.dart';
 import '../../models/inventory_movement.dart';
 import '../../models/product.dart';
-import '../../services/access_control_service.dart';
+import '../../services/current_user_service.dart';
 import '../../services/inventory_movement_service.dart';
 import '../../services/product_service.dart';
 import '../../shared/inventory_ui.dart';
+import '../../widgets/common/auto_user_field.dart';
 import '../../widgets/common/serial_scan_screen.dart';
 
 class AddMovementScreen extends StatefulWidget {
@@ -63,7 +63,6 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
   bool _saving = false;
   bool _loadingProducts = true;
   List<Product> _products = [];
-  List<String> _userNames = [];
 
   // Manual date & time for the action being recorded. Defaults to "now" but
   // can be changed to backdate/forward-date a check-out or check-in.
@@ -94,7 +93,6 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
   void initState() {
     super.initState();
     _loadProducts();
-    _loadUserNames();
     final editing = widget.editMovement;
     if (editing != null) {
       for (final item in editing.items) {
@@ -120,15 +118,6 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
       _typeController.text = MovementType.branch;
       // "Used By" starts empty — the person filling the form picks who it's
       // for, instead of it being pre-filled with whoever is logged in.
-    }
-  }
-
-  Future<void> _loadUserNames() async {
-    try {
-      final names = await AccessControlService.fetchAllUserNames();
-      if (mounted) setState(() => _userNames = names);
-    } catch (_) {
-      // Non-fatal — "Used By" just falls back to free text entry.
     }
   }
 
@@ -263,8 +252,11 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
 
     setState(() => _saving = true);
     try {
-      final access = context.read<CurrentAccess>().access;
-      final actedBy = (access?.name.isNotEmpty ?? false) ? access!.name : (access?.email ?? 'Unknown');
+      // Logged-in user's name — never typed manually.
+      final actedBy = await CurrentUserService.getName();
+      final usedBy = (_isEditing && widget.editMovement!.usedBy.trim().isNotEmpty)
+          ? widget.editMovement!.usedBy.trim()
+          : actedBy;
 
       if (_isEditing) {
         await InventoryMovementService.updateMovement(
@@ -274,7 +266,7 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
           to: _toController.text.trim(),
           purpose: _purposeController.text.trim(),
           remarks: _remarksController.text.trim(),
-          usedBy: _usedByController.text.trim(),
+          usedBy: usedBy,
           checkedOutAt: _editCheckedOutAt,
           checkedInAt: _editCheckedInAt,
           items: _editItemsAreEmpty ? items : null,
@@ -289,7 +281,7 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
           to: _toController.text.trim(),
           purpose: _purposeController.text.trim(),
           remarks: _remarksController.text.trim(),
-          usedBy: _usedByController.text.trim(),
+          usedBy: usedBy,
           action: _action,
           actedBy: actedBy,
           createdBy: actedBy,
@@ -610,71 +602,14 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
     ]);
   }
 
+  // Auto-filled from the logged-in user — not editable. When editing an
+  // existing movement the original "Used By" name is kept.
   Widget _usedByField() {
-    return Autocomplete<String>(
-      initialValue: TextEditingValue(text: _usedByController.text),
-      optionsBuilder: (value) {
-        if (value.text.trim().isEmpty) return _userNames;
-        final q = value.text.toLowerCase();
-        return _userNames.where((n) => n.toLowerCase().contains(q));
-      },
-      onSelected: (selection) => setState(() => _usedByController.text = selection),
-      optionsViewBuilder: (context, onSelected, options) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(12),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 220, maxWidth: 400),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (context, index) {
-                  final option = options.elementAt(index);
-                  return ListTile(
-                    dense: true,
-                    title: Text(option),
-                    onTap: () => onSelected(option),
-                  );
-                },
-              ),
-            ),
-          ),
-        );
-      },
-      fieldViewBuilder: (context, fieldController, focusNode, onSubmitted) {
-        if (fieldController.text != _usedByController.text) {
-          fieldController.text = _usedByController.text;
-        }
-        return TextFormField(
-          controller: fieldController,
-          focusNode: focusNode,
-          textCapitalization: TextCapitalization.words,
-          onChanged: (v) => _usedByController.text = v,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.navy),
-          decoration: InputDecoration(
-            labelText: 'Used By',
-            helperText: 'Pick from the list, or type a name manually',
-            helperStyle: TextStyle(color: Colors.grey.shade400, fontSize: 11.5),
-            labelStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-            prefixIcon: const Icon(Icons.person_rounded, size: 20, color: Colors.grey),
-            suffixIcon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.grey),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-            enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-            focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.teal, width: 1.5)),
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          ),
-          validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-        );
-      },
+    return AutoUserField(
+      controller: _usedByController,
+      label: 'Used By (auto)',
+      accent: AppColors.teal,
+      preferExisting: _isEditing,
     );
   }
 
