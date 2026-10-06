@@ -280,19 +280,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   }
 
   Future<void> _pickInvoiceDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _invoiceDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: kNavy, onPrimary: Colors.white),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) setState(() => _invoiceDate = picked);
+    // Date is stamped automatically — not editable.
   }
 
   Invoice _buildInvoiceFromForm() {

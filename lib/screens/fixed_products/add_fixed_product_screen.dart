@@ -99,31 +99,7 @@ class _AddFixedProductScreenState extends State<AddFixedProductScreen> {
   }
 
   Future<void> _pickAddedOnDate() async {
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: _addedOn,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-
-    if (pickedDate == null || !mounted) return;
-
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_addedOn),
-    );
-
-    if (pickedTime == null || !mounted) return;
-
-    setState(() {
-      _addedOn = DateTime(
-        pickedDate.year,
-        pickedDate.month,
-        pickedDate.day,
-        pickedTime.hour,
-        pickedTime.minute,
-      );
-    });
+    // Date is stamped automatically — not editable.
   }
 
   Future<void> _save() async {

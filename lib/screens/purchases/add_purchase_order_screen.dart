@@ -234,13 +234,7 @@ class _AddPurchaseOrderScreenState extends State<AddPurchaseOrderScreen> {
       '${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}';
 
   Future<void> _pickOrderDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _orderDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) setState(() => _orderDate = picked);
+    // Date is stamped automatically — not editable.
   }
 
   Future<void> _pickDeliveryDate() async {

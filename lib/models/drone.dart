@@ -22,7 +22,12 @@ class Drone {
   String status; // 'IN' | 'OUT'
   String? pilotName; // also doubles as "used by" — last person to toggle IN/OUT
   final String? category;
-  final int batteryLevel;
+  final String? gps; // GPS module fitted (from the fleet list), null if none recorded
+  final String? linkType; // 'Analog' | 'Digital' video link, null if not recorded
+  final bool hasMovement; // true once an IN/OUT movement has been recorded — only these show on the Drone IN/OUT dashboard
+  final bool inMasterList; // true for drones that belong to the DRONE_LIST fleet
+  final List<String> additionalProducts; // accessories that went out with the drone on its last movement
+  final String? condition; // 'Good' | 'Damaged' as recorded on the last movement
   final double flightHours;
   final String? notes;
   final DateTime? maintenanceDue;
@@ -33,6 +38,9 @@ class Drone {
   final DateTime? checkedInAt; // when status last became 'IN' — kept alongside checkedOutAt purely for display ("In: ... · Out: ...") so both dates stay visible regardless of current status
   final String? addedBy; // auto-filled from login when the drone is registered — never typed
   final String? updatedBy; // auto-filled from login on every edit / IN-OUT action
+  final String? tripInId; // id of the IN history entry that closed this record (null while OUT)
+  final String? tripId; // id of the OUT history entry that started this record (null for legacy/no-history drones)
+  final bool isPastTrip; // true for an older, completed OUT→IN record — frozen, never edited
   final bool reminderAcknowledged; // true once someone has seen/dismissed the overdue reminder for this OUT session
 
   Drone({
@@ -45,7 +53,12 @@ class Drone {
     this.droneClass,
     this.pilotName,
     this.category,
-    this.batteryLevel = 100,
+    this.gps,
+    this.linkType,
+    this.inMasterList = false,
+    this.hasMovement = false,
+    this.additionalProducts = const [],
+    this.condition,
     this.flightHours = 0,
     this.notes,
     this.maintenanceDue,
@@ -57,7 +70,19 @@ class Drone {
     this.addedBy,
     this.updatedBy,
     this.reminderAcknowledged = false,
+    this.tripId,
+    this.tripInId,
+    this.isPastTrip = false,
   });
+
+  /// A finished OUT→IN record. Once a drone is back IN the record is frozen:
+  /// it can't be edited or deleted, and the next OUT starts a NEW record.
+  bool get isLockedRecord =>
+      isPastTrip ||
+          (status == 'IN' && checkedOutAt != null && checkedInAt != null);
+
+  /// UIN / GPS / link type are shown only for the values that exist.
+  bool get hasDetails => uin != null || gps != null || linkType != null;
 
   // ── Normalization helpers ───────────────────────────────────────────────
   // Firestore data (especially seeded/imported data) doesn't always use the
@@ -106,6 +131,20 @@ class Drone {
     return 'IN';
   }
 
+  static String? _clean(dynamic raw) {
+    final v = raw?.toString().trim() ?? '';
+    return v.isEmpty ? null : v;
+  }
+
+  /// Canonicalizes the video-link label to exactly 'Analog' or 'Digital'.
+  static String? _normalizeLink(dynamic raw) {
+    final v = raw?.toString().trim().toLowerCase() ?? '';
+    if (v.isEmpty) return null;
+    if (v.startsWith('analog')) return 'Analog';
+    if (v.startsWith('digital')) return 'Digital';
+    return null;
+  }
+
   // ── Firestore → Dart ───────────────────────────────────────────────────────
 
   factory Drone.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -122,12 +161,24 @@ class Drone {
       name: j['name']?.toString() ?? '',
       model: j['model']?.toString() ?? '',
       serialNumber: j['serial_number']?.toString() ?? '',
-      uin: j['uin']?.toString(),
+      uin: _clean(j['uin']),
       droneClass: j['drone_class']?.toString(),
       status: _normalizeStatus(j['status']),
       pilotName: j['pilot_name']?.toString(),
       category: j['category']?.toString(),
-      batteryLevel: (j['battery_level'] as num?)?.toInt() ?? 100,
+      gps: _clean(j['gps']),
+      linkType: _normalizeLink(j['link_type']),
+      inMasterList: j['in_master_list'] as bool? ?? false,
+      hasMovement: (j['has_movement'] as bool? ?? false) ||
+          j['checked_out_at'] is Timestamp ||
+          j['checked_in_at'] is Timestamp,
+      additionalProducts: (j['additional_products'] is List)
+          ? (j['additional_products'] as List)
+          .map((e) => e.toString())
+          .where((e) => e.trim().isNotEmpty)
+          .toList()
+          : const [],
+      condition: _clean(j['condition']),
       flightHours: (j['flight_hours'] as num?)?.toDouble() ?? 0.0,
       notes: j['notes']?.toString(),
       maintenanceDue: j['maintenance_due'] is Timestamp
@@ -161,7 +212,12 @@ class Drone {
     'status': status,
     'pilot_name': pilotName,
     'category': category,
-    'battery_level': batteryLevel,
+    'gps': gps,
+    'link_type': linkType,
+    'in_master_list': inMasterList,
+    'has_movement': hasMovement,
+    'additional_products': additionalProducts,
+    'condition': condition,
     'flight_hours': flightHours,
     'notes': notes,
     'maintenance_due': maintenanceDue != null
@@ -193,7 +249,12 @@ class Drone {
     String? status,
     String? pilotName,
     String? category,
-    int? batteryLevel,
+    String? gps,
+    String? linkType,
+    bool? inMasterList,
+    bool? hasMovement,
+    List<String>? additionalProducts,
+    String? condition,
     double? flightHours,
     String? notes,
     DateTime? maintenanceDue,
@@ -205,6 +266,10 @@ class Drone {
     String? addedBy,
     String? updatedBy,
     bool? reminderAcknowledged,
+    String? tripId,
+    String? tripInId,
+    bool? isPastTrip,
+    bool clearCheckedInAt = false,
   }) =>
       Drone(
         id: id ?? this.id,
@@ -216,7 +281,12 @@ class Drone {
         status: status ?? this.status,
         pilotName: pilotName ?? this.pilotName,
         category: category ?? this.category,
-        batteryLevel: batteryLevel ?? this.batteryLevel,
+        gps: gps ?? this.gps,
+        linkType: linkType ?? this.linkType,
+        inMasterList: inMasterList ?? this.inMasterList,
+        hasMovement: hasMovement ?? this.hasMovement,
+        additionalProducts: additionalProducts ?? this.additionalProducts,
+        condition: condition ?? this.condition,
         flightHours: flightHours ?? this.flightHours,
         notes: notes ?? this.notes,
         maintenanceDue: maintenanceDue ?? this.maintenanceDue,
@@ -224,10 +294,13 @@ class Drone {
         branch: branch ?? this.branch,
         purpose: purpose ?? this.purpose,
         checkedOutAt: checkedOutAt ?? this.checkedOutAt,
-        checkedInAt: checkedInAt ?? this.checkedInAt,
+        checkedInAt: clearCheckedInAt ? null : (checkedInAt ?? this.checkedInAt),
         addedBy: addedBy ?? this.addedBy,
         updatedBy: updatedBy ?? this.updatedBy,
         reminderAcknowledged: reminderAcknowledged ?? this.reminderAcknowledged,
+        tripId: tripId ?? this.tripId,
+        tripInId: tripInId ?? this.tripInId,
+        isPastTrip: isPastTrip ?? this.isPastTrip,
       );
 }
 
@@ -244,6 +317,8 @@ class DroneHistory {
   final String? notes;
   final String? purpose;
   final DateTime? timestamp;
+  final List<String> additionalProducts;
+  final String? condition;
 
   const DroneHistory({
     required this.id,
@@ -253,6 +328,8 @@ class DroneHistory {
     this.notes,
     this.purpose,
     this.timestamp,
+    this.additionalProducts = const [],
+    this.condition,
   });
 
   /// Human-readable time string (matches the old REST `time` field).
@@ -278,6 +355,10 @@ class DroneHistory {
       notes: j['notes']?.toString(),
       purpose: j['purpose']?.toString(),
       timestamp: (j['timestamp'] as Timestamp?)?.toDate(),
+      additionalProducts: (j['additional_products'] is List)
+          ? (j['additional_products'] as List).map((e) => e.toString()).toList()
+          : const [],
+      condition: j['condition']?.toString(),
     );
   }
 
@@ -287,6 +368,8 @@ class DroneHistory {
     'status': status,
     'notes': notes,
     'purpose': purpose,
+    'additional_products': additionalProducts,
+    'condition': condition,
     'timestamp': FieldValue.serverTimestamp(),
   };
 }

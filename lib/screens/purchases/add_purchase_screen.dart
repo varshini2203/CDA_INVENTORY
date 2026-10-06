@@ -275,13 +275,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> {
       '${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}';
 
   Future<void> _pickBillDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _billDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) setState(() => _billDate = picked);
+    // Date is stamped automatically — not editable.
   }
 
   // ── Upload Bill / Add Image ─────────────────────────────────────────

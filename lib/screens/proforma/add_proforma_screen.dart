@@ -275,6 +275,7 @@ class _AddProformaScreenState extends State<AddProformaScreen> {
       '${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}';
 
   Future<void> _pickDate({required bool isValidTill, bool isExpectedDelivery = false}) async {
+    if (!isValidTill && !isExpectedDelivery) return; // Record date is automatic; only this other date stays manual.
     final initial = isExpectedDelivery
         ? (_expectedDelivery ?? _proformaDate.add(const Duration(days: 7)))
         : (isValidTill ? (_validTill ?? _proformaDate.add(const Duration(days: 15))) : _proformaDate);

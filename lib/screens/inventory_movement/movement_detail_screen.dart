@@ -60,17 +60,7 @@ class _MovementDetailScreenState extends State<MovementDetailScreen> {
   }
 
   Future<DateTime?> _pickDateTime() async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: now,
-      firstDate: DateTime(2015),
-      lastDate: now.add(const Duration(days: 365)),
-    );
-    if (date == null || !mounted) return null;
-    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(now));
-    if (time == null) return null;
-    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    return DateTime.now(); // automatic date & time
   }
 
   Future<void> _doCheckOut() async {

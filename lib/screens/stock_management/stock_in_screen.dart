@@ -28,7 +28,7 @@ class _StockInScreenState extends State<StockInScreen> {
 
   String    _selectedBranch   = 'CDA Admin';
   String    _selectedCategory = 'consumable';
-  DateTime? _selectedDate;
+  DateTime? _selectedDate = DateTime.now(); // automatic
   bool      _saving = false;
   bool get _isProductLocked => widget.initialProductName != null;
 
@@ -58,20 +58,7 @@ class _StockInScreenState extends State<StockInScreen> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2024),
-      lastDate: DateTime(2030),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme:
-          const ColorScheme.light(primary: kNavy, onPrimary: Colors.white),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) setState(() => _selectedDate = picked);
+    // Date is stamped automatically — not editable.
   }
 
   Future<void> _save() async {

@@ -82,6 +82,7 @@ class _AddSaleOrderScreenState extends State<AddSaleOrderScreen> {
   }
 
   Future<void> _pickDate(TextEditingController c) async {
+    if (identical(c, orderDateController)) return; // Record date is automatic; only this other date stays manual.
     final picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),

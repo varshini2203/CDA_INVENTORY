@@ -165,6 +165,7 @@ class _AddEstimateScreenState extends State<AddEstimateScreen> {
       '${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}';
 
   Future<void> _pickDate({required bool isValidTill}) async {
+    if (!isValidTill) return; // Record date is automatic; only this other date stays manual.
     final picked = await showDatePicker(
       context: context,
       initialDate: isValidTill ? (_validTill ?? DateTime.now()) : _estimateDate,

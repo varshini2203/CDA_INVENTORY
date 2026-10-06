@@ -1,12 +1,16 @@
 // lib/screens/drone/edit_drone_screen.dart
-// Firestore version — identical UI logic, theme matched to Invoice pages.
+//
+// Edit the details of a fleet drone. The drone itself (name, group) comes from
+// the fleet list and cannot be renamed here; IN / OUT status and its date &
+// time can only change through a Drone IN / OUT entry. Battery is not tracked.
+
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
+import 'package:intl/intl.dart';
+
 import '../../models/drone.dart';
 import '../../services/drone_service.dart';
-import '../../widgets/common/auto_user_field.dart';
-import '../../constants/drone_categories.dart';
 
 class EditDroneScreen extends StatefulWidget {
   final DroneService service;
@@ -21,16 +25,11 @@ class EditDroneScreen extends StatefulWidget {
 class _EditDroneScreenState extends State<EditDroneScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _nameCtrl;
-  late final TextEditingController _modelCtrl;
-  late final TextEditingController _serialCtrl;
-  late final TextEditingController _pilotCtrl;
+  late final TextEditingController _uinCtrl;
+  late final TextEditingController _gpsCtrl;
   late final TextEditingController _hoursCtrl;
   late final TextEditingController _notesCtrl;
-  late String _status;
-  late String _category;
-  late String _branch;
-  late double _battery;
+  String? _linkType; // null | 'Analog' | 'Digital'
   DateTime? _maintenanceDue;
   bool _saving = false;
 
@@ -50,24 +49,12 @@ class _EditDroneScreenState extends State<EditDroneScreen>
   void initState() {
     super.initState();
     final d = widget.drone;
-    _nameCtrl = TextEditingController(text: d.name);
-    _modelCtrl = TextEditingController(text: d.model);
-    _serialCtrl = TextEditingController(text: d.serialNumber);
-    _pilotCtrl = TextEditingController(text: d.pilotName ?? '');
-    _hoursCtrl =
-        TextEditingController(text: d.flightHours.toString());
+    _uinCtrl = TextEditingController(text: d.uin ?? '');
+    _gpsCtrl = TextEditingController(text: d.gps ?? '');
+    _hoursCtrl = TextEditingController(text: d.flightHours.toString());
     _notesCtrl = TextEditingController(text: d.notes ?? '');
-    _status = d.status;
-    _category =
-    (d.category != null && kDroneCategories.contains(d.category))
-        ? d.category!
-        : kDroneCategories.first;
-    _branch = (d.branch != null && kBranchOptions.contains(d.branch))
-        ? d.branch!
-        : kBranchOptions.first;
-    _battery = d.batteryLevel.toDouble().clamp(0, 100);
+    _linkType = d.linkType;
     _maintenanceDue = d.maintenanceDue;
-
     _droneAnim = AnimationController(
         vsync: this, duration: const Duration(seconds: 5))
       ..repeat();
@@ -75,10 +62,8 @@ class _EditDroneScreenState extends State<EditDroneScreen>
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _modelCtrl.dispose();
-    _serialCtrl.dispose();
-    _pilotCtrl.dispose();
+    _uinCtrl.dispose();
+    _gpsCtrl.dispose();
     _hoursCtrl.dispose();
     _notesCtrl.dispose();
     _droneAnim.dispose();
@@ -88,8 +73,8 @@ class _EditDroneScreenState extends State<EditDroneScreen>
   Future<void> _pickMaintenanceDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _maintenanceDue ??
-          DateTime.now().add(const Duration(days: 30)),
+      initialDate:
+      _maintenanceDue ?? DateTime.now().add(const Duration(days: 30)),
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
       builder: (context, child) => Theme(
@@ -105,34 +90,40 @@ class _EditDroneScreenState extends State<EditDroneScreen>
     if (picked != null) setState(() => _maintenanceDue = picked);
   }
 
-  Color get _batteryColor {
-    if (_battery <= 20) return kCoral;
-    if (_battery <= 50) return kAmber;
-    return kGreen;
-  }
+  String? _nullIfEmpty(String v) => v.trim().isEmpty ? null : v.trim();
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
-    final updated = widget.drone.copyWith(
-      name: _nameCtrl.text.trim(),
-      model: _modelCtrl.text.trim(),
-      serialNumber: _serialCtrl.text.trim(),
-      status: _status,
-      // Not typed — kept as-is here; DroneService stamps the logged-in
-      // user as "used by" / "updated by" when the status actually changes.
-      pilotName: widget.drone.pilotName,
-      category: _category,
-      batteryLevel: _battery.round(),
-      flightHours:
-      double.tryParse(_hoursCtrl.text.trim()) ??
-          widget.drone.flightHours,
-      notes: _notesCtrl.text.trim().isEmpty
-          ? null
-          : _notesCtrl.text.trim(),
+    final d = widget.drone;
+    final updated = Drone(
+      id: d.id,
+      name: d.name,
+      model: d.model,
+      serialNumber: d.serialNumber,
+      status: d.status, // unchanged — only IN / OUT entries change status
+      uin: _nullIfEmpty(_uinCtrl.text),
+      droneClass: d.droneClass,
+      pilotName: d.pilotName,
+      category: d.category,
+      gps: _nullIfEmpty(_gpsCtrl.text),
+      linkType: _linkType,
+      inMasterList: d.inMasterList,
+      hasMovement: d.hasMovement,
+      additionalProducts: d.additionalProducts,
+      condition: d.condition,
+      flightHours: double.tryParse(_hoursCtrl.text.trim()) ?? d.flightHours,
+      notes: _nullIfEmpty(_notesCtrl.text),
       maintenanceDue: _maintenanceDue,
-      branch: _branch,
+      lastUpdated: d.lastUpdated,
+      branch: d.branch,
+      purpose: d.purpose,
+      checkedOutAt: d.checkedOutAt,
+      checkedInAt: d.checkedInAt,
+      addedBy: d.addedBy,
+      updatedBy: d.updatedBy,
+      reminderAcknowledged: d.reminderAcknowledged,
     );
 
     final result = await widget.service.updateDrone(updated);
@@ -143,16 +134,15 @@ class _EditDroneScreenState extends State<EditDroneScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Row(children: [
-            Icon(Icons.check_circle_outline,
-                color: Colors.white, size: 18),
+            Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
             SizedBox(width: 8),
             Text('Drone updated successfully!',
                 style: TextStyle(color: Colors.white)),
           ]),
           backgroundColor: kGreen,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -164,8 +154,8 @@ class _EditDroneScreenState extends State<EditDroneScreen>
               style: const TextStyle(color: Colors.white)),
           backgroundColor: kCoral,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -174,6 +164,7 @@ class _EditDroneScreenState extends State<EditDroneScreen>
 
   @override
   Widget build(BuildContext context) {
+    final d = widget.drone;
     return Scaffold(
       backgroundColor: kSurface,
       body: CustomScrollView(
@@ -184,110 +175,31 @@ class _EditDroneScreenState extends State<EditDroneScreen>
             child: Form(
               key: _formKey,
               child: Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 8),
-                    // Firestore doc ID badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: kAmber.withOpacity(0.3)),
-                        boxShadow: [
-                          BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2)),
-                        ],
-                      ),
-                      child: Row(children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: kAmber.withOpacity(0.12),
-                            borderRadius:
-                            BorderRadius.circular(7),
-                          ),
-                          child: const Icon(Icons.fingerprint,
-                              color: kAmber, size: 16),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Doc ID: ${widget.drone.id}',
-                            style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: kAmber.withOpacity(0.12),
-                            borderRadius:
-                            BorderRadius.circular(6),
-                          ),
-                          child: const Text('EDITING',
-                              style: TextStyle(
-                                  color: kAmber,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.5)),
-                        ),
-                      ]),
-                    ),
-                    const SizedBox(height: 20),
-                    _buildSectionHeader(
-                        'Identity', Icons.badge_outlined),
+                    _buildSectionHeader('Fleet Drone', Icons.flight_rounded),
                     const SizedBox(height: 12),
-                    _buildField(
-                        controller: _nameCtrl,
-                        label: 'Drone Name',
-                        icon: Icons.airplanemode_active,
-                        validator: (v) =>
-                        v == null || v.trim().isEmpty
-                            ? 'Drone name is required'
-                            : null),
-                    const SizedBox(height: 14),
-                    _buildField(
-                        controller: _modelCtrl,
-                        label: 'Model',
-                        icon: Icons.category_outlined,
-                        validator: (v) =>
-                        v == null || v.trim().isEmpty
-                            ? 'Model is required'
-                            : null),
-                    const SizedBox(height: 14),
-                    _buildField(
-                        controller: _serialCtrl,
-                        label: 'Serial Number',
-                        icon: Icons.tag,
-                        validator: (v) =>
-                        v == null || v.trim().isEmpty
-                            ? 'Serial number is required'
-                            : null),
+                    _buildReadOnly(d),
                     const SizedBox(height: 24),
                     _buildSectionHeader(
-                        'Assignment', Icons.person_pin_outlined),
+                        'Details', Icons.settings_input_antenna_rounded),
                     const SizedBox(height: 12),
-                    AutoUserField(
-                      controller: _pilotCtrl,
-                      label: 'Used By (auto)',
-                      accent: kTeal,
-                      preferExisting: true,
-                    ),
+                    _buildField(
+                        controller: _uinCtrl,
+                        label: 'UIN (if registered)',
+                        hint: 'e.g. UIN-UB202502479TC',
+                        icon: Icons.fingerprint),
                     const SizedBox(height: 14),
-                    _buildCategoryDropdown(),
+                    _buildField(
+                        controller: _gpsCtrl,
+                        label: 'GPS module',
+                        hint: 'e.g. M10',
+                        icon: Icons.gps_fixed_rounded),
                     const SizedBox(height: 14),
-                    _buildBranchDropdown(),
+                    _buildLinkDropdown(),
                     const SizedBox(height: 24),
                     _buildSectionHeader(
                         'Metrics', Icons.monitor_heart_outlined),
@@ -295,29 +207,21 @@ class _EditDroneScreenState extends State<EditDroneScreen>
                     _buildField(
                         controller: _hoursCtrl,
                         label: 'Flight Hours',
+                        hint: '0.0',
                         icon: Icons.timer_outlined,
-                        keyboardType:
-                        const TextInputType.numberWithOptions(
+                        keyboardType: const TextInputType.numberWithOptions(
                             decimal: true)),
                     const SizedBox(height: 14),
-                    _buildBatterySlider(),
-                    const SizedBox(height: 24),
-                    _buildSectionHeader(
-                        'Schedule', Icons.event_outlined),
-                    const SizedBox(height: 12),
                     _buildMaintenancePicker(),
                     const SizedBox(height: 24),
-                    _buildSectionHeader(
-                        'purpose', Icons.notes_outlined),
+                    _buildSectionHeader('Notes', Icons.notes_outlined),
                     const SizedBox(height: 12),
                     _buildField(
                         controller: _notesCtrl,
-                        label: 'purpose (optional)',
-                        hint: 'aim',
+                        label: 'Notes (optional)',
+                        hint: 'Anything worth remembering',
                         icon: Icons.notes,
                         maxLines: 3),
-                    const SizedBox(height: 24),
-                    _buildStatusSelector(),
                     const SizedBox(height: 28),
                     _buildSubmitButton(),
                     const SizedBox(height: 40),
@@ -333,7 +237,7 @@ class _EditDroneScreenState extends State<EditDroneScreen>
 
   Widget _buildAppBar() {
     return SliverAppBar(
-      expandedHeight: 140,
+      expandedHeight: 130,
       pinned: true,
       backgroundColor: kNavy,
       iconTheme: const IconThemeData(color: Colors.white),
@@ -348,26 +252,20 @@ class _EditDroneScreenState extends State<EditDroneScreen>
                   colors: [kNavy, kNavyLight],
                 ),
               ),
-              child: CustomPaint(painter: _SubtleGridPainter()),
             ),
             AnimatedBuilder(
               animation: _droneAnim,
               builder: (_, __) {
                 final t = _droneAnim.value;
-                final x =
-                    0.72 + math.sin(t * 2 * math.pi) * 0.12;
-                final y =
-                    0.35 + math.cos(t * 2 * math.pi * 0.7) * 0.2;
+                final x = 0.7 + math.sin(t * 2 * math.pi) * 0.15;
+                final y = 0.4 + math.cos(t * 2 * math.pi * 0.6) * 0.25;
                 return Positioned(
                   right: MediaQuery.of(context).size.width * (1 - x),
-                  top: 140 * y,
+                  top: 130 * y,
                   child: Opacity(
-                    opacity: 0.22,
-                    child: Transform.rotate(
-                      angle: math.sin(t * 2 * math.pi) * 0.08,
-                      child: const Icon(Icons.flight_rounded,
-                          color: kAmber, size: 30),
-                    ),
+                    opacity: 0.25,
+                    child: const Icon(Icons.flight_rounded,
+                        color: kTeal, size: 32),
                   ),
                 );
               },
@@ -375,24 +273,23 @@ class _EditDroneScreenState extends State<EditDroneScreen>
             Positioned(
               left: 20,
               bottom: 16,
-              right: 80,
+              right: 20,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Edit · ${widget.drone.name}',
-                      style: const TextStyle(
+                  const Text('Edit Drone',
+                      style: TextStyle(
                           color: Colors.white,
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 0.2),
-                      overflow: TextOverflow.ellipsis),
+                          letterSpacing: 0.2)),
                   const SizedBox(height: 4),
-                  Text(widget.drone.model,
+                  Text(widget.drone.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                          color: kAmber.withOpacity(0.85),
-                          fontSize: 13),
-                      overflow: TextOverflow.ellipsis),
+                          color: kTeal.withOpacity(0.85), fontSize: 13)),
                 ],
               ),
             ),
@@ -414,345 +311,178 @@ class _EditDroneScreenState extends State<EditDroneScreen>
                 fontWeight: FontWeight.w700,
                 letterSpacing: 2)),
         const SizedBox(width: 12),
-        Expanded(
-            child:
-            Container(height: 1, color: Colors.grey.shade200)),
+        Expanded(child: Container(height: 1, color: Colors.grey.shade200)),
       ],
     );
   }
 
-  Widget _buildCategoryDropdown() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
-      ),
-      child: DropdownButtonFormField<String>(
-        value: _category,
-        dropdownColor: Colors.white,
-        style: const TextStyle(color: kNavy, fontSize: 15),
-        decoration: InputDecoration(
-          labelText: 'Category',
-          labelStyle:
-          TextStyle(color: Colors.grey.shade600, fontSize: 14),
-          prefixIcon: const Icon(Icons.workspaces_outline,
-              color: kAmber, size: 20),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.only(right: 16),
-        ),
-        items: kDroneCategories
-            .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-            .toList(),
-        onChanged: (v) =>
-            setState(() => _category = v ?? _category),
-      ),
-    );
-  }
+  BoxDecoration get _cardDecoration => BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(14),
+    border: Border.all(color: Colors.grey.shade200),
+    boxShadow: [
+      BoxShadow(
+          color: Colors.black.withOpacity(0.04),
+          blurRadius: 8,
+          offset: const Offset(0, 2)),
+    ],
+  );
 
-  Widget _buildBranchDropdown() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
-      ),
-      child: DropdownButtonFormField<String>(
-        value: _branch,
-        dropdownColor: Colors.white,
-        style: const TextStyle(color: kNavy, fontSize: 15),
-        decoration: InputDecoration(
-          labelText: 'Branch',
-          labelStyle:
-          TextStyle(color: Colors.grey.shade600, fontSize: 14),
-          prefixIcon: const Icon(Icons.location_city_outlined,
-              color: kAmber, size: 20),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.only(right: 16),
-        ),
-        items: kBranchOptions
-            .map((b) => DropdownMenuItem(
-            value: b, child: Text(kBranchLabels[b] ?? b)))
-            .toList(),
-        onChanged: (v) => setState(() => _branch = v ?? _branch),
-      ),
-    );
-  }
-
-  Widget _buildBatterySlider() {
+  Widget _buildReadOnly(Drone d) {
+    final isIn = d.status == 'IN';
+    final color = isIn ? kTeal : kAmber;
+    final fmt = DateFormat('d MMM yyyy, h:mm a');
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
-      ),
+      decoration: _cardDecoration,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.battery_charging_full,
-                  color: _batteryColor, size: 18),
-              const SizedBox(width: 8),
-              Text('Battery Level',
-                  style: TextStyle(
-                      color: Colors.grey.shade600, fontSize: 13)),
-              const Spacer(),
+              Expanded(
+                child: Text(d.name,
+                    style: const TextStyle(
+                        color: kNavy,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800)),
+              ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _batteryColor.withOpacity(0.1),
+                  color: color.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: _batteryColor.withOpacity(0.3)),
                 ),
-                child: Text('${_battery.round()}%',
+                child: Text(d.status,
                     style: TextStyle(
-                        color: _batteryColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13)),
+                        color: color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800)),
               ),
             ],
           ),
+          if (d.category != null) ...[
+            const SizedBox(height: 4),
+            Text(d.category!,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+          ],
+          if (d.checkedOutAt != null || d.checkedInAt != null) ...[
+            const SizedBox(height: 10),
+            if (d.checkedOutAt != null)
+              Text('Out: ${fmt.format(d.checkedOutAt!)}',
+                  style: const TextStyle(
+                      color: kCoral,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700)),
+            if (d.checkedInAt != null)
+              Text('In: ${fmt.format(d.checkedInAt!)}',
+                  style: const TextStyle(
+                      color: kGreen,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700)),
+          ],
           const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: _battery / 100,
-              backgroundColor: Colors.grey.shade200,
-              valueColor: AlwaysStoppedAnimation(_batteryColor),
-              minHeight: 4,
-            ),
-          ),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: Colors.transparent,
-              inactiveTrackColor: Colors.transparent,
-              thumbColor: _batteryColor,
-              overlayColor: _batteryColor.withOpacity(0.15),
-              trackHeight: 0,
-            ),
-            child: Slider(
-              value: _battery,
-              min: 0,
-              max: 100,
-              divisions: 100,
-              onChanged: (v) => setState(() => _battery = v),
-            ),
+          Row(
+            children: [
+              Icon(Icons.lock_outline_rounded,
+                  size: 13, color: Colors.grey.shade400),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                    'Name, status and IN / OUT time change only through a Drone IN / OUT entry.',
+                    style: TextStyle(
+                        color: Colors.grey.shade500, fontSize: 11.5)),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLinkDropdown() {
+    return Container(
+      decoration: _cardDecoration,
+      child: DropdownButtonFormField<String?>(
+        value: _linkType,
+        dropdownColor: Colors.white,
+        style: const TextStyle(color: kNavy, fontSize: 15),
+        decoration: InputDecoration(
+          labelText: 'Video link',
+          labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+          prefixIcon: Icon(Icons.podcasts_rounded,
+              color: Colors.grey.shade500, size: 20),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.only(right: 16),
+        ),
+        items: const [
+          DropdownMenuItem<String?>(value: null, child: Text('Not specified')),
+          DropdownMenuItem<String?>(value: 'Analog', child: Text('Analog')),
+          DropdownMenuItem<String?>(value: 'Digital', child: Text('Digital')),
+        ],
+        onChanged: (v) => setState(() => _linkType = v),
       ),
     );
   }
 
   Widget _buildMaintenancePicker() {
+    final has = _maintenanceDue != null;
     return InkWell(
       onTap: _pickMaintenanceDate,
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: _maintenanceDue != null
-                  ? kAmber.withOpacity(0.4)
-                  : Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2)),
-          ],
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        decoration: _cardDecoration,
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: kAmber.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: const Icon(Icons.build_outlined,
-                  color: kAmber, size: 18),
-            ),
+            Icon(Icons.build_outlined,
+                color: has ? kAmber : Colors.grey.shade500, size: 20),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Maintenance Date',
-                      style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12)),
-                  const SizedBox(height: 2),
-                  Text(
-                    _maintenanceDue == null
-                        ? 'Tap to set (optional)'
-                        : _maintenanceDue!
-                        .toLocal()
-                        .toString()
-                        .split(' ')
-                        .first,
-                    style: TextStyle(
-                        color: _maintenanceDue == null
-                            ? Colors.grey.shade400
-                            : kNavy,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
+              child: Text(
+                  has
+                      ? 'Maintenance due: ${DateFormat('dd MMM yyyy').format(_maintenanceDue!)}'
+                      : 'Maintenance due date (optional)',
+                  style: TextStyle(
+                      color: has ? kNavy : Colors.grey.shade600,
+                      fontSize: 14,
+                      fontWeight: has ? FontWeight.w700 : FontWeight.w500)),
             ),
-            if (_maintenanceDue != null)
-              GestureDetector(
-                onTap: () =>
-                    setState(() => _maintenanceDue = null),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Icon(Icons.close,
-                      color: Colors.grey.shade600, size: 14),
-                ),
-              )
-            else
-              Icon(Icons.chevron_right,
-                  color: Colors.grey.shade400, size: 20),
+            if (has)
+              InkWell(
+                onTap: () => setState(() => _maintenanceDue = null),
+                child: Icon(Icons.close, size: 18, color: Colors.grey.shade500),
+              ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatusSelector() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.toggle_on_outlined,
-                  color: kNavy, size: 16),
-              SizedBox(width: 8),
-              Text('STATUS',
-                  style: TextStyle(
-                      color: kNavy,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 2)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _StatusOption(
-                  label: 'IN',
-                  icon: Icons.flight_land,
-                  color: kTeal,
-                  description: 'In the hangar',
-                  selected: _status == 'IN',
-                  onTap: () => setState(() => _status = 'IN'),
-                  accentColor: kAmber,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatusOption(
-                  label: 'OUT',
-                  icon: Icons.flight_takeoff,
-                  color: kAmber,
-                  description: 'On a mission',
-                  selected: _status == 'OUT',
-                  onTap: () => setState(() => _status = 'OUT'),
-                  accentColor: kAmber,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
 
   Widget _buildSubmitButton() {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: _saving
-            ? []
-            : [
-          BoxShadow(
-              color: kAmber.withOpacity(0.3),
-              blurRadius: 18,
-              spreadRadius: 0),
-        ],
-      ),
-      child: SizedBox(
-        height: 56,
-        child: ElevatedButton(
-          onPressed: _saving ? null : _save,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: kAmber,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: kAmber.withOpacity(0.4),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            elevation: 0,
-          ),
-          child: _saving
-              ? const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                  color: Colors.white, strokeWidth: 2.5))
-              : const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.save_outlined, size: 20),
-              SizedBox(width: 10),
-              Text('Save Changes',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3)),
-            ],
-          ),
+    return SizedBox(
+      height: 54,
+      child: ElevatedButton.icon(
+        onPressed: _saving ? null : _save,
+        icon: _saving
+            ? const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+                color: Colors.white, strokeWidth: 2))
+            : const Icon(Icons.save_rounded),
+        label: Text(_saving ? 'Saving…' : 'Save Changes',
+            style:
+            const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: kTeal,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: kTeal.withOpacity(0.4),
+          disabledForegroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
         ),
       ),
     );
@@ -761,142 +491,34 @@ class _EditDroneScreenState extends State<EditDroneScreen>
   Widget _buildField({
     required TextEditingController controller,
     required String label,
-    String? hint,
+    required String hint,
     required IconData icon,
-    String? Function(String?)? validator,
-    int maxLines = 1,
     TextInputType? keyboardType,
-    bool readOnly = false,
+    int maxLines = 1,
+    String? Function(String?)? validator,
   }) {
-    return TextFormField(
-      controller: controller,
-      readOnly: readOnly,
-      enableInteractiveSelection: !readOnly,
-      validator: validator,
-      maxLines: maxLines,
-      keyboardType: keyboardType,
-      style: const TextStyle(color: kNavy, fontSize: 15),
-      cursorColor: kAmber,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        labelStyle:
-        TextStyle(color: Colors.grey.shade600, fontSize: 14),
-        floatingLabelStyle:
-        const TextStyle(color: kAmber, fontSize: 13),
-        hintStyle: TextStyle(color: Colors.grey.shade400),
-        prefixIcon:
-        Icon(icon, color: kAmber, size: 20),
-        filled: true,
-        fillColor: Colors.white,
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide:
-          BorderSide(color: Colors.grey.shade200, width: 1),
-        ),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide:
-          const BorderSide(color: kAmber, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide:
-          const BorderSide(color: kCoral, width: 1.5),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide:
-          const BorderSide(color: kCoral, width: 1.5),
-        ),
-        errorStyle: const TextStyle(color: kCoral),
-      ),
-    );
-  }
-}
-
-class _StatusOption extends StatelessWidget {
-  final String label, description;
-  final IconData icon;
-  final Color color, accentColor;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _StatusOption(
-      {required this.label,
-        required this.description,
-        required this.icon,
-        required this.color,
-        required this.accentColor,
-        required this.selected,
-        required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding:
-        const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-        decoration: BoxDecoration(
-          color: selected
-              ? color.withOpacity(0.12)
-              : const Color(0xFFF7F9FB),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: selected
-                  ? color.withOpacity(0.5)
-                  : Colors.grey.shade200,
-              width: selected ? 1.5 : 1),
-        ),
-        child: Column(
-          children: [
-            Icon(icon,
-                color:
-                selected ? color : Colors.grey.shade400,
-                size: 22),
-            const SizedBox(height: 6),
-            Text(label,
-                style: TextStyle(
-                    color: selected
-                        ? color
-                        : Colors.grey.shade500,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                    letterSpacing: 1)),
-            const SizedBox(height: 3),
-            Text(description,
-                style: TextStyle(
-                    color: selected
-                        ? color.withOpacity(0.7)
-                        : Colors.grey.shade400,
-                    fontSize: 11)),
-          ],
+    return Container(
+      decoration: _cardDecoration,
+      child: TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
+        maxLines: maxLines,
+        validator: validator,
+        style: const TextStyle(color: kNavy, fontSize: 15),
+        cursorColor: kTeal,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          prefixIcon: Icon(icon, color: Colors.grey.shade500, size: 20),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         ),
       ),
     );
   }
-}
-
-class _SubtleGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withOpacity(0.04)
-      ..strokeWidth = 0.5;
-    const spacing = 24.0;
-    for (double x = 0; x < size.width; x += spacing) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y < size.height; y += spacing) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
 }

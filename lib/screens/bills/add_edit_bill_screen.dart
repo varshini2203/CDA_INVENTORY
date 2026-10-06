@@ -129,19 +129,7 @@ class _AddEditBillScreenState extends State<AddEditBillScreen> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _billDate,
-      firstDate: DateTime(2015),
-      lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: ColorScheme.light(primary: _accentColor, onPrimary: Colors.white),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) setState(() => _billDate = picked);
+    // Date is stamped automatically — not editable.
   }
 
   Future<void> _save() async {

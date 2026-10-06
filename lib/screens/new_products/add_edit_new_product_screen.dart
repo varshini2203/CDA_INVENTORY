@@ -217,14 +217,7 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
 
   // ── Date picker ───────────────────────────────────────────────────────
   Future<void> _pickPurchaseDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _purchaseDate,
-      firstDate: DateTime(2015),
-      lastDate: DateTime(2100),
-    );
-    if (picked == null) return;
-    setState(() => _purchaseDate = picked);
+    // Date is stamped automatically — not editable.
   }
 
   // ── Attachments ───────────────────────────────────────────────────────

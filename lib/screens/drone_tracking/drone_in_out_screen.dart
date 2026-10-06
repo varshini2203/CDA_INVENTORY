@@ -4,14 +4,11 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import '../../models/drone.dart';
 import '../../services/drone_service.dart';
-import '../../services/current_user_service.dart';
 import '../../services/drone_reminder_service.dart';
-import '../../constants/drone_categories.dart';
 import '../../data/seed_drones.dart';
 import '../../widgets/common/serial_scan_screen.dart';
 import 'add_drone_entry_screen.dart';
@@ -19,15 +16,9 @@ import 'edit_drone_screen.dart';
 import 'drone_history_screen.dart';
 import 'drone_inout_history_screen.dart';
 
-// Drone type / category filter options. Extend this list anytime a new
-// drone type gets added to the fleet — the type filter chip row (below the
-// branch filter row) is built from it. Values here must match exactly
-// whatever string gets saved into Drone.category from the Add/Edit Drone
-// screens, or the chip will show a count of 0 and filter nothing in.
-const List<String> kDroneCategoryOptions = [
-  'RPTO Aerial',
-  'FPV',
-];
+// Drone group filter options — straight from the fleet list (DRONE_LIST.xlsx):
+// TC Drones, DJI Drones, FPV Drones, Fixed Wings. Values match Drone.category.
+const List<String> kDroneCategoryOptions = kDroneGroups;
 
 class DroneInOutScreen extends StatefulWidget {
   const DroneInOutScreen({super.key});
@@ -39,15 +30,14 @@ class DroneInOutScreen extends StatefulWidget {
 class _DroneInOutScreenState extends State<DroneInOutScreen>
     with TickerProviderStateMixin {
   final DroneService _service = DroneService();
-  List<Drone> _drones = [];
+  List<Drone> _drones = []; // dashboard list: drones with a recorded movement
+  List<Drone> _fleet = []; // whole fleet — used for the header Total / IN / OUT
   bool _loading = true;
   bool _seeding = false;
   String? _error;
   String _search = '';
   String _filter = 'ALL';
-  // 'ALL' | 'Branch 1' (CDA Admin) | 'Branch 2' (CDA Ops)
-  String _branchFilter = 'ALL';
-  // 'ALL' | 'RPTO Aerial' | 'FPV' | ... (see kDroneCategoryOptions)
+  // 'ALL' | 'TC Drones' | 'DJI Drones' | ... (see kDroneCategoryOptions)
   String _categoryFilter = 'ALL';
   // 'newest' | 'oldest' | 'date'
   String _sortOption = 'newest';
@@ -96,11 +86,16 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
       _error = null;
     });
     final result = await _service.getDrones();
+    final recs = result.success ? await _service.getMovementRecords() : null;
     if (!mounted) return;
     setState(() {
       _loading = false;
       if (result.success) {
-        _drones = result.data!;
+        _drones = recs?.success == true
+            ? recs!.data!
+            : result.data!.where((d) => d.hasMovement).toList();
+        // Dashboard lists only drones that have a recorded IN/OUT movement.
+        _fleet = result.data!;
         _headerAnim.forward(from: 0);
       } else {
         _error = result.error;
@@ -118,17 +113,24 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
       await _service.backfillCheckInOutTimestamps(result.data!);
       if (updated > 0 && mounted) {
         final refreshed = await _service.getDrones(forceRefresh: true);
+        final refRecs = refreshed.success
+            ? await _service.getMovementRecords()
+            : null;
         if (mounted && refreshed.success) {
-          setState(() => _drones = refreshed.data!);
+          setState(() {
+            _fleet = refreshed.data!;
+            _drones = refRecs?.success == true
+                ? refRecs!.data!
+                : refreshed.data!.where((d) => d.hasMovement).toList();
+          });
         }
       }
     }
   }
 
-  /// Seeds the `drones` Firestore collection with the curated drone
-  /// inventory from `lib/data/seed_drones.dart` (extracted from the CDA
-  /// Admin and CDA Ops inventory spreadsheets). Safe to run more than
-  /// once — `seedDrones()` skips any drone that's already in Firestore.
+  /// Loads the fleet list (DRONE_LIST.xlsx → `lib/data/seed_drones.dart`)
+  /// into the `drones` Firestore collection. Safe to run more than once —
+  /// existing drones keep their status, history and IN/OUT times.
   Future<void> _seedFleet() async {
     if (_seeding) return;
     setState(() => _seeding = true);
@@ -136,7 +138,7 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
       await seedDrones(FirebaseFirestore.instance);
       if (!mounted) return;
       _showSnack(
-        'Fleet seed data loaded',
+        'Drone list loaded (${kDroneMasterList.length} drones)',
         icon: Icons.cloud_done_rounded,
         color: kTeal,
       );
@@ -155,85 +157,37 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
     }
   }
 
+  /// IN / OUT is always recorded through the entry screen: the drone comes
+  /// from the fleet dropdown, and the date, time and handler are automatic.
   Future<void> _toggleStatus(Drone drone) async {
-    final newStatus = drone.status == 'IN' ? 'OUT' : 'IN';
-    // Logged-in user's name — never typed manually.
-    final currentUserName = await CurrentUserService.getName();
-    if (!mounted) return;
-
-    final entry = await showDialog<_DroneActionEntry>(
-      context: context,
-      builder: (_) => _DroneActionDialog(
-        drone: drone,
-        newStatus: newStatus,
-        defaultName: currentUserName,
-      ),
-    );
-    if (entry == null) return; // cancelled
-
-    // Handled By — always the logged-in user (auto-fetched, never typed).
-    final handledBy = currentUserName;
-
-    HapticFeedback.lightImpact();
-
-    // Optimistic local update
-    setState(() {
-      drone.status = newStatus;
-      drone.pilotName = handledBy;
-    });
-
-    final result = await _service.updateStatus(
-      drone.id,
-      newStatus,
-      performedBy: handledBy, // service re-resolves from login and saves it
-      actionTime: entry.time,
-      purpose: entry.purpose,
-    );
-    if (!mounted) return;
-    if (result.success) {
-      final purposeSuffix =
-      (newStatus == 'OUT' && entry.purpose != null && entry.purpose!.isNotEmpty)
-          ? ' for ${entry.purpose}'
-          : '';
-      _showSnack(
-        '${drone.name} marked $newStatus — handled by $handledBy$purposeSuffix',
-        icon: newStatus == 'IN' ? Icons.flight_land : Icons.flight_takeoff,
-        color: newStatus == 'IN' ? kTeal : kAmber,
-      );
-      // 4-hour "did you forget to bring it back?" reminder for this drone.
-      // Replaces any reminder already pending for it. Only fires for OUT —
-      // see DroneReminderService.scheduleReminder.
-      DroneReminderService.instance.scheduleReminder(
-        droneId: drone.id,
-        droneName: drone.name,
-        newStatus: newStatus,
-        actionTime: entry.time,
-        purpose: entry.purpose,
-      );
-    } else {
-      // Roll back
-      setState(() => drone.status = newStatus == 'IN' ? 'OUT' : 'IN');
-      _showSnack('Update failed: ${result.error}', isError: true);
-    }
+    final done = await Navigator.push<bool>(
+        context,
+        _slide(AddDroneEntryScreen(
+            service: _service, initialDroneId: drone.id)));
+    if (done == true) _loadDrones();
   }
 
+  /// Deletes ONE IN/OUT record (not the drone itself).
   Future<void> _deleteDrone(Drone drone) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => _ConfirmDialog(
-        title: 'Remove drone?',
-        body: '"${drone.name}" will be permanently removed from the fleet.',
-        confirmLabel: 'Remove',
+        title: 'Delete this record?',
+        body: 'This ${drone.status == 'OUT' ? 'OUT' : 'IN / OUT'} record of '
+            '"${drone.name}" will be removed. The drone stays in the fleet.',
+        confirmLabel: 'Delete',
         confirmColor: kCoral,
       ),
     );
     if (confirmed != true) return;
-    final result = await _service.deleteDrone(drone.id);
+    final result = await _service.deleteMovementRecord(drone);
     if (!mounted) return;
     if (result.success) {
-      DroneReminderService.instance.cancelReminder(drone.id);
-      setState(() => _drones.removeWhere((d) => d.id == drone.id));
-      _showSnack('${drone.name} removed', icon: Icons.delete_outline);
+      if (!drone.isPastTrip) {
+        DroneReminderService.instance.cancelReminder(drone.id);
+      }
+      await _loadDrones();
+      _showSnack('Record deleted', icon: Icons.delete_outline);
     } else {
       _showSnack('Delete failed: ${result.error}', isError: true);
     }
@@ -324,9 +278,11 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
         d.name.toLowerCase().contains(_search.toLowerCase()) ||
         d.model.toLowerCase().contains(_search.toLowerCase()) ||
         d.serialNumber.toLowerCase().contains(_search.toLowerCase()) ||
+        (d.uin ?? '').toLowerCase().contains(_search.toLowerCase()) ||
+        (d.gps ?? '').toLowerCase().contains(_search.toLowerCase()) ||
+        (d.linkType ?? '').toLowerCase().contains(_search.toLowerCase()) ||
         (d.pilotName ?? '').toLowerCase().contains(_search.toLowerCase());
     final matchFilter = _filter == 'ALL' || d.status == _filter;
-    final matchBranch = _branchFilter == 'ALL' || d.branch == _branchFilter;
     final matchCategory =
         _categoryFilter == 'ALL' || d.category == _categoryFilter;
     final matchDate = _sortOption != 'date' ||
@@ -334,7 +290,6 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
         (d.lastUpdated != null && _isSameDate(d.lastUpdated!, _sortDate!));
     return matchSearch &&
         matchFilter &&
-        matchBranch &&
         matchCategory &&
         matchDate;
   }).toList()
@@ -349,9 +304,6 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
 
   bool _isSameDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
-
-  int _branchCount(String branch) =>
-      _drones.where((d) => d.branch == branch).length;
 
   int _categoryCount(String category) =>
       _drones.where((d) => d.category == category).length;
@@ -372,9 +324,9 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
               droneAnim: _droneAnim,
               radarAnim: _radarAnim,
               headerAnim: _headerAnim,
-              drones: _drones,
-              inCount: _inCount,
-              outCount: _outCount,
+              drones: _fleet,
+              inCount: _fleet.where((d) => d.status == 'IN').length,
+              outCount: _fleet.where((d) => d.status == 'OUT').length,
               loading: _loading,
               seeding: _seeding,
               onRefresh: _loadDrones,
@@ -387,8 +339,6 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
             SliverToBoxAdapter(child: _buildSearchBar()),
           if (!_loading && _error == null && _drones.isNotEmpty)
             SliverToBoxAdapter(child: _buildFilterRow()),
-          if (!_loading && _error == null && _drones.isNotEmpty)
-            SliverToBoxAdapter(child: _buildBranchFilterRow()),
           if (!_loading && _error == null && _drones.isNotEmpty)
             SliverToBoxAdapter(child: _buildCategoryFilterRow()),
           if (!_loading && _error == null && _sortOption == 'date' && _sortDate != null)
@@ -409,8 +359,8 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
       elevation: 2,
       shape:
       RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      icon: const Icon(Icons.add_rounded, size: 22),
-      label: const Text('Register Drone',
+      icon: const Icon(Icons.swap_vert_rounded, size: 22),
+      label: const Text('Drone IN / OUT',
           style: TextStyle(
               fontWeight: FontWeight.w800,
               fontSize: 14,
@@ -443,7 +393,7 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
                 style: const TextStyle(color: kNavy, fontSize: 14),
                 cursorColor: kTeal,
                 decoration: InputDecoration(
-                  hintText: 'Search by name, model, serial, used by…',
+                  hintText: 'Search by name, UIN, GPS, Analog / Digital, used by…',
                   hintStyle:
                   TextStyle(color: Colors.grey.shade400, fontSize: 14),
                   prefixIcon:
@@ -560,34 +510,6 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
     );
   }
 
-  Widget _buildBranchFilterRow() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _FilterChip(
-                label: 'All Branch',
-                count: _drones.length,
-                selected: _branchFilter == 'ALL',
-                color: kPurple,
-                onTap: () => setState(() => _branchFilter = 'ALL')),
-            for (final branch in kBranchOptions) ...[
-              const SizedBox(width: 8),
-              _FilterChip(
-                  label: kBranchLabels[branch] ?? branch,
-                  count: _branchCount(branch),
-                  selected: _branchFilter == branch,
-                  color: kPurple,
-                  onTap: () => setState(() => _branchFilter = branch)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   /// Drone-type filter row — "All Types", "RPTO Aerial", "FPV", etc.
   /// Same chip pattern as the branch filter row above; filters on
   /// Drone.category (see kDroneCategoryOptions at the top of this file).
@@ -599,7 +521,7 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
         child: Row(
           children: [
             _FilterChip(
-                label: 'All Types',
+                label: 'All Drones',
                 count: _drones.length,
                 selected: _categoryFilter == 'ALL',
                 color: kGreen,
@@ -678,7 +600,7 @@ class _DroneInOutScreenState extends State<DroneInOutScreen>
     if (_drones.isEmpty) {
       return SliverFillRemaining(
           child: _EmptyView(
-              onAdd: _openAdd, onSeed: _seedFleet, seeding: _seeding));
+              onAdd: _openAdd));
     }
     if (items.isEmpty) {
       return SliverFillRemaining(
@@ -949,7 +871,7 @@ class _DroneHeaderDelegate extends SliverPersistentHeaderDelegate {
                         : const Icon(Icons.cloud_upload_rounded,
                         color: Colors.white),
                     onPressed: seeding ? null : onSeed,
-                    tooltip: 'Seed fleet data',
+                    tooltip: 'Load drone list',
                   ),
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded,
@@ -1300,10 +1222,10 @@ class _DroneCardState extends State<_DroneCard>
           child: child,
         ),
         child: Container(
-          margin: const EdgeInsets.only(bottom: 14),
+          margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
@@ -1316,7 +1238,7 @@ class _DroneCardState extends State<_DroneCard>
           child: Column(
             children: [
               Container(
-                height: 3,
+                height: 2,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(colors: [
                     statusColor.withOpacity(0.9),
@@ -1327,269 +1249,155 @@ class _DroneCardState extends State<_DroneCard>
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ── Row 1: status · name · small actions ──────────────
                     Row(
                       children: [
                         _StatusBadge(
-                            status: widget.drone.status,
-                            color: statusColor),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 9, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F4F8),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: Colors.grey.shade200),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.timer_outlined,
-                                  color: Colors.grey.shade500, size: 12),
-                              const SizedBox(width: 4),
-                              Text('${widget.drone.flightHours}h',
-                                  style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        // Show shortened Firestore document ID
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 9, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F4F8),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                              '#${widget.drone.id.length > 6 ? widget.drone.id.substring(0, 6) : widget.drone.id}',
-                              style: TextStyle(
-                                  color: Colors.grey.shade400,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                                color: statusColor.withOpacity(0.25)),
-                          ),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Icon(Icons.flight_rounded,
-                                  color: statusColor.withOpacity(0.8),
-                                  size: 26),
-                              if (isIn)
-                                Positioned(
-                                  bottom: 6,
-                                  right: 6,
-                                  child: Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      color: kTeal,
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                            color: kTeal.withOpacity(0.7),
-                                            blurRadius: 4)
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 14),
+                            status: widget.drone.status, color: statusColor),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                            children: [
-                              Text(widget.drone.name,
-                                  style: const TextStyle(
-                                      color: kNavy,
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.2)),
-                              const SizedBox(height: 3),
-                              Text(widget.drone.model,
-                                  style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 13)),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Icon(Icons.tag,
-                                      size: 11,
-                                      color: Colors.grey.shade400),
-                                  const SizedBox(width: 3),
-                                  Flexible(
-                                    child: Text(
-                                        widget.drone.serialNumber,
-                                        style: TextStyle(
-                                            color: Colors.grey.shade400,
-                                            fontSize: 11,
-                                            fontFamily: 'monospace'),
-                                        overflow:
-                                        TextOverflow.ellipsis),
-                                  ),
-                                  if (widget.drone.category !=
-                                      null) ...[
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding:
-                                      const EdgeInsets.symmetric(
-                                          horizontal: 7,
-                                          vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color:
-                                        const Color(0xFFF0F4F8),
-                                        borderRadius:
-                                        BorderRadius.circular(6),
-                                        border: Border.all(
-                                            color: Colors
-                                                .grey.shade200),
-                                      ),
-                                      child: Text(
-                                          widget.drone.category!,
-                                          style: TextStyle(
-                                              color:
-                                              Colors.grey.shade600,
-                                              fontSize: 10,
-                                              fontWeight:
-                                              FontWeight.w600)),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ],
-                          ),
+                          child: Text(widget.drone.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: kNavy,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800)),
                         ),
-                        _BatteryWidget(
-                            level: widget.drone.batteryLevel),
+                        if (widget.drone.isLockedRecord)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Row(children: [
+                              Icon(Icons.lock_outline_rounded,
+                                  size: 14, color: Colors.grey.shade500),
+                              const SizedBox(width: 4),
+                              Text('Completed',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade500)),
+                            ]),
+                          ),
+                        _MiniBtn(
+                            icon: Icons.history_rounded,
+                            color: kPurple,
+                            tooltip: 'History',
+                            onTap: widget.onHistory),
+                        // A finished OUT→IN record is frozen — no edit, no delete.
+                        if (!widget.drone.isLockedRecord) ...[
+                          const SizedBox(width: 6),
+                          _MiniBtn(
+                              icon: Icons.edit_outlined,
+                              color: kAmber,
+                              tooltip: 'Edit',
+                              onTap: widget.onEdit),
+                        ],
                       ],
                     ),
-                    if (widget.drone.pilotName != null &&
-                        widget.drone.pilotName!.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: kPurple.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: kPurple.withOpacity(0.25)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.person_outline,
-                                color: kPurple, size: 14),
-                            const SizedBox(width: 6),
-                            Text('Handled by: ${widget.drone.pilotName!}',
-                                style: const TextStyle(
-                                    color: kPurple,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500)),
-                          ],
-                        ),
-                      ),
+                    const SizedBox(height: 6),
+                    // ── Row 2: compact info chips ─────────────────────────
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (widget.drone.category != null)
+                          _DetailChip(
+                              icon: Icons.category_outlined,
+                              text: widget.drone.category!,
+                              color: kNavy),
+                        if (widget.drone.uin != null)
+                          _DetailChip(
+                              icon: Icons.fingerprint,
+                              text: 'UIN ${widget.drone.uin!}',
+                              color: kPurple),
+                        if (widget.drone.gps != null)
+                          _DetailChip(
+                              icon: Icons.gps_fixed_rounded,
+                              text: 'GPS ${widget.drone.gps!}',
+                              color: const Color(0xFF00B894)),
+                        if (widget.drone.linkType != null)
+                          _DetailChip(
+                              icon: widget.drone.linkType == 'Digital'
+                                  ? Icons.settings_input_antenna_rounded
+                                  : Icons.podcasts_rounded,
+                              text: widget.drone.linkType!,
+                              color: widget.drone.linkType == 'Digital'
+                                  ? kTeal
+                                  : kAmber),
+                        if (widget.drone.pilotName != null &&
+                            widget.drone.pilotName!.isNotEmpty)
+                          _DetailChip(
+                              icon: Icons.person_outline,
+                              text: widget.drone.pilotName!,
+                              color: kPurple),
+                      ],
+                    ),
+                    if (widget.drone.status == 'OUT' &&
+                        widget.drone.additionalProducts.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                          'With: ${widget.drone.additionalProducts.join(', ')}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: Colors.grey.shade600, fontSize: 11)),
                     ],
                     if (widget.drone.maintenanceDue != null) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       _MaintenanceBadge(
                           dueDate: widget.drone.maintenanceDue!),
                     ],
                     if (widget.drone.checkedInAt != null ||
                         widget.drone.checkedOutAt != null) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       _InOutDateStrip(
                         checkedInAt: widget.drone.checkedInAt,
                         checkedOutAt: widget.drone.checkedOutAt,
                       ),
                     ],
-                    const SizedBox(height: 14),
-                    Container(height: 1, color: Colors.grey.shade200),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: GestureDetector(
-                            onTap: widget.onToggle,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 11),
-                              decoration: BoxDecoration(
-                                color: statusColor.withOpacity(0.1),
-                                borderRadius:
-                                BorderRadius.circular(12),
-                                border: Border.all(
-                                    color:
-                                    statusColor.withOpacity(0.4)),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                      isIn
-                                          ? Icons.flight_takeoff_rounded
-                                          : Icons.flight_land_rounded,
+                    // ── Action: only on the latest record of a drone ──────
+                    // Like Inventory Movement: only an OPEN (OUT) record has an
+                    // action — Bring IN. A completed record has none, and a new
+                    // OUT is only started from the Drone IN / OUT button.
+                    if (!widget.drone.isPastTrip &&
+                        widget.drone.status == 'OUT') ...[
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: widget.onToggle,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: statusColor.withOpacity(0.4)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                  isIn
+                                      ? Icons.flight_takeoff_rounded
+                                      : Icons.flight_land_rounded,
+                                  color: statusColor,
+                                  size: 14),
+                              const SizedBox(width: 6),
+                              Text(isIn ? 'Send OUT' : 'Bring IN',
+                                  style: TextStyle(
                                       color: statusColor,
-                                      size: 16),
-                                  const SizedBox(width: 7),
-                                  Text(
-                                      isIn ? 'Send OUT' : 'Bring IN',
-                                      style: TextStyle(
-                                          color: statusColor,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13)),
-                                ],
-                              ),
-                            ),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12)),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        _ActionBtn(
-                            icon: Icons.history_rounded,
-                            color: kPurple,
-                            tooltip: 'History',
-                            onTap: widget.onHistory),
-                        const SizedBox(width: 8),
-                        _ActionBtn(
-                            icon: Icons.edit_outlined,
-                            color: kAmber,
-                            tooltip: 'Edit',
-                            onTap: widget.onEdit),
-                        const SizedBox(width: 8),
-                        _ActionBtn(
-                            icon: Icons.delete_outline_rounded,
-                            color: kCoral,
-                            tooltip: 'Delete',
-                            onTap: widget.onDelete),
-                      ],
-                    ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1649,7 +1457,7 @@ class _InOutDateStrip extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < segments.length; i++) ...[
-            if (i > 0) Container(width: 1, height: 34, color: Colors.white),
+            if (i > 0) Container(width: 1, height: 26, color: Colors.white),
             segments[i],
           ],
         ],
@@ -1665,7 +1473,7 @@ class _InOutDateStrip extends StatelessWidget {
     required bool alignEnd,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       color: color.withOpacity(0.1),
       child: Row(
         mainAxisAlignment:
@@ -1687,6 +1495,43 @@ class _InOutDateStrip extends StatelessWidget {
             const SizedBox(width: 5),
             Icon(icon, size: 12, color: color),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Detail chip (UIN / GPS / Analog-Digital / group) ─────────────────────────
+
+class _DetailChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+  const _DetailChip(
+      {required this.icon, required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(text,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700)),
+          ),
         ],
       ),
     );
@@ -1732,54 +1577,38 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// ── Battery Widget ────────────────────────────────────────────────────────────
+// ── Action Button ─────────────────────────────────────────────────────────────
 
-class _BatteryWidget extends StatelessWidget {
-  final int level;
-  const _BatteryWidget({required this.level});
-
-  Color get _color {
-    if (level <= 20) return const Color(0xFFFF6B6B);
-    if (level <= 50) return const Color(0xFFFFB800);
-    return const Color(0xFF00B894);
-  }
+class _MiniBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _MiniBtn(
+      {required this.icon,
+        required this.color,
+        required this.tooltip,
+        required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Icon(Icons.battery_charging_full, size: 16, color: _color),
-        const SizedBox(height: 2),
-        Text('$level%',
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: _color)),
-        const SizedBox(height: 4),
-        Container(
-          width: 28,
-          height: 4,
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(2),
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withOpacity(0.3)),
           ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: level / 100,
-            child: Container(
-              decoration: BoxDecoration(
-                  color: _color,
-                  borderRadius: BorderRadius.circular(2)),
-            ),
-          ),
+          child: Icon(icon, color: color, size: 15),
         ),
-      ],
+      ),
     );
   }
 }
-
-// ── Action Button ─────────────────────────────────────────────────────────────
 
 class _ActionBtn extends StatelessWidget {
   final IconData icon;
@@ -1909,231 +1738,6 @@ class _ConfirmDialog extends StatelessWidget {
   }
 }
 
-// ── IN/OUT Action Dialog (who + when) ─────────────────────────────────────────
-
-/// Result of the "who did this, and when" dialog shown before every
-/// IN/OUT toggle.
-class _DroneActionEntry {
-  final String usedBy;
-  final DateTime time;
-  final String? purpose;
-  const _DroneActionEntry({required this.usedBy, required this.time, this.purpose});
-}
-
-class _DroneActionDialog extends StatefulWidget {
-  final Drone drone;
-  final String newStatus; // 'IN' or 'OUT'
-  final String? defaultName;
-  const _DroneActionDialog(
-      {required this.drone, required this.newStatus, this.defaultName});
-
-  @override
-  State<_DroneActionDialog> createState() => _DroneActionDialogState();
-}
-
-class _DroneActionDialogState extends State<_DroneActionDialog> {
-  static const Color kNavy = Color(0xFF0A1628);
-  static const Color kTeal = Color(0xFF00D4AA);
-  static const Color kAmber = Color(0xFFFFB800);
-
-  late final TextEditingController _nameCtrl;
-  late DateTime _when;
-  String? _purpose;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameCtrl = TextEditingController(text: widget.defaultName ?? '');
-    _when = DateTime.now();
-    _purpose = widget.newStatus == 'OUT' ? kDronePurposes.first : null;
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _when,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (picked != null) {
-      setState(() => _when = DateTime(
-          picked.year, picked.month, picked.day, _when.hour, _when.minute));
-    }
-  }
-
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_when),
-    );
-    if (picked != null) {
-      setState(() => _when = DateTime(_when.year, _when.month, _when.day,
-          picked.hour, picked.minute));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isIn = widget.newStatus == 'IN';
-    final color = isIn ? kTeal : kAmber;
-    final canConfirm = _nameCtrl.text.trim().isNotEmpty &&
-        (isIn || (_purpose != null && _purpose!.isNotEmpty));
-
-    return AlertDialog(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      title: Row(children: [
-        Icon(isIn ? Icons.flight_land_rounded : Icons.flight_takeoff_rounded,
-            color: color),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text('Mark "${widget.drone.name}" ${widget.newStatus}',
-              style: const TextStyle(color: kNavy, fontWeight: FontWeight.bold)),
-        ),
-      ]),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Handled By (auto)',
-                style: TextStyle(
-                    color: kNavy, fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _nameCtrl,
-              readOnly: true, // auto-filled from login — not editable
-              enableInteractiveSelection: false,
-              style: const TextStyle(color: kNavy, fontSize: 14, fontWeight: FontWeight.w600),
-              decoration: InputDecoration(
-                hintText: 'Detected from your login',
-                helperText: 'Filled automatically from your login',
-                prefixIcon: const Icon(Icons.person_outline, size: 20),
-                suffixIcon: const Icon(Icons.lock_outline_rounded, size: 18),
-                isDense: true,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-            if (!isIn) ...[
-              const SizedBox(height: 16),
-              const Text('Purpose',
-                  style: TextStyle(
-                      color: kNavy, fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: _purpose,
-                isExpanded: true,
-                style: const TextStyle(color: kNavy, fontSize: 14),
-                decoration: InputDecoration(
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.flag_outlined, size: 20),
-                  border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                items: kDronePurposes
-                    .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                    .toList(),
-                onChanged: (v) => setState(() => _purpose = v),
-              ),
-            ],
-            const SizedBox(height: 16),
-            const Text('Date & time',
-                style: TextStyle(
-                    color: kNavy, fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                  child: _PickerField(
-                    icon: Icons.calendar_today_outlined,
-                    label: DateFormat('dd MMM yyyy').format(_when),
-                    onTap: _pickDate,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _PickerField(
-                    icon: Icons.access_time,
-                    label: DateFormat('hh:mm a').format(_when),
-                    onTap: _pickTime,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
-        ),
-        ElevatedButton(
-          onPressed: canConfirm
-              ? () => Navigator.pop(
-              context,
-              _DroneActionEntry(
-                  usedBy: widget.defaultName ?? _nameCtrl.text.trim(),
-                  time: _when,
-                  purpose: isIn ? null : _purpose))
-              : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: Colors.white,
-            shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-          ),
-          child: Text('Confirm ${widget.newStatus}'),
-        ),
-      ],
-    );
-  }
-}
-
-class _PickerField extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _PickerField(
-      {required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: Colors.grey.shade600),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(label,
-                  style: const TextStyle(
-                      color: Color(0xFF0A1628),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600),
-                  overflow: TextOverflow.ellipsis),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ── Loading / Empty / Error ───────────────────────────────────────────────────
 
 class _PulsingDroneIcon extends StatelessWidget {
@@ -2170,10 +1774,7 @@ class _PulsingDroneIcon extends StatelessWidget {
 
 class _EmptyView extends StatelessWidget {
   final VoidCallback onAdd;
-  final VoidCallback onSeed;
-  final bool seeding;
-  const _EmptyView(
-      {required this.onAdd, required this.onSeed, required this.seeding});
+  const _EmptyView({required this.onAdd});
 
   static const Color kTeal = Color(0xFF00D4AA);
   static const Color kPurple = Color(0xFF6C63FF);
@@ -2196,48 +1797,26 @@ class _EmptyView extends StatelessWidget {
                 size: 52, color: Colors.grey.shade300),
           ),
           const SizedBox(height: 22),
-          const Text('Fleet is empty',
+          const Text('No IN / OUT movements yet',
               style: TextStyle(
                   color: Color(0xFF0A1628),
                   fontSize: 20,
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          Text('Register your first drone to begin tracking.',
+          Text('Drones appear here once an IN / OUT movement is recorded.',
               style:
               TextStyle(color: Colors.grey.shade500, fontSize: 14)),
           const SizedBox(height: 30),
           ElevatedButton.icon(
             onPressed: onAdd,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Register Drone',
+            icon: const Icon(Icons.swap_vert_rounded),
+            label: const Text('Drone IN / OUT',
                 style: TextStyle(fontWeight: FontWeight.w700)),
             style: ElevatedButton.styleFrom(
               backgroundColor: kTeal,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 28, vertical: 15),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-          ),
-          const SizedBox(height: 14),
-          OutlinedButton.icon(
-            onPressed: seeding ? null : onSeed,
-            icon: seeding
-                ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                    color: kPurple, strokeWidth: 2))
-                : const Icon(Icons.cloud_upload_rounded, size: 18),
-            label: Text(
-                seeding ? 'Seeding fleet…' : 'Seed Fleet Data',
-                style: const TextStyle(fontWeight: FontWeight.w700)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: kPurple,
-              side: BorderSide(color: kPurple.withOpacity(0.5)),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 28, vertical: 15),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 28, vertical: 15),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
             ),

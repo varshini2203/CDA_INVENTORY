@@ -76,6 +76,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
   @override
   void initState() {
     super.initState();
+    dateController.text = _fmtDate(DateTime.now()); // automatic date
     final p = widget.paymentToEdit;
     if (p != null) {
       customerController.text = p.customerName;
@@ -137,21 +138,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
       '${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}';
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2024),
-      lastDate: DateTime(2030),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-            colorScheme:
-            const ColorScheme.light(primary: AppColors.navy, onPrimary: Colors.white)),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      setState(() => dateController.text = _fmtDate(picked));
-    }
+    // Date is stamped automatically — not editable.
   }
 
   // ── Add Attachment — lets the user actually pick a photo/scan instead
@@ -259,7 +246,7 @@ class _AddPaymentInScreenState extends State<AddPaymentInScreen> {
     amountController.clear();
     referenceController.clear();
     notesController.clear();
-    dateController.clear();
+    dateController.text = _fmtDate(DateTime.now());
     for (final c in _allocationControllers.values) {
       c.dispose();
     }

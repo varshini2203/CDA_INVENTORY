@@ -168,19 +168,7 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
   }
 
   Future<void> _pickDateTime(DateTime initial, void Function(DateTime) onPicked) async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(2015),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(initial),
-    );
-    if (time == null) return;
-    onPicked(DateTime(date.year, date.month, date.day, time.hour, time.minute));
+    // Check-out / check-in time is stamped automatically.
   }
 
   String _formatDateTime(DateTime dt) {
@@ -285,7 +273,7 @@ class _AddMovementScreenState extends State<AddMovementScreen> {
           action: _action,
           actedBy: actedBy,
           createdBy: actedBy,
-          when: _actionDateTime,
+          when: DateTime.now(), // automatic: exact time of saving
         );
         if (!mounted) return;
         showAppSnack(context,

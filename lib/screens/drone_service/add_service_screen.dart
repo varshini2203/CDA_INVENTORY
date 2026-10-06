@@ -148,7 +148,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
   // In / Check Out buttons are tapped. These let the user open a
   // date + time picker afterwards to correct/backdate the value.
   Future<void> _editCheckedInAt() async {
-    final picked = await _pickDateTime(initial: _checkedInAt ?? DateTime.now());
+    final picked = DateTime.now(); // automatic
     if (picked == null) return;
     setState(() => _checkedInAt = picked);
   }
@@ -158,7 +158,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
       _showSnack('Check in first before setting a check-out time', isError: true);
       return;
     }
-    final picked = await _pickDateTime(initial: _checkedOutAt ?? DateTime.now());
+    final picked = DateTime.now(); // automatic
     if (picked == null) return;
     setState(() => _checkedOutAt = picked);
   }
