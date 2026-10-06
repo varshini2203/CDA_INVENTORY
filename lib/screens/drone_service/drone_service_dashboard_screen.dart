@@ -220,7 +220,9 @@ class _DroneServiceDashboardScreenState
       final matchSearch = _search.isEmpty ||
           s.droneName.toLowerCase().contains(_search.toLowerCase()) ||
           s.serviceType.toLowerCase().contains(_search.toLowerCase()) ||
-          s.technician.toLowerCase().contains(_search.toLowerCase());
+          s.technician.toLowerCase().contains(_search.toLowerCase()) ||
+          (s.customerName ?? '').toLowerCase().contains(_search.toLowerCase()) ||
+          (s.customerPhone ?? '').contains(_search);
       return matchBranch && matchStatus && matchSearch;
     }).toList();
     list.sort((a, b) => _sortAscending
@@ -519,6 +521,8 @@ class _DroneServiceDashboardScreenState
           r.droneName.toLowerCase().contains(_historySearch.toLowerCase()) ||
           r.serviceType.toLowerCase().contains(_historySearch.toLowerCase()) ||
           r.technician.toLowerCase().contains(_historySearch.toLowerCase()) ||
+          (r.customerName ?? '').toLowerCase().contains(_historySearch.toLowerCase()) ||
+          (r.customerPhone ?? '').contains(_historySearch) ||
           (r.checkedInBy ?? '').toLowerCase().contains(_historySearch.toLowerCase()) ||
           (r.checkedOutBy ?? '').toLowerCase().contains(_historySearch.toLowerCase());
       final matchInOut = switch (_historyInOutFilter) {
@@ -592,7 +596,7 @@ class _DroneServiceDashboardScreenState
         cursorColor: kNavy,
         style: const TextStyle(color: kNavy, fontSize: 14, fontWeight: FontWeight.w500),
         decoration: InputDecoration(
-          hintText: 'Search drone, service type, handled by…',
+          hintText: 'Search drone, customer, phone, handled by…',
           hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
           prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400, size: 20),
           filled: true,
@@ -778,7 +782,7 @@ class _DroneServiceDashboardScreenState
           cursorColor: kNavy,
           style: const TextStyle(color: kNavy, fontSize: 14, fontWeight: FontWeight.w500),
           decoration: InputDecoration(
-            hintText: 'Search drone, service type, technician…',
+            hintText: 'Search drone, customer, phone, technician…',
             hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
             prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400, size: 20),
             filled: true,
@@ -1249,6 +1253,10 @@ class _ServiceDetailSheet extends StatelessWidget {
           _row(Icons.apartment_rounded, 'Branch', kBranchLabels[record.branch] ?? record.branch),
           _row(Icons.event_rounded, 'Scheduled', DateFormat('EEE, d MMM yyyy · h:mm a').format(record.scheduledAt)),
           _row(Icons.person_outline_rounded, 'Technician', record.technician.isEmpty ? '—' : record.technician),
+          if ((record.customerName ?? '').trim().isNotEmpty) _row(Icons.person_pin_rounded, 'Customer', record.customerName!),
+          if ((record.customerPhone ?? '').trim().isNotEmpty) _row(Icons.phone_outlined, 'Phone', record.customerPhone!),
+          if ((record.customerAddress ?? '').trim().isNotEmpty) _row(Icons.location_on_outlined, 'Address', record.customerAddress!),
+          if ((record.issueDescription ?? '').trim().isNotEmpty) _row(Icons.report_problem_outlined, 'Issue', record.issueDescription!),
           _row(Icons.flag_outlined, 'Priority', record.priority),
           if (record.cost != null) _row(Icons.currency_rupee_rounded, 'Cost', record.cost!.toStringAsFixed(2)),
           if (record.notes != null && record.notes!.trim().isNotEmpty) _row(Icons.notes_rounded, 'Notes', record.notes!),

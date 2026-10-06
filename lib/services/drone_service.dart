@@ -10,18 +10,12 @@
 //       history/                   ← sub-collection
 //         {historyId}              ← document
 //
-// FLEET: only drones flagged `in_master_list` (seeded from DRONE_LIST.xlsx via
-// data/seed_drones.dart) are ever listed or selectable. There is no manual
-// drone creation. IN/OUT date & time are ALWAYS taken from the server clock
-// at the moment of the action — callers cannot supply or edit them — and the
-// person is ALWAYS the logged-in user (CurrentUserService).
-//
 // IMPORTANT: The Reports screen's Drone IN/OUT counts are computed entirely
 // from the `history` sub-collection (see report_service.dart). Every code
 // path that sets or changes a drone's status MUST write a matching history
 // record, or those changes will silently disappear from the monthly report
 // even though the drone's own `status` field is correct. That's why both
-// updateDrone() and updateStatus() below write a history entry in addition
+// addDrone() and updateDrone() below now write a history entry in addition
 // to updateStatus().
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -76,7 +70,6 @@ class DroneService {
     final list = snapshot.docs
         .map((doc) => Drone.fromFirestore(
         doc as DocumentSnapshot<Map<String, dynamic>>))
-        .where((d) => d.inMasterList)
         .toList();
     _dronesCache = list;
     return list;
@@ -108,9 +101,6 @@ class DroneService {
           return d.name.toLowerCase().contains(q) ||
               d.model.toLowerCase().contains(q) ||
               d.serialNumber.toLowerCase().contains(q) ||
-              (d.uin ?? '').toLowerCase().contains(q) ||
-              (d.gps ?? '').toLowerCase().contains(q) ||
-              (d.linkType ?? '').toLowerCase().contains(q) ||
               (d.pilotName ?? '').toLowerCase().contains(q);
         }).toList();
       }
@@ -147,7 +137,6 @@ class DroneService {
     return query.snapshots().map((snap) => snap.docs
         .map((doc) => Drone.fromFirestore(
         doc as DocumentSnapshot<Map<String, dynamic>>))
-        .where((d) => d.inMasterList)
         .toList());
   }
 
@@ -162,7 +151,6 @@ class DroneService {
           .map((doc) => Drone.fromFirestore(
           doc as DocumentSnapshot<Map<String, dynamic>>))
           .where((d) {
-        if (!d.inMasterList) return false;
         if (d.reminderAcknowledged) return false;
         final since = d.checkedOutAt ?? d.lastUpdated;
         if (since == null) return false;
@@ -187,6 +175,70 @@ class DroneService {
       await _drones.doc(droneId).update({'reminder_acknowledged': true});
       clearCache();
       return ApiResult.ok(true);
+    } catch (e) {
+      return ApiResult.err(_firestoreError(e));
+    }
+  }
+
+  // ── ADD DRONE ──────────────────────────────────────────────────────────────
+  Future<ApiResult<Drone>> addDrone(Drone drone, {DateTime? actionTime}) async {
+    try {
+      // Logged-in user — auto-fetched, never typed. Saved with the record.
+      final who = await CurrentUserService.getName();
+      final data = drone.toFirestore();
+      data['added_by'] = who;
+      data['updated_by'] = who;
+      data['pilot_name'] = who;
+
+      final ts =
+      actionTime != null ? Timestamp.fromDate(actionTime) : FieldValue.serverTimestamp();
+      data['created_at'] = ts;
+      data['last_updated'] = ts;
+
+      final status = drone.status.toUpperCase();
+      if (status == 'OUT' && drone.checkedOutAt == null) {
+        data['checked_out_at'] = ts;
+      }
+      if (status == 'IN' && drone.checkedInAt == null) {
+        data['checked_in_at'] = ts;
+      }
+
+      final ref = await _drones.add(data);
+
+      // Log the initial status as a history entry so it's counted in reports.
+      if (status.isNotEmpty) {
+        await _history(ref.id).add({
+          'drone_id': ref.id,
+          'pilot': who,
+          'added_by': who,
+          'status': status,
+          'notes': 'Initial registration',
+          'timestamp': ts,
+        });
+      }
+
+      final doc = drone.copyWith(
+        id: ref.id,
+        addedBy: who,
+        updatedBy: who,
+        pilotName: who,
+        lastUpdated: actionTime ?? DateTime.now(),
+        checkedOutAt: status == 'OUT' ? (drone.checkedOutAt ?? actionTime) : drone.checkedOutAt,
+        checkedInAt: status == 'IN' ? (drone.checkedInAt ?? actionTime) : drone.checkedInAt,
+      );
+      clearCache();
+      ActivityLogService.logAdd(
+        module: 'Drones',
+        itemName: drone.name,
+        data: {
+          'model': drone.model,
+          'serial_number': drone.serialNumber,
+          'status': drone.status,
+          'pilot': who,
+          'added_by': who,
+        },
+      );
+      return ApiResult.ok(doc);
     } catch (e) {
       return ApiResult.err(_firestoreError(e));
     }
@@ -285,40 +337,35 @@ class DroneService {
     }
   }
 
-  // ── UPDATE STATUS (IN / OUT movement) ──────────────────────────────────────
-  // Date & time = server clock at the moment of the action (never typed).
-  // Person       = logged-in user (never typed).
+  // ── UPDATE STATUS (IN / OUT toggle) ────────────────────────────────────────
   Future<ApiResult<Drone>> updateStatus(
       String id,
       String status, {
         String? note,
+        int? batteryLevel,
+        String? performedBy, // ignored — always replaced by the logged-in user
+        DateTime? actionTime,
         String? purpose,
         List<String> additionalProducts = const [],
         String? condition,
       }) async {
     try {
-      final who = await CurrentUserService.getName();
-      final localNow = DateTime.now(); // display only — stored value is server time
-      final ts = FieldValue.serverTimestamp();
+      // Always the logged-in user — any caller-supplied name is ignored so
+      // a name can never be typed/spoofed.
+      performedBy = await CurrentUserService.getName();
+      final ts = actionTime != null
+          ? Timestamp.fromDate(actionTime)
+          : FieldValue.serverTimestamp();
       final upperStatus = status.toUpperCase();
       final isOut = upperStatus == 'OUT';
 
-      final currentDoc = await _drones.doc(id).get();
-      if (!currentDoc.exists) return ApiResult.err('Drone not found.');
-      final currentData = currentDoc.data() ?? {};
-      final currentStatus =
-          currentData['status']?.toString().toUpperCase() ?? 'IN';
-      if (currentStatus == upperStatus) {
-        return ApiResult.err(
-            '${currentData['name'] ?? 'Drone'} is already $upperStatus.');
-      }
-
       final updates = <String, dynamic>{
         'status': upperStatus,
-        'has_movement': true,
         'last_updated': ts,
-        'pilot_name': who,
-        'updated_by': who,
+        if (batteryLevel != null) 'battery_level': batteryLevel,
+        'pilot_name': performedBy,
+        'updated_by': performedBy,
+        'has_movement': true,
         'additional_products': additionalProducts,
         'condition': condition,
         if (isOut) ...{
@@ -331,13 +378,19 @@ class DroneService {
         },
       };
 
+      final currentDoc = await _drones.doc(id).get();
+      final currentData = currentDoc.data() ?? {};
+      final pilot = (performedBy != null && performedBy.isNotEmpty)
+          ? performedBy
+          : (currentData['pilot_name']?.toString() ?? 'Unknown');
+
       // Run status update + history write atomically
       final batch = _db.batch();
       batch.update(_drones.doc(id), updates);
       batch.set(_history(id).doc(), {
         'drone_id': id,
-        'pilot': who,
-        'updated_by': who,
+        'pilot': pilot,
+        'updated_by': pilot,
         'status': upperStatus,
         'notes': note,
         'purpose': isOut ? purpose : null,
@@ -347,13 +400,7 @@ class DroneService {
       });
       await batch.commit();
 
-      final localTs = Timestamp.fromDate(localNow);
-      final doc = Drone.fromMap(id, {
-        ...currentData,
-        ...updates,
-        'last_updated': localTs,
-        if (isOut) 'checked_out_at': localTs else 'checked_in_at': localTs,
-      });
+      final doc = Drone.fromMap(id, {...currentData, ...updates});
       clearCache();
       ActivityLogService.logEdit(
         module: 'Drones',
@@ -362,14 +409,176 @@ class DroneService {
         after: {
           'status': upperStatus,
           'note': note,
-          'used_by': who,
+          'used_by': pilot,
           if (isOut) 'purpose': purpose,
-          if (additionalProducts.isNotEmpty)
-            'additional_products': additionalProducts.join(', '),
-          if (condition != null) 'condition': condition,
         },
       );
       return ApiResult.ok(doc);
+    } catch (e) {
+      return ApiResult.err(_firestoreError(e));
+    }
+  }
+
+  // ── MOVEMENT RECORDS (Drone IN/OUT dashboard) ─────────────────────────────
+  // One record per OUT→IN trip, newest first. The latest trip of each drone
+  // is the live drone document; older trips are rebuilt from the history
+  // sub-collection and flagged `isPastTrip` (frozen, never edited).
+
+  List<_Trip> _pairTrips(List<DroneHistory> history) {
+    final sorted = history.where((h) => h.timestamp != null).toList()
+      ..sort((a, b) => a.timestamp!.compareTo(b.timestamp!));
+    final trips = <_Trip>[];
+    _Trip? open;
+    for (final h in sorted) {
+      final st = h.status.toUpperCase();
+      if (st == 'OUT') {
+        if (open != null) trips.add(open);
+        open = _Trip(out: h);
+      } else if (st == 'IN') {
+        if (open != null) {
+          open.inn = h;
+          trips.add(open);
+          open = null;
+        } else {
+          trips.add(_Trip(inn: h));
+        }
+      }
+    }
+    if (open != null) trips.add(open);
+    return trips;
+  }
+
+  Future<ApiResult<List<Drone>>> getMovementRecords() async {
+    try {
+      final drones = await _fetchAllDrones();
+      final snap = await _db.collectionGroup('history').get();
+      final byDrone = <String, List<DroneHistory>>{};
+      for (final doc in snap.docs) {
+        final droneId = doc.reference.parent.parent?.id ?? '';
+        byDrone.putIfAbsent(droneId, () => []).add(DroneHistory.fromFirestore(
+            doc as DocumentSnapshot<Map<String, dynamic>>, droneId));
+      }
+
+      final records = <Drone>[];
+      for (final d in drones) {
+        if (!d.hasMovement) continue;
+        final trips = _pairTrips(byDrone[d.id] ?? const []);
+        if (trips.isEmpty) {
+          records.add(d); // legacy drone with no history
+          continue;
+        }
+        final last = trips.last;
+        records.add(d.copyWith(tripId: last.out?.id, tripInId: last.inn?.id));
+        for (final t in trips.sublist(0, trips.length - 1)) {
+          records.add(Drone(
+            id: d.id,
+            name: d.name,
+            model: d.model,
+            serialNumber: d.serialNumber,
+            status: 'IN',
+            uin: d.uin,
+            droneClass: d.droneClass,
+            pilotName: t.out?.pilot ?? t.inn?.pilot,
+            category: d.category,
+            gps: d.gps,
+            linkType: d.linkType,
+            inMasterList: d.inMasterList,
+            hasMovement: true,
+            additionalProducts:
+            t.out?.additionalProducts ?? t.inn?.additionalProducts ?? const [],
+            condition: t.inn?.condition ?? t.out?.condition,
+            flightHours: d.flightHours,
+            notes: t.out?.notes ?? t.inn?.notes,
+            maintenanceDue: d.maintenanceDue,
+            lastUpdated: t.inn?.timestamp ?? t.out?.timestamp,
+            branch: d.branch,
+            purpose: t.out?.purpose,
+            checkedOutAt: t.out?.timestamp,
+            checkedInAt: t.inn?.timestamp,
+            addedBy: d.addedBy,
+            updatedBy: t.inn?.pilot ?? t.out?.pilot,
+            reminderAcknowledged: true,
+            tripId: t.out?.id,
+            tripInId: t.inn?.id,
+            isPastTrip: true,
+          ));
+        }
+      }
+
+      DateTime stamp(Drone x) =>
+          x.checkedInAt ??
+              x.checkedOutAt ??
+              x.lastUpdated ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+      records.sort((a, b) => stamp(b).compareTo(stamp(a)));
+      return ApiResult.ok(records);
+    } catch (e) {
+      return ApiResult.err(_firestoreError(e));
+    }
+  }
+
+  /// Deletes ONE IN/OUT record (not the drone). Removes that trip's history
+  /// entries; if it was the drone's latest record, the drone document is
+  /// rolled back to its previous trip (or cleared if there was none).
+  Future<ApiResult<bool>> deleteMovementRecord(Drone drone) async {
+    try {
+      final ids = <String>[
+        if (drone.tripId != null) drone.tripId!,
+        if (drone.tripInId != null) drone.tripInId!,
+      ];
+      if (ids.isNotEmpty) {
+        final batch = _db.batch();
+        for (final hid in ids) {
+          batch.delete(_history(drone.id).doc(hid));
+        }
+        await batch.commit();
+      }
+
+      if (!drone.isPastTrip) {
+        final remaining = await getHistory(drone.id);
+        final trips = _pairTrips(remaining.success ? remaining.data! : const []);
+        final updates = <String, dynamic>{};
+        if (trips.isEmpty) {
+          updates.addAll({
+            'status': 'IN',
+            'has_movement': false,
+            'checked_out_at': FieldValue.delete(),
+            'checked_in_at': FieldValue.delete(),
+            'purpose': null,
+            'pilot_name': null,
+            'additional_products': <String>[],
+            'condition': null,
+            'reminder_acknowledged': true,
+          });
+        } else {
+          final t = trips.last;
+          updates.addAll({
+            'status': t.inn != null ? 'IN' : 'OUT',
+            'has_movement': true,
+            'checked_out_at': t.out?.timestamp != null
+                ? Timestamp.fromDate(t.out!.timestamp!)
+                : FieldValue.delete(),
+            'checked_in_at': t.inn?.timestamp != null
+                ? Timestamp.fromDate(t.inn!.timestamp!)
+                : FieldValue.delete(),
+            'purpose': t.inn == null ? t.out?.purpose : null,
+            'pilot_name': t.out?.pilot ?? t.inn?.pilot,
+            'additional_products':
+            t.out?.additionalProducts ?? t.inn?.additionalProducts ?? <String>[],
+            'condition': t.inn?.condition ?? t.out?.condition,
+            'last_updated': FieldValue.serverTimestamp(),
+          });
+        }
+        await _drones.doc(drone.id).update(updates);
+      }
+
+      clearCache();
+      ActivityLogService.logDelete(
+        module: 'Drones',
+        itemName: drone.name,
+        data: {'record': drone.status, 'purpose': drone.purpose},
+      );
+      return ApiResult.ok(true);
     } catch (e) {
       return ApiResult.err(_firestoreError(e));
     }
@@ -429,183 +638,6 @@ class DroneService {
       clearCache();
       return ApiResult.ok(Drone.fromFirestore(
           doc as DocumentSnapshot<Map<String, dynamic>>));
-    } catch (e) {
-      return ApiResult.err(_firestoreError(e));
-    }
-  }
-
-  // ── IN/OUT RECORDS (one per OUT→IN trip) ───────────────────────────────────
-  // Every OUT starts a NEW record; the matching IN closes it. A closed record
-  // is never touched again — the next OUT creates a second record for the
-  // same drone. Derived from the drone's history, so existing data works too.
-  Future<ApiResult<List<Drone>>> getMovementRecords(
-      {bool forceRefresh = false}) async {
-    try {
-      // Every drone document (not only the current fleet list), so records
-      // from drones registered earlier are included too.
-      final allSnap = await _drones.get();
-      final fleet = allSnap.docs
-          .map((doc) => Drone.fromFirestore(
-          doc as DocumentSnapshot<Map<String, dynamic>>))
-          .toList();
-      final histRes = await getAllHistory();
-      final byDrone = <String, List<DroneHistory>>{};
-      for (final h in histRes.data ?? const <DroneHistory>[]) {
-        byDrone.putIfAbsent(h.droneId, () => []).add(h);
-      }
-      final epoch = DateTime.fromMillisecondsSinceEpoch(0);
-      final records = <Drone>[];
-      for (final d in fleet.where(
-              (d) => d.hasMovement || (byDrone[d.id] ?? const []).isNotEmpty)) {
-        // Oldest first; entries with no timestamp (very old data) go first.
-        final events = (byDrone[d.id] ?? []).toList()
-          ..sort((a, b) => (a.timestamp ?? epoch).compareTo(b.timestamp ?? epoch));
-        // Pair each OUT with the next IN.
-        final trips = <List<DroneHistory?>>[]; // [out, in]
-        for (final h in events) {
-          if (h.status == 'OUT') {
-            trips.add([h, null]);
-          } else if (h.status == 'IN') {
-            if (trips.isNotEmpty && trips.last[1] == null) {
-              trips.last[1] = h;
-            } else {
-              trips.add([null, h]);
-            }
-          }
-        }
-        if (trips.isEmpty) {
-          records.add(d);
-          continue;
-        }
-        for (var i = 0; i < trips.length; i++) {
-          final out = trips[i][0], inn = trips[i][1];
-          final isLatest = i == trips.length - 1;
-          if (isLatest) {
-            // Latest record mirrors the live drone (status, current state).
-            records.add(d.copyWith(
-              tripId: out?.id ?? inn?.id,
-              tripInId: inn?.id,
-              checkedOutAt: out?.timestamp ?? d.checkedOutAt,
-              // An open (OUT) record must NOT inherit the previous trip's IN time.
-              checkedInAt: inn?.timestamp,
-              clearCheckedInAt: inn == null,
-            ));
-          } else {
-            final who = inn?.pilot ?? out?.pilot ?? d.pilotName;
-            records.add(Drone(
-              id: d.id,
-              name: d.name,
-              model: d.model,
-              serialNumber: d.serialNumber,
-              status: inn != null ? 'IN' : 'OUT',
-              uin: d.uin,
-              droneClass: d.droneClass,
-              pilotName: who,
-              category: d.category,
-              gps: d.gps,
-              linkType: d.linkType,
-              inMasterList: d.inMasterList,
-              hasMovement: true,
-              additionalProducts: out?.additionalProducts ?? const [],
-              condition: inn?.condition ?? out?.condition,
-              branch: d.branch,
-              purpose: out?.purpose,
-              checkedOutAt: out?.timestamp,
-              checkedInAt: inn?.timestamp,
-              lastUpdated: inn?.timestamp ?? out?.timestamp,
-              updatedBy: who,
-              reminderAcknowledged: true,
-              tripId: out?.id ?? inn?.id,
-              tripInId: inn?.id,
-              isPastTrip: true,
-            ));
-          }
-        }
-      }
-      return ApiResult.ok(records);
-    } catch (e) {
-      return ApiResult.err(_firestoreError(e));
-    }
-  }
-
-  // ── DELETE ONE IN/OUT RECORD ───────────────────────────────────────────────
-  // Removes just this OUT→IN record (its history entries). The drone itself
-  // stays in the fleet; its live status is recomputed from what remains.
-  Future<ApiResult<bool>> deleteMovementRecord(Drone rec) async {
-    try {
-      final ids = <String>{
-        if (rec.tripId != null) rec.tripId!,
-        if (rec.tripInId != null) rec.tripInId!,
-      };
-      final batch = _db.batch();
-      for (final hid in ids) {
-        batch.delete(_history(rec.id).doc(hid));
-      }
-      await batch.commit();
-
-      // Recompute the drone's live state from the remaining history.
-      final snap = await _history(rec.id)
-          .orderBy('timestamp', descending: true)
-          .get();
-      final rest = snap.docs.map((d) => d.data()).toList();
-      final upd = <String, dynamic>{
-        'last_updated': FieldValue.serverTimestamp(),
-      };
-      if (rest.isEmpty) {
-        upd.addAll({
-          'status': 'IN',
-          'has_movement': false,
-          'checked_out_at': FieldValue.delete(),
-          'checked_in_at': FieldValue.delete(),
-          'purpose': null,
-          'additional_products': <String>[],
-          'reminder_acknowledged': false,
-        });
-      } else {
-        final last = rest.first;
-        final lastStatus = (last['status']?.toString() ?? 'IN').toUpperCase();
-        Timestamp? firstOf(String st) {
-          for (final r in rest) {
-            if ((r['status']?.toString().toUpperCase()) == st &&
-                r['timestamp'] is Timestamp) {
-              return r['timestamp'] as Timestamp;
-            }
-          }
-          return null;
-        }
-        final outTs = firstOf('OUT');
-        final inTs = firstOf('IN');
-        upd.addAll({
-          'status': lastStatus,
-          'has_movement': true,
-          'checked_out_at': outTs ?? FieldValue.delete(),
-          'checked_in_at': inTs ?? FieldValue.delete(),
-          if (lastStatus == 'IN') 'purpose': null,
-        });
-      }
-      await _drones.doc(rec.id).update(upd);
-      clearCache();
-      ActivityLogService.logEdit(
-        module: 'Drones',
-        itemName: rec.name,
-        before: {'record': 'IN/OUT record'},
-        after: {'record': 'deleted'},
-      );
-      return ApiResult.ok(true);
-    } catch (e) {
-      return ApiResult.err(_firestoreError(e));
-    }
-  }
-
-  /// Every drone document, including ones outside the current fleet list —
-  /// used so old history entries can still show their drone's name.
-  Future<ApiResult<List<Drone>>> getAllDroneDocs() async {
-    try {
-      final snap = await _drones.get();
-      return ApiResult.ok(snap.docs
-          .map((doc) => Drone.fromFirestore(
-          doc as DocumentSnapshot<Map<String, dynamic>>))
-          .toList());
     } catch (e) {
       return ApiResult.err(_firestoreError(e));
     }
@@ -685,4 +717,11 @@ class DroneService {
     }
     return 'Error: $e';
   }
+}
+
+/// One OUT→IN pair rebuilt from history (internal helper).
+class _Trip {
+  DroneHistory? out;
+  DroneHistory? inn;
+  _Trip({this.out, this.inn});
 }

@@ -77,7 +77,9 @@ class DroneServiceBookingService {
         list = list.where((s) {
           return s.droneName.toLowerCase().contains(q) ||
               s.serviceType.toLowerCase().contains(q) ||
-              s.technician.toLowerCase().contains(q);
+              s.technician.toLowerCase().contains(q) ||
+              (s.customerName ?? '').toLowerCase().contains(q) ||
+              (s.customerPhone ?? '').contains(q);
         }).toList();
       }
       return ApiResult.ok(list);
