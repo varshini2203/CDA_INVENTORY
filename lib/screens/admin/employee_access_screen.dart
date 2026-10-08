@@ -6,6 +6,7 @@
 // Editor access, or revokes access entirely.
 
 import 'package:flutter/material.dart';
+import 'admin_hero_banner.dart';
 
 import '../../models/app_access_models.dart';
 import '../../services/access_control_service.dart';
@@ -14,9 +15,9 @@ import 'employee_activity_screen.dart';
 class EmployeeAccessScreen extends StatelessWidget {
   const EmployeeAccessScreen({super.key});
 
-  static const _bg = Color(0xFF050A14);
-  static const _card = Color(0xFF0A1428);
-  static const _border = Color(0xFF1A2E50);
+  static const _bg = Color(0xFFF2F5FA);
+  static const _card = Colors.white;
+  static const _border = Color(0xFFD5DFEE);
   static const _blue = Color(0xFF1E5FC8);
 
   Future<void> _syncLegacyUsers(BuildContext context) async {
@@ -37,99 +38,39 @@ class EmployeeAccessScreen extends StatelessWidget {
   // sit in a SliverToBoxAdapter and scroll away with the rest of the page
   // — see the note at the bottom of this file for why that matters.
   Widget _buildHeroBanner(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 220,
-      margin: const EdgeInsets.fromLTRB(14, 0, 14, 4),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: _card,
-        border: Border.all(color: _border),
-      ),
-      child: Stack(
+    return AdminHeroBanner(
+      bottomLeft: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/pending.png',
-              fit: BoxFit.cover,
-              // Bias toward the drone/skyline band of the tall
-              // portrait photo — a short wide crop can't show the
-              // whole image, so favor the recurring hero subject,
-              // same as the other admin-screen banners.
-              alignment: const Alignment(0, -0.6),
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-            ),
+          Text(
+            'Manage Employees',
+            style: TextStyle(
+                color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
           ),
-          // Dark scrim, heaviest at the bottom where the title sits.
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.black.withOpacity(0.15),
-                    Colors.black.withOpacity(0.55),
-                    Colors.black.withOpacity(0.80),
-                  ],
-                  stops: const [0.0, 0.55, 1.0],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 14,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Text(
-                  'Manage Employees',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                SizedBox(height: 3),
-                Text(
-                  'View employees and control their access levels',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // "Sync legacy users" — small circular button pinned to
-          // the top-right corner of the banner instead of a plain
-          // AppBar action, so the transparent AppBar above stays
-          // uncluttered (just the back arrow).
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Material(
-              color: Colors.black.withOpacity(0.35),
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () => _syncLegacyUsers(context),
-                child: Padding(
-                  padding: const EdgeInsets.all(9),
-                  child: Tooltip(
-                    message: 'Give every un-configured existing employee Viewer access',
-                    child: Icon(Icons.sync_rounded,
-                        color: Colors.white.withOpacity(0.9), size: 19),
-                  ),
-                ),
-              ),
-            ),
+          SizedBox(height: 3),
+          Text(
+            'View employees and control their access levels',
+            style: TextStyle(color: Colors.white, fontSize: 12.5),
           ),
         ],
+      ),
+      // "Sync legacy users" — small circular button in the top-right.
+      topRight: Material(
+        color: Colors.black.withOpacity(0.35),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => _syncLegacyUsers(context),
+          child: Padding(
+            padding: const EdgeInsets.all(9),
+            child: Tooltip(
+              message: 'Give every un-configured existing employee Viewer access',
+              child: Icon(Icons.sync_rounded,
+                  color: Color(0xFF374151), size: 19),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -144,7 +85,7 @@ class EmployeeAccessScreen extends StatelessWidget {
         // Pending Requests screen's treatment.
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Color(0xFF111827)),
       ),
       // A single CustomScrollView for the ENTIRE page (hero banner + the
       // employee list) — everything scrolls together as one unit, same
@@ -184,12 +125,12 @@ class EmployeeAccessScreen extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.cloud_off_rounded, size: 40, color: Colors.white.withOpacity(0.3)),
+                        Icon(Icons.cloud_off_rounded, size: 40, color: Color(0xFF9CA3AF)),
                         const SizedBox(height: 12),
                         Text(
                           'Could not load employees.\n${snapshot.error}',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                          style: TextStyle(color: Color(0xFF6B7280)),
                         ),
                       ],
                     ),
@@ -208,7 +149,7 @@ class EmployeeAccessScreen extends StatelessWidget {
                   hasScrollBody: false,
                   child: Center(
                     child: Text('No employees yet',
-                        style: TextStyle(color: Colors.white.withOpacity(0.4))),
+                        style: TextStyle(color: Color(0xFF9CA3AF))),
                   ),
                 ),
               ],
@@ -245,11 +186,11 @@ class _EmployeeCard extends StatelessWidget {
   Color get _dotColor {
     switch (user.accessLevel) {
       case AccessLevel.editor:
-        return Colors.greenAccent;
+        return Color(0xFF15803D);
       case AccessLevel.viewer:
-        return Colors.amber;
+        return Color(0xFFB7791F);
       case AccessLevel.none:
-        return Colors.white24;
+        return Color(0xFFD5DFEE);
     }
   }
 
@@ -268,11 +209,11 @@ class _EmployeeCard extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: EmployeeAccessScreen._card,
-        title: const Text('Remove employee?', style: TextStyle(color: Colors.white)),
+        title: const Text('Remove employee?', style: TextStyle(color: Color(0xFF111827))),
         content: Text(
           'This will permanently remove ${user.name.isNotEmpty ? user.name : user.email} '
               'and revoke all their access. This cannot be undone.',
-          style: TextStyle(color: Colors.white.withOpacity(0.7)),
+          style: TextStyle(color: Color(0xFF374151)),
         ),
         actions: [
           TextButton(
@@ -281,7 +222,7 @@ class _EmployeeCard extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+            child: const Text('Delete', style: TextStyle(color: Color(0xFFDC2626))),
           ),
         ],
       ),
@@ -327,7 +268,7 @@ class _EmployeeCard extends StatelessWidget {
                     backgroundColor: EmployeeAccessScreen._blue.withOpacity(0.2),
                     child: Text(
                       user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: const TextStyle(color: Color(0xFF111827), fontWeight: FontWeight.bold),
                     ),
                   ),
                   if (user.isOnline)
@@ -338,7 +279,7 @@ class _EmployeeCard extends StatelessWidget {
                         width: 10,
                         height: 10,
                         decoration: BoxDecoration(
-                          color: Colors.greenAccent,
+                          color: Color(0xFF15803D),
                           shape: BoxShape.circle,
                           border: Border.all(color: EmployeeAccessScreen._card, width: 2),
                         ),
@@ -352,9 +293,9 @@ class _EmployeeCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(user.name.isNotEmpty ? user.name : user.email,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                        style: const TextStyle(color: Color(0xFF111827), fontWeight: FontWeight.w700)),
                     Text(user.email,
-                        style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 11)),
+                        style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11)),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -366,7 +307,7 @@ class _EmployeeCard extends StatelessWidget {
                         const SizedBox(width: 5),
                         Text(
                           '${accessLevelToString(user.accessLevel)} · ${accessStatusToString(user.accessStatus)}',
-                          style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 11),
+                          style: TextStyle(color: Color(0xFF6B7280), fontSize: 11),
                         ),
                       ],
                     ),
@@ -400,7 +341,7 @@ class _EmployeeCard extends StatelessWidget {
                 child: _AccessButton(
                   label: 'Viewer',
                   active: user.accessLevel == AccessLevel.viewer,
-                  color: Colors.amber,
+                  color: Color(0xFFB7791F),
                   onTap: () => _setLevel(context, AccessLevel.viewer),
                 ),
               ),
@@ -409,7 +350,7 @@ class _EmployeeCard extends StatelessWidget {
                 child: _AccessButton(
                   label: 'Editor',
                   active: user.accessLevel == AccessLevel.editor,
-                  color: Colors.greenAccent,
+                  color: Color(0xFF15803D),
                   onTap: () => _setLevel(context, AccessLevel.editor),
                 ),
               ),
@@ -418,7 +359,7 @@ class _EmployeeCard extends StatelessWidget {
                 child: _AccessButton(
                   label: 'Revoke',
                   active: user.accessLevel == AccessLevel.none,
-                  color: Colors.redAccent,
+                  color: Color(0xFFDC2626),
                   onTap: () => _setLevel(context, AccessLevel.none),
                 ),
               ),
@@ -480,16 +421,16 @@ class _DeleteButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.redAccent.withOpacity(0.14),
+            color: Color(0xFFDC2626).withOpacity(0.14),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+            border: Border.all(color: Color(0xFFDC2626).withOpacity(0.5)),
           ),
           child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.delete_outline_rounded, size: 13, color: Colors.redAccent),
+              Icon(Icons.delete_outline_rounded, size: 13, color: Color(0xFFDC2626)),
               SizedBox(width: 4),
-              Text('Delete', style: TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.w700)),
+              Text('Delete', style: TextStyle(fontSize: 11, color: Color(0xFFDC2626), fontWeight: FontWeight.w700)),
             ],
           ),
         ),
@@ -527,13 +468,13 @@ class _AccessButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? color.withOpacity(0.18) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: active ? color : Colors.white24),
+            border: Border.all(color: active ? color : Color(0xFFD5DFEE)),
           ),
           child: Text(
             label,
             style: TextStyle(
               fontSize: 12,
-              color: active ? color : Colors.white60,
+              color: active ? color : Color(0xFF6B7280),
               fontWeight: active ? FontWeight.w800 : FontWeight.w500,
             ),
           ),

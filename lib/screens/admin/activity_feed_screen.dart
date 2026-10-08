@@ -25,6 +25,7 @@
 // tags, a cleaner diff box for edits, and a sticky filter panel.
 
 import 'package:flutter/material.dart';
+import 'admin_hero_banner.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/app_access_models.dart';
@@ -49,19 +50,19 @@ class ActivityFeedScreen extends StatefulWidget {
 
 class _ActivityFeedScreenState extends State<ActivityFeedScreen> {
   // ── Palette — matches the Manage Employees screen. ───────────────────────
-  static const _bg = Color(0xFF050A14);
-  static const _card = Color(0xFF0A1428);
-  static const _chipFill = Color(0xFF101B33);
+  static const _bg = Color(0xFFF2F5FA);
+  static const _card = Colors.white;
+  static const _chipFill = Color(0xFFEAF0FA);
   static const _chipSelected = Color(0xFF1E5FC8);
-  static const _border = Color(0xFF1A2E50);
+  static const _border = Color(0xFFD5DFEE);
   static const _blue = Color(0xFF1E5FC8);
-  static const _textPrimary = Colors.white;
-  static const _textSecondary = Color(0xFFB8C2D9);
-  static const _textFaint = Color(0xFF6B7A99);
+  static const _textPrimary = Color(0xFF111827);
+  static const _textSecondary = Color(0xFF4B5563);
+  static const _textFaint = Color(0xFF6B7280);
 
-  static const _green = Color(0xFF2ECC71); // added
-  static const _amber = Color(0xFFF5A623); // edited
-  static const _red = Color(0xFFE74C3C); // deleted
+  static const _green = Color(0xFF15803D); // added
+  static const _amber = Color(0xFFB7791F); // edited
+  static const _red = Color(0xFFDC2626); // deleted
   static const _grey = Color(0xFF6B7A99); // screen visit / other
 
   // The complete, real set of modules that log activity anywhere in this
@@ -171,7 +172,7 @@ class _ActivityFeedScreenState extends State<ActivityFeedScreen> {
       case 'deleted':
         return _red;
       default:
-        return log.kind == 'screen_visit' ? _grey : Colors.amber;
+        return log.kind == 'screen_visit' ? _grey : Color(0xFFB7791F);
     }
   }
 
@@ -311,128 +312,67 @@ class _ActivityFeedScreenState extends State<ActivityFeedScreen> {
   // scroll away with everything else — see the "why this screen wasn't
   // scrolling" note at the bottom of this file.
   Widget _buildHeroBanner() {
-    return Container(
-      width: double.infinity,
-      height: 220,
-      margin: const EdgeInsets.fromLTRB(14, 0, 14, 4),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: _card,
-        border: Border.all(color: _border),
-      ),
-      child: Stack(
+    return AdminHeroBanner(
+      bottomLeft: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/pending.png',
-              fit: BoxFit.cover,
-              // Bias toward the drone/skyline band of the tall
-              // portrait photo — a short wide crop can't show the
-              // whole image, so favor the recurring hero subject,
-              // same as the other admin-screen banners.
-              alignment: const Alignment(0, -0.6),
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-            ),
-          ),
-          // Dark scrim, heaviest at the bottom where the title sits.
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.black.withOpacity(0.15),
-                    Colors.black.withOpacity(0.55),
-                    Colors.black.withOpacity(0.80),
-                  ],
-                  stops: const [0.0, 0.55, 1.0],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
               ),
-            ),
+              const Text(
+                'Live Activity Feed',
+                style: TextStyle(
+                    color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+            ],
           ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 14,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 3),
+          const Text(
+            'Every screen visit and change, across every user',
+            style: TextStyle(color: Colors.white, fontSize: 12.5),
+          ),
+        ],
+      ),
+      // Sort toggle — small pill pinned to the top-right corner.
+      topRight: Material(
+        color: Colors.black.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => setState(() {
+            _sort = _sort == _SortOrder.newest ? _SortOrder.oldest : _SortOrder.newest;
+          }),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
-                    ),
-                    const Text(
-                      'Live Activity Feed',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+                Icon(
+                  _sort == _SortOrder.newest
+                      ? Icons.arrow_downward_rounded
+                      : Icons.arrow_upward_rounded,
+                  size: 15,
+                  color: Color(0xFF374151),
                 ),
-                const SizedBox(height: 3),
-                const Text(
-                  'Every screen visit and change, across every user',
+                const SizedBox(width: 5),
+                Text(
+                  _sort == _SortOrder.newest ? 'Newest' : 'Oldest',
                   style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12.5,
-                  ),
+                      color: Color(0xFF374151),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
                 ),
               ],
             ),
           ),
-          // Sort toggle — small pill pinned to the top-right corner
-          // of the banner instead of a plain AppBar action, so the
-          // transparent AppBar above stays uncluttered (just the
-          // back arrow), same treatment as the "sync legacy users"
-          // button on the Manage Employees screen.
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Material(
-              color: Colors.black.withOpacity(0.35),
-              borderRadius: BorderRadius.circular(20),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => setState(() {
-                  _sort = _sort == _SortOrder.newest ? _SortOrder.oldest : _SortOrder.newest;
-                }),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _sort == _SortOrder.newest
-                            ? Icons.arrow_downward_rounded
-                            : Icons.arrow_upward_rounded,
-                        size: 15,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        _sort == _SortOrder.newest ? 'Newest' : 'Oldest',
-                        style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -462,7 +402,7 @@ class _ActivityFeedScreenState extends State<ActivityFeedScreen> {
         // Manage Employees screen's treatment.
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Color(0xFF111827)),
       ),
       // A single CustomScrollView for the ENTIRE page (hero banner, both
       // filter bars, the module chips, the stats strip, the toolbar, and
@@ -1012,14 +952,14 @@ class _ActivityFeedScreenState extends State<ActivityFeedScreen> {
                           TextSpan(
                             text: oldV,
                             style: const TextStyle(
-                                color: Colors.redAccent, decoration: TextDecoration.lineThrough),
+                                color: Color(0xFFDC2626), decoration: TextDecoration.lineThrough),
                           ),
                         ];
                       } else if (log.action == 'added') {
                         valueSpans = [
                           TextSpan(
                             text: newV,
-                            style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w700),
+                            style: const TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w700),
                           ),
                         ];
                       } else {
@@ -1027,12 +967,12 @@ class _ActivityFeedScreenState extends State<ActivityFeedScreen> {
                           TextSpan(
                             text: oldV,
                             style: const TextStyle(
-                                color: Colors.redAccent, decoration: TextDecoration.lineThrough),
+                                color: Color(0xFFDC2626), decoration: TextDecoration.lineThrough),
                           ),
                           const TextSpan(text: '   →   ', style: TextStyle(color: _textFaint)),
                           TextSpan(
                             text: newV,
-                            style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w700),
+                            style: const TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w700),
                           ),
                         ];
                       }

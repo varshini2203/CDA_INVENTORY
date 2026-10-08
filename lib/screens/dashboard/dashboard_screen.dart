@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cda_inventory/screens/branches/branch_list_screen.dart';
@@ -42,29 +43,29 @@ import 'package:cda_inventory/screens/sales/payment_in_list_screen.dart';
 // ...
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 🎨 CDA NAVY DESIGN TOKENS
+// 🎨 CDA LIGHT DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
-const _bg          = Color(0xFF050A14);
-const _bgDeep      = Color(0xFF030710);
-const _surface     = Color(0xFF0A1428);
-const _surfaceHigh = Color(0xFF0F1C35);
-const _border      = Color(0xFF1A2E50);
+const _bg          = Color(0xFFF4F7FC);
+const _bgDeep      = Color(0xFFFFFFFF);
+const _surface     = Color(0xFFFFFFFF);
+const _surfaceHigh = Color(0xFFEAF1FC);
+const _border      = Color(0xFFD5DFEE);
 
 const _blue        = Color(0xFF1E5FC8);
 const _blueGlow    = Color(0x331E5FC8);
-const _blueLight   = Color(0xFF3A7AE8);
+const _blueLight   = Color(0xFF2F6FDB);
 const _blueDark    = Color(0xFF0D3A80);
 
-const _silver      = Color(0xFFB8C8DC);
-const _white       = Color(0xFFF0F6FF);
+const _silver      = Color(0xFF5B7390);
+const _white       = Color(0xFFFFFFFF);
 
-const _green       = Color(0xFF00D68F);
+const _green       = Color(0xFF00A870); // darker for contrast on white
 const _red         = Color(0xFFE8374A);
-const _gold        = Color(0xFFF2B705);
+const _gold        = Color(0xFFD99A00); // darker for contrast on white
 
-const _textPrimary = Color(0xFFF0F6FF);
-const _textSub     = Color(0xFFA0B8D0);
-const _textMuted   = Color(0xFF4A6080);
+const _textPrimary = Color(0xFF0F1E3A);
+const _textSub     = Color(0xFF41587A);
+const _textMuted   = Color(0xFF7A8CA8);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 📦 MODULE DATA
@@ -77,9 +78,9 @@ const _modules = [
     'desc': 'Hardware assets',
     'tag': 'ASSETS',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/fixed_assets.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/fixed_assets.png',
   },
   {
     'title': 'Inventory',
@@ -88,9 +89,9 @@ const _modules = [
     'desc': 'Live stock view',
     'tag': 'STOCK',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/inventory.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/inventory.png',
   },
   {
     'title': 'New Products',
@@ -99,9 +100,9 @@ const _modules = [
     'desc': 'Recently added items',
     'tag': 'STOCK',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/new_product.png',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/new_products.png',
   },
   {
     'title': 'Consumables',
@@ -110,9 +111,9 @@ const _modules = [
     'desc': 'Supplies & parts',
     'tag': 'STOCK',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/consumables.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/consumables.png',
   },
   {
     'title': 'Inventory Movement',
@@ -121,8 +122,8 @@ const _modules = [
     'desc': 'Transfers, in & out',
     'tag': 'OPS',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
     'image': 'assets/images/inventory_movement.png',
   },
   {
@@ -132,9 +133,9 @@ const _modules = [
     'desc': 'Flight logs',
     'tag': 'OPS',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/drone_in_and_out.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/drone inout.png',
   },
   {
     'title': 'Drone Services',
@@ -143,9 +144,9 @@ const _modules = [
     'desc': 'Service & maintenance',
     'tag': 'OPS',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/drone services.png',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/drone_service.png',
   },
   {
     'title': 'Stock Management',
@@ -154,9 +155,9 @@ const _modules = [
     'desc': 'Analytics hub',
     'tag': 'MGMT',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/stock_management.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/stock_management.png',
   },
   {
     'title': 'Branch Inventory',
@@ -165,9 +166,9 @@ const _modules = [
     'desc': 'Multi-branch',
     'tag': 'MGMT',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/branch_inventory.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/branch_inventory.png',
   },
   {
     'title': 'Purchases',
@@ -176,9 +177,9 @@ const _modules = [
     'desc': 'Orders, POs & payments',
     'tag': 'FINANCE',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/purchase_list.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/purchase_lists.png',
   },
   {
     'title': 'Invoice List',
@@ -187,9 +188,9 @@ const _modules = [
     'desc': 'Billing records',
     'tag': 'FINANCE',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/invoice_list.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/invoice_list.png',
   },
   {
     'title': 'Bills',
@@ -198,8 +199,8 @@ const _modules = [
     'desc': 'Scan & store bills',
     'tag': 'FINANCE',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
     'image': 'assets/images/bills.png',
   },
   {
@@ -209,9 +210,9 @@ const _modules = [
     'desc': 'Quick lookup',
     'tag': 'TOOLS',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/search_products.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/search_products.png',
   },
   {
     'title': 'Stock Out',
@@ -220,9 +221,9 @@ const _modules = [
     'desc': 'Issue items',
     'tag': 'OPS',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/stock out.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/stock_out.png',
   },
   {
     'title': 'Stock History',
@@ -231,9 +232,9 @@ const _modules = [
     'desc': 'Audit trail',
     'tag': 'LOGS',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/stock history.jpg',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/stock_history.png',
   },
 
   {
@@ -243,9 +244,9 @@ const _modules = [
     'desc': 'Monthly exports',
     'tag': 'REPORTS',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
-    'image': 'assets/images/report.png',
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    'image': 'assets/images/Report.png',
   },
   {
     'title': 'Inventory Analytics',
@@ -254,8 +255,8 @@ const _modules = [
     'desc': 'Stock insights & health',
     'tag': 'MGMT',
     'color': _blueLight,
-    'gradFrom': Color(0xFF0D2348),
-    'gradTo': Color(0xFF0A1428),
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
     'image': 'assets/images/inventory_analytics.png',
   },
   {
@@ -265,8 +266,8 @@ const _modules = [
     'desc': 'Points, badges & missions',
     'tag': 'REWARDS',
     'color': _gold,
-    'gradFrom': Color(0xFF2A2308),
-    'gradTo': Color(0xFF0A1428),
+    'gradFrom': Color(0xFFFFF3CC),
+    'gradTo': Color(0xFFFFFFFF),
     'image': 'assets/images/staff_rewards.png',
   },
 ];
@@ -322,6 +323,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    // Light theme: dark status-bar icons so they stay visible on white.
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
+
     // Spec requirement 5: log dashboard access distinctly from login, so
     // the audit trail shows the user actually made it past any approval
     // gate and reached the app, not just that they authenticated.
@@ -468,7 +472,7 @@ class _CDABottomNav extends StatelessWidget {
         color: _bgDeep,
         border: const Border(top: BorderSide(color: _border, width: 1)),
         boxShadow: [
-          BoxShadow(color: _blue.withOpacity(0.12), blurRadius: 18, offset: const Offset(0, -4)),
+          BoxShadow(color: _blue.withOpacity(0.08), blurRadius: 18, offset: const Offset(0, -4)),
         ],
       ),
       child: Row(
@@ -532,12 +536,12 @@ class _CDAAppBar extends StatelessWidget implements PreferredSizeWidget {
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [_bgDeep.withOpacity(0.97), const Color(0xFF071020).withOpacity(0.95)],
+          colors: [Colors.white.withOpacity(0.97), const Color(0xFFF1F6FF).withOpacity(0.97)],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
         border: const Border(bottom: BorderSide(color: _border, width: 1)),
         boxShadow: [
-          BoxShadow(color: _blue.withOpacity(0.18), blurRadius: 20, offset: const Offset(0, 4)),
+          BoxShadow(color: _blue.withOpacity(0.10), blurRadius: 16, offset: const Offset(0, 3)),
         ],
       ),
       child: Padding(
@@ -565,7 +569,7 @@ class _CDAAppBar extends StatelessWidget implements PreferredSizeWidget {
                 borderRadius: BorderRadius.circular(10),
                 color: _white,
                 border: Border.all(color: _blue.withOpacity(0.6), width: 1.5),
-                boxShadow: [BoxShadow(color: _blue.withOpacity(0.45), blurRadius: 12)],
+                boxShadow: [BoxShadow(color: _blue.withOpacity(0.25), blurRadius: 10)],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(9),
@@ -1229,20 +1233,20 @@ class _CDABgPainter extends CustomPainter {
   void paint(Canvas canvas, Size sz) {
     canvas.drawRect(Rect.fromLTWH(0, 0, sz.width, sz.height),
         Paint()..shader = const LinearGradient(
-          colors: [Color(0xFF030710), Color(0xFF050A14), Color(0xFF040810)],
+          colors: [Color(0xFFF8FAFF), Color(0xFFF1F5FC), Color(0xFFF6F9FF)],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ).createShader(Rect.fromLTWH(0, 0, sz.width, sz.height)));
 
-    final grid = Paint()..color = const Color(0xFF0D2040).withOpacity(0.7)..strokeWidth = 0.5;
+    final grid = Paint()..color = const Color(0xFFC9D7EC).withOpacity(0.55)..strokeWidth = 0.5;
     for (double x = 0; x < sz.width; x += 32) canvas.drawLine(Offset(x, 0), Offset(x, sz.height), grid);
     for (double y = 0; y < sz.height; y += 32) canvas.drawLine(Offset(0, y), Offset(sz.width, y), grid);
 
     _drawGlow(canvas, sz, x: sz.width * (0.78 + blob1 * 0.06), y: sz.height * (0.12 + blob1 * 0.06),
-        radius: sz.width * 0.40, color: const Color(0xFF1E5FC8), opacity: 0.13);
+        radius: sz.width * 0.40, color: const Color(0xFF1E5FC8), opacity: 0.10);
     _drawGlow(canvas, sz, x: sz.width * (0.10 + blob2 * 0.05), y: sz.height * (0.80 + blob2 * 0.06),
-        radius: sz.width * 0.30, color: const Color(0xFF3A7AE8), opacity: 0.08);
+        radius: sz.width * 0.30, color: const Color(0xFF3A7AE8), opacity: 0.07);
     _drawGlow(canvas, sz, x: sz.width * 0.50, y: sz.height * (0.92 + blob1 * 0.03),
-        radius: sz.width * 0.25, color: const Color(0xFFB8C8DC), opacity: 0.05);
+        radius: sz.width * 0.25, color: const Color(0xFF3A7AE8), opacity: 0.05);
 
     _drawRadar(canvas, sz);
 
@@ -1255,7 +1259,7 @@ class _CDABgPainter extends CustomPainter {
 
     _drawBgDrone(canvas, sz, t: drone1, yFrac: 0.20, scale: 0.44, color: const Color(0xFF1E5FC8), rtl: false);
     _drawBgDrone(canvas, sz, t: drone2, yFrac: 0.52, scale: 0.29, color: const Color(0xFF3A7AE8), rtl: true);
-    _drawBgDrone(canvas, sz, t: drone3, yFrac: 0.36, scale: 0.21, color: const Color(0xFFB8C8DC), rtl: false);
+    _drawBgDrone(canvas, sz, t: drone3, yFrac: 0.36, scale: 0.21, color: const Color(0xFF6E8FBF), rtl: false);
   }
 
   void _drawRadar(Canvas canvas, Size sz) {
@@ -1499,342 +1503,55 @@ class _DashboardBodyState extends State<_DashboardBody>
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ✨ FLOWING SHINE SYSTEM
+// CDA HERO BANNER — bright daytime artwork. The logo, academy name and tagline
+// are already part of the image, so nothing is overlaid on it.
 // ═══════════════════════════════════════════════════════════════════════════════
-class _BannerShineController extends StatefulWidget {
-  final Widget Function(BuildContext context, double progress) builder;
-  const _BannerShineController({required this.builder});
-  @override
-  State<_BannerShineController> createState() => _BannerShineControllerState();
-}
-
-class _BannerShineControllerState extends State<_BannerShineController>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))..repeat();
-  }
-
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (ctx, _) => widget.builder(ctx, _ctrl.value),
-    );
-  }
-}
-
-class _ShineLinePainter extends CustomPainter {
-  final String text;
-  final TextStyle style;
-  final double globalProgress;
-  final double lineStart;
-  final double lineEnd;
-
-  _ShineLinePainter({required this.text, required this.style,
-    required this.globalProgress, required this.lineStart, required this.lineEnd});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final baseGrad = const LinearGradient(
-      colors: [Color(0xFF2255B0), Color(0xFFB8D4F8), Color(0xFF3A7AE8),
-        Color(0xFFD0E8FF), Color(0xFF2255B0)],
-      stops: [0.0, 0.25, 0.5, 0.75, 1.0],
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-    ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-
-    final tp = TextPainter(
-      text: TextSpan(text: text, style: style.copyWith(foreground: Paint()..shader = baseGrad)),
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-    )..layout(maxWidth: size.width);
-
-    final offset = Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2);
-    tp.paint(canvas, offset);
-
-    double localT;
-    if (globalProgress < lineStart) {
-      localT = -0.30;
-    } else if (globalProgress > lineEnd) {
-      localT = 1.30;
-    } else {
-      final raw = (globalProgress - lineStart) / (lineEnd - lineStart);
-      localT = raw < 0.5 ? 2 * raw * raw : 1 - math.pow(-2 * raw + 2, 2) / 2;
-      localT = -0.20 + localT * 1.40;
-    }
-
-    const beamHalf = 0.14;
-    final cx = localT * size.width;
-    final beamRect = Rect.fromLTRB(
-      cx - beamHalf * size.width, 0,
-      cx + beamHalf * size.width, size.height,
-    );
-
-    final beamGrad = LinearGradient(
-      colors: [Colors.transparent, Colors.white.withOpacity(0.15),
-        Colors.white.withOpacity(0.95), Colors.white.withOpacity(0.15),
-        Colors.transparent],
-      stops: const [0.0, 0.30, 0.50, 0.70, 1.0],
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-    ).createShader(beamRect);
-
-    final tp2 = TextPainter(
-      text: TextSpan(text: text, style: style.copyWith(foreground: Paint()..shader = beamGrad)),
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-    )..layout(maxWidth: size.width);
-
-    tp2.paint(canvas, offset);
-
-    if (localT > -0.05 && localT < 1.05) {
-      final sparkX = (offset.dx + tp.width * localT).clamp(offset.dx, offset.dx + tp.width);
-      final sparkY = offset.dy + tp.height / 2;
-      canvas.drawCircle(Offset(sparkX, sparkY), 2.5,
-          Paint()..color = Colors.white.withOpacity(0.85)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ShineLinePainter old) => old.globalProgress != globalProgress;
-}
-
-class _ShineLine extends StatelessWidget {
-  final String text;
-  final TextStyle style;
-  final double globalProgress;
-  final double lineStart;
-  final double lineEnd;
-
-  const _ShineLine({required this.text, required this.style,
-    required this.globalProgress, required this.lineStart, required this.lineEnd});
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _ShineLinePainter(text: text, style: style,
-          globalProgress: globalProgress, lineStart: lineStart, lineEnd: lineEnd),
-      child: Text(text, style: style.copyWith(color: Colors.transparent),
-          textAlign: TextAlign.center),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CDA LOGO BANNER
-// ═══════════════════════════════════════════════════════════════════════════════
-class _CDALogoBanner extends StatefulWidget {
+class _CDALogoBanner extends StatelessWidget {
   const _CDALogoBanner();
-  @override
-  State<_CDALogoBanner> createState() => _CDALogoBannerState();
-}
 
-class _CDALogoBannerState extends State<_CDALogoBanner>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse;
-  late final Animation<double> _glow;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))
-      ..repeat(reverse: true);
-    _glow = Tween<double>(begin: 0.6, end: 1.0)
-        .animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() { _pulse.dispose(); super.dispose(); }
+  static const double _imageAspect = 1524 / 1032;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _glow,
-      builder: (_, child) => Container(
-        margin: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          // Fallback fill shown while the image loads, or if it's
-          // missing — keeps the card looking intentional either way.
-          gradient: LinearGradient(
-            colors: [
-              const Color(0xFF071630).withOpacity(0.98),
-              const Color(0xFF040D1C).withOpacity(0.96),
-            ],
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-          ),
-          border: Border.all(color: _blue.withOpacity(0.28 * _glow.value), width: 1.2),
-          boxShadow: [
-            BoxShadow(color: _blue.withOpacity(0.22 * _glow.value),
-                blurRadius: 28, offset: const Offset(0, 6)),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // ── Skyline + drones artwork, full-bleed behind the
-            // banner content ─────────────────────────────────────
-            Positioned.fill(
+    return Container(
+      margin: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _blue.withOpacity(0.25), width: 1.2),
+        boxShadow: [
+          BoxShadow(color: _blue.withOpacity(0.15),
+              blurRadius: 22, offset: const Offset(0, 6)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(19),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Full image on phones; capped on wide (web/tablet) screens.
+            final h = (constraints.maxWidth / _imageAspect).clamp(0.0, 340.0);
+            return SizedBox(
+              height: h,
+              width: double.infinity,
               child: Image.asset(
                 'assets/images/dashboard_hero_banner.png',
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-              ),
-            ),
-            // ── Dark scrim so the white logo ring, shine-text and
-            // pills stay readable over the busy photo ──────────────
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.black.withOpacity(0.55),
-                      const Color(0xFF040D1C).withOpacity(0.72),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+                alignment: Alignment.topCenter,
+                errorBuilder: (_, __, ___) => Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFEAF1FF), Color(0xFFD5E4FA)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.flight_takeoff_rounded, color: _blue, size: 40),
                   ),
                 ),
               ),
-            ),
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-                child: child,
-              ),
-            ),
-          ],
+            );
+          },
         ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Stack(alignment: Alignment.center, children: [
-            Container(
-              width: 96, height: 96,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [_blue.withOpacity(0.25), _blue.withOpacity(0.0)],
-                ),
-              ),
-            ),
-            Container(
-              width: 82, height: 82,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.transparent,
-                border: Border.all(color: _blue.withOpacity(0.35), width: 1.5),
-              ),
-            ),
-            Container(
-              width: 72, height: 72,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _white,
-                border: Border.all(color: _blue.withOpacity(0.65), width: 2),
-                boxShadow: [
-                  BoxShadow(color: _blue.withOpacity(0.45), blurRadius: 18, spreadRadius: 2),
-                ],
-              ),
-              child: ClipOval(
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Image.asset('assets/images/logo.png', fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) =>
-                      const Icon(Icons.flight_takeoff_rounded, color: _blue, size: 32)),
-                ),
-              ),
-            ),
-          ]),
-
-          const SizedBox(height: 14),
-
-          _BannerShineController(
-            builder: (_, progress) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-
-                _ShineLine(
-                  text: 'CHENNAI DRONE ACADEMY',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2.5,
-                    height: 1.1,
-                    color: _blueLight,
-                  ),
-                  globalProgress: progress,
-                  lineStart: 0.02,
-                  lineEnd: 0.58,
-                ),
-
-                const SizedBox(height: 6),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 20, height: 1,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.transparent, _blue.withOpacity(0.6)],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-
-                    Flexible(
-                      child: _ShineLine(
-                        text: 'SKYLNK UNMANNED PVT. LTD.',
-                        style: const TextStyle(
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.6,
-                          color: _textMuted,
-                        ),
-                        globalProgress: progress,
-                        lineStart: 0.52,
-                        lineEnd: 0.98,
-                      ),
-                    ),
-
-                    const SizedBox(width: 6),
-                    Container(
-                      width: 20, height: 1,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [_blue.withOpacity(0.6), Colors.transparent],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 6,
-            runSpacing: 4,
-            children: const [
-              _Pill(label: 'System Online', color: _green,     icon: Icons.check_circle_rounded),
-              _Pill(label: 'Inventory v2.0', color: _blue,     icon: Icons.inventory_2_rounded),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -1901,12 +1618,12 @@ class _HeroCardState extends State<_HeroCard> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         gradient: LinearGradient(
-          colors: [const Color(0xFF081830).withOpacity(0.97),
-            const Color(0xFF050E1E).withOpacity(0.95)],
+          colors: [Colors.white.withOpacity(0.98),
+            const Color(0xFFEEF4FF).withOpacity(0.98)],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
         border: Border.all(color: _blue.withOpacity(0.30), width: 1),
-        boxShadow: [BoxShadow(color: _blue.withOpacity(0.18), blurRadius: 22, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: _blue.withOpacity(0.10), blurRadius: 18, offset: const Offset(0, 5))],
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -1920,7 +1637,7 @@ class _HeroCardState extends State<_HeroCard> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle, color: _white,
                     border: Border.all(color: _blue.withOpacity(0.5), width: 1.5),
-                    boxShadow: [BoxShadow(color: _blue.withOpacity(0.35), blurRadius: 10)],
+                    boxShadow: [BoxShadow(color: _blue.withOpacity(0.25), blurRadius: 10)],
                   ),
                   child: ClipOval(
                     child: Image.asset('assets/images/logo.png', fit: BoxFit.contain,
@@ -1994,15 +1711,15 @@ class _Pill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+        color: Color.alphaBlend(color.withOpacity(0.12), Colors.white.withOpacity(0.88)),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3), width: 1),
+        border: Border.all(color: color.withOpacity(0.45), width: 1),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, color: color, size: 9),
         const SizedBox(width: 3),
-        Text(label, style: TextStyle(color: color, fontSize: 9,
-            fontWeight: FontWeight.w600, letterSpacing: 0.3)),
+        Text(label, style: TextStyle(color: color, fontSize: 9.5,
+            fontWeight: FontWeight.w800, letterSpacing: 0.3)),
       ]),
     );
   }
@@ -2190,7 +1907,7 @@ class _ModuleCardState extends State<_ModuleCard> with TickerProviderStateMixin 
                   width: 1),
               boxShadow: _hovered
                   ? [BoxShadow(color: widget.color.withOpacity(0.25), blurRadius: 12, offset: const Offset(0, 4))]
-                  : [BoxShadow(color: Colors.black.withOpacity(0.30), blurRadius: 4, offset: const Offset(0, 2))],
+                  : [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 6, offset: const Offset(0, 2))],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
@@ -2234,7 +1951,7 @@ class _ModuleCardState extends State<_ModuleCard> with TickerProviderStateMixin 
                             child: Container(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
-                                  colors: [Colors.black.withOpacity(0.55), Colors.transparent],
+                                  colors: [Colors.black.withOpacity(0.10), Colors.transparent],
                                   begin: Alignment.bottomCenter, end: Alignment.topCenter,
                                   stops: const [0.0, 0.55],
                                 ),
@@ -2259,7 +1976,7 @@ class _ModuleCardState extends State<_ModuleCard> with TickerProviderStateMixin 
                             child: Container(
                               padding: const EdgeInsets.all(2),
                               decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.50),
+                                  color: Colors.white.withOpacity(0.85),
                                   borderRadius: BorderRadius.circular(4)),
                               child: Text(widget.emoji, style: const TextStyle(fontSize: 10)),
                             ),
@@ -2366,7 +2083,7 @@ class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: const Color(0xFF040810),
+      backgroundColor: const Color(0xFFF4F7FC),
       child: Stack(
         children: [
           // ── Drone / sunset skyline artwork, full-bleed behind the
@@ -2379,16 +2096,16 @@ class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMi
               errorBuilder: (_, __, ___) => const SizedBox.shrink(),
             ),
           ),
-          // ── Dark scrim over the full height so nav labels, pills and
+          // ── Light scrim over the full height so nav labels, pills and
           // icons stay readable over the artwork ───────────────────────
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF040810).withOpacity(0.55),
-                    const Color(0xFF040810).withOpacity(0.72),
-                    const Color(0xFF040810).withOpacity(0.85),
+                    Colors.white.withOpacity(0.30),
+                    Colors.white.withOpacity(0.62),
+                    Colors.white.withOpacity(0.82),
                   ],
                   stops: const [0.0, 0.45, 1.0],
                   begin: Alignment.topCenter,
@@ -2403,14 +2120,13 @@ class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMi
                 width: double.infinity,
                 padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 16),
                 decoration: BoxDecoration(
-                  // Was an opaque navy gradient that fully hid the background
-                  // artwork behind the header. Lightened to a faint tint so
-                  // the drone/skyline image reads through while the divider
-                  // line still separates the header from the nav list below.
+                  // Faint tint so the drone/skyline image reads through
+                  // while the divider line still separates the header
+                  // from the nav list below.
                   gradient: LinearGradient(
                     colors: [
-                      const Color(0xFF060E20).withOpacity(0.40),
-                      const Color(0xFF0A1830).withOpacity(0.32),
+                      Colors.white.withOpacity(0.55),
+                      const Color(0xFFEAF1FF).withOpacity(0.45),
                     ],
                     begin: Alignment.topLeft, end: Alignment.bottomRight,
                   ),
@@ -2425,7 +2141,7 @@ class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMi
                         decoration: BoxDecoration(
                           shape: BoxShape.circle, color: _white,
                           border: Border.all(color: _blue.withOpacity(0.60), width: 2),
-                          boxShadow: [BoxShadow(color: _blue.withOpacity(0.45), blurRadius: 14)],
+                          boxShadow: [BoxShadow(color: _blue.withOpacity(0.30), blurRadius: 12)],
                         ),
                         child: ClipOval(
                           child: Padding(
@@ -2440,8 +2156,8 @@ class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMi
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           const Text('Chennai Drone Academy',
-                              style: TextStyle(color: _textPrimary, fontSize: 13,
-                                  fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+                              style: TextStyle(color: _textPrimary, fontSize: 14,
+                                  fontWeight: FontWeight.w800, letterSpacing: 0.2)),
                           const SizedBox(height: 3),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -2452,8 +2168,8 @@ class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMi
                               border: Border.all(color: _blue.withOpacity(0.40), width: 1),
                             ),
                             child: const Text('SkyLNK Unmanned Pvt. Ltd.',
-                                style: TextStyle(color: _silver, fontSize: 9,
-                                    fontWeight: FontWeight.w600, letterSpacing: 0.6)),
+                                style: TextStyle(color: _blueDark, fontSize: 9.5,
+                                    fontWeight: FontWeight.w800, letterSpacing: 0.6)),
                           ),
                         ]),
                       ),
@@ -2509,8 +2225,8 @@ class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMi
                         const Padding(
                           padding: EdgeInsets.fromLTRB(16, 14, 16, 4),
                           child: Text('ADMIN CONTROLS',
-                              style: TextStyle(color: _textMuted, fontSize: 10,
-                                  fontWeight: FontWeight.w800, letterSpacing: 1.1)),
+                              style: TextStyle(color: _textSub, fontSize: 10.5,
+                                  fontWeight: FontWeight.w900, letterSpacing: 1.1)),
                         ),
                         _DrawerNavItem(
                           icon: Icons.notifications_active_rounded,
@@ -2585,9 +2301,14 @@ class _DrawerNavItemState extends State<_DrawerNavItem> {
         duration: const Duration(milliseconds: 160),
         margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
         decoration: BoxDecoration(
-          color: _h ? color.withOpacity(0.14) : (widget.isHome ? color.withOpacity(0.08) : Colors.transparent),
+          color: _h
+              ? Color.alphaBlend(color.withOpacity(0.14), Colors.white)
+              : (widget.isHome
+              ? Color.alphaBlend(color.withOpacity(0.12), Colors.white.withOpacity(0.92))
+              : Colors.white.withOpacity(0.86)),
           borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: _h ? color.withOpacity(0.40) : Colors.transparent, width: 1),
+          border: Border.all(
+              color: _h ? color.withOpacity(0.50) : _border.withOpacity(0.8), width: 1),
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(11),
@@ -2608,8 +2329,9 @@ class _DrawerNavItemState extends State<_DrawerNavItem> {
               ),
               const SizedBox(width: 12),
               Text(widget.label, style: TextStyle(
-                  color: _h ? color : _textSub, fontSize: 13,
-                  fontWeight: _h ? FontWeight.w600 : FontWeight.w400)),
+                  color: _h ? color : (widget.isLogout ? _red : _textPrimary),
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700)),
               const Spacer(),
               if (_h) Icon(Icons.chevron_right_rounded, color: color.withOpacity(0.6), size: 15),
             ]),
@@ -2655,9 +2377,12 @@ class _ExpandableDrawerNavItemState extends State<_ExpandableDrawerNavItem> {
             duration: const Duration(milliseconds: 160),
             margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
             decoration: BoxDecoration(
-              color: _h || _open ? color.withOpacity(0.14) : Colors.transparent,
+              color: _h || _open
+                  ? Color.alphaBlend(color.withOpacity(0.14), Colors.white)
+                  : Colors.white.withOpacity(0.86),
               borderRadius: BorderRadius.circular(11),
-              border: Border.all(color: _h || _open ? color.withOpacity(0.40) : Colors.transparent, width: 1),
+              border: Border.all(
+                  color: _h || _open ? color.withOpacity(0.50) : _border.withOpacity(0.8), width: 1),
             ),
             child: InkWell(
               borderRadius: BorderRadius.circular(11),
@@ -2678,8 +2403,8 @@ class _ExpandableDrawerNavItemState extends State<_ExpandableDrawerNavItem> {
                   ),
                   const SizedBox(width: 12),
                   Text(widget.label, style: TextStyle(
-                      color: _h || _open ? color : _textSub, fontSize: 13,
-                      fontWeight: _h || _open ? FontWeight.w600 : FontWeight.w400)),
+                      color: _h || _open ? color : _textPrimary, fontSize: 13.5,
+                      fontWeight: FontWeight.w700)),
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.all(3),
@@ -2705,7 +2430,7 @@ class _ExpandableDrawerNavItemState extends State<_ExpandableDrawerNavItem> {
           firstChild: Container(
             margin: const EdgeInsets.fromLTRB(22, 2, 10, 6),
             decoration: BoxDecoration(
-              color: _bgDeep.withOpacity(0.55),
+              color: Colors.white.withOpacity(0.96),
               borderRadius: BorderRadius.circular(10),
               border: Border(left: BorderSide(color: color.withOpacity(0.45), width: 2)),
             ),
@@ -2756,13 +2481,12 @@ class _DrawerSubNavItemState extends State<_DrawerSubNavItem> {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             child: Row(children: [
               Icon(Icons.subdirectory_arrow_right_rounded,
-                  size: 14, color: _h ? color : _textMuted),
+                  size: 14, color: _h ? color : _textSub),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(widget.label, style: TextStyle(
-                    color: _h ? color : _textSub, fontSize: 12,
-                    fontStyle: FontStyle.italic,
-                    fontWeight: _h ? FontWeight.w700 : FontWeight.w500)),
+                    color: _h ? color : _textPrimary, fontSize: 12.5,
+                    fontWeight: FontWeight.w700)),
               ),
               if (_h)
                 Icon(Icons.north_east_rounded, size: 12, color: color.withOpacity(0.8)),

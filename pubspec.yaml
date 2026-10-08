@@ -61,19 +61,19 @@ flutter:
 
   assets:
     - assets/images/logo.png
-    - assets/images/fixed_assets.jpg
-    - assets/images/inventory.jpg
-    - assets/images/consumables.jpg
-    - assets/images/drone_in_and_out.jpg
-    - assets/images/invoice_list.jpg
-    - assets/images/purchase_list.jpg
-    - assets/images/search_products.jpg
-    - assets/images/stock history.jpg
-    - assets/images/stock out.jpg
-    - assets/images/stock_management.jpg
-    - assets/images/branch_inventory.jpg
+    - assets/images/fixed_assets.png
+    - assets/images/inventory.png
+    - assets/images/consumables.png
+    - assets/images/drone inout.png
+    - assets/images/invoice_list.png
+    - assets/images/purchase_lists.png
+    - assets/images/search_products.png
+    - assets/images/stock_history.png
+    - assets/images/stock_out.png
+    - assets/images/stock_management.png
+    - assets/images/branch_inventory.png
     - assets/icons/app_icon_1024.png
-    - assets/images/report.png
+    - assets/images/Report.png
     - assets/images/bills.png
     - assets/images/cda_background.png
     - assets/images/splash.png
@@ -82,8 +82,8 @@ flutter:
     - assets/images/side_navigation.png
     - assets/images/pending.png
     - assets/images/skylynk.jpg
-    - assets/images/new_product.png
-    - assets/images/drone services.png
+    - assets/images/new_products.png
+    - assets/images/drone_service.png
     - assets/images/staff_rewards.png
     - assets/images/inventory_analytics.png
     - assets/images/inventory_movement.png

@@ -8,6 +8,7 @@
 // them inside the all-users Live Activity Feed.
 
 import 'package:flutter/material.dart';
+import 'admin_hero_banner.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/app_access_models.dart';
@@ -17,14 +18,14 @@ class EmployeeActivityScreen extends StatelessWidget {
   final AppUserAccess user;
   const EmployeeActivityScreen({super.key, required this.user});
 
-  static const _bg = Color(0xFF050A14);
-  static const _card = Color(0xFF0A1428);
-  static const _border = Color(0xFF1A2E50);
+  static const _bg = Color(0xFFF2F5FA);
+  static const _card = Colors.white;
+  static const _border = Color(0xFFD5DFEE);
   static const _blue = Color(0xFF1E5FC8);
 
-  static const _green = Color(0xFF2ECC71); // added
-  static const _amber = Color(0xFFF5A623); // edited
-  static const _red = Color(0xFFE74C3C); // deleted
+  static const _green = Color(0xFF15803D); // added
+  static const _amber = Color(0xFFB7791F); // edited
+  static const _red = Color(0xFFDC2626); // deleted
   static const _purple = Color(0xFF9B59B6); // page visit
 
   static final _dateFmt = DateFormat('d MMM yyyy, h:mm a');
@@ -64,7 +65,7 @@ class EmployeeActivityScreen extends StatelessWidget {
       case 'deleted':
         return _red;
       default:
-        return Colors.amber;
+        return Color(0xFFB7791F);
     }
   }
 
@@ -114,7 +115,7 @@ class EmployeeActivityScreen extends StatelessWidget {
         // Pending Requests / Manage Employees screens.
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Color(0xFF111827)),
       ),
       body: Column(
         children: [
@@ -122,72 +123,30 @@ class EmployeeActivityScreen extends StatelessWidget {
           // screens, with this employee's avatar/name/email overlaid
           // instead of a generic title, so it's immediately clear whose
           // activity trail this is. ────────────────────────────────────
-          Container(
-            width: double.infinity,
-            height: 220,
-            margin: const EdgeInsets.fromLTRB(14, 0, 14, 4),
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              color: _card,
-              border: Border.all(color: _border),
-            ),
-            child: Stack(
+          AdminHeroBanner(
+            bottomLeft: Row(
               children: [
-                Positioned.fill(
-                  child: Image.asset(
-                    'assets/images/pending.png',
-                    fit: BoxFit.cover,
-                    alignment: const Alignment(0, -0.6),
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Color(0xFF9CA3AF),
+                  child: Text(
+                    displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.black.withOpacity(0.20),
-                          Colors.black.withOpacity(0.60),
-                          Colors.black.withOpacity(0.85),
-                        ],
-                        stops: const [0.0, 0.55, 1.0],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 14,
-                  child: Row(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: _blue.withOpacity(0.3),
-                        child: Text(
-                          displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                      Text(displayName,
                           style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(displayName,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 2),
-                            Text(user.email,
-                                style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12)),
-                          ],
-                        ),
-                      ),
+                              color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(user.email,
+                          style: const TextStyle(color: Colors.white, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -210,12 +169,12 @@ class EmployeeActivityScreen extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.cloud_off_rounded, size: 40, color: Colors.white.withOpacity(0.3)),
+                          Icon(Icons.cloud_off_rounded, size: 40, color: Color(0xFF9CA3AF)),
                           const SizedBox(height: 12),
                           Text(
                             'Could not load activity.\n${snapshot.error}',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                            style: TextStyle(color: Color(0xFF6B7280)),
                           ),
                         ],
                       ),
@@ -226,7 +185,7 @@ class EmployeeActivityScreen extends StatelessWidget {
                 if (logs.isEmpty) {
                   return Center(
                     child: Text('No activity from $displayName yet',
-                        style: TextStyle(color: Colors.white.withOpacity(0.4))),
+                        style: TextStyle(color: Color(0xFF9CA3AF))),
                   );
                 }
                 return ListView.builder(
@@ -253,23 +212,23 @@ class EmployeeActivityScreen extends StatelessWidget {
             width: 8,
             height: 8,
             decoration: BoxDecoration(
-              color: user.isOnline ? _green : Colors.white24,
+              color: user.isOnline ? _green : Color(0xFFD5DFEE),
               shape: BoxShape.circle,
             ),
           ),
           const SizedBox(width: 6),
           Text(
             user.isOnline ? 'Online now' : 'Offline',
-            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w600),
+            style: TextStyle(color: Color(0xFF374151), fontSize: 12, fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 14),
-          Icon(Icons.login_rounded, size: 14, color: Colors.white.withOpacity(0.4)),
+          Icon(Icons.login_rounded, size: 14, color: Color(0xFF9CA3AF)),
           const SizedBox(width: 4),
           Text(
             user.lastLogin != null
                 ? 'Last login ${_dateFmt.format(user.lastLogin!)}'
                 : 'No login recorded yet',
-            style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+            style: TextStyle(color: Color(0xFF6B7280), fontSize: 11),
           ),
         ],
       ),
@@ -316,7 +275,7 @@ class EmployeeActivityScreen extends StatelessWidget {
                               _whereText(log),
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                  color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                                  color: Color(0xFF111827), fontSize: 13, fontWeight: FontWeight.w700),
                             ),
                           ),
                         ],
@@ -324,14 +283,14 @@ class EmployeeActivityScreen extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         log.timestamp != null ? _dateFmt.format(log.timestamp!) : '—',
-                        style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10),
+                        style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 10),
                       ),
                     ],
                   ),
                 ),
                 Text(
                   _timeAgo(log.timestamp),
-                  style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 10),
+                  style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 10),
                 ),
               ],
             ),
@@ -341,7 +300,7 @@ class EmployeeActivityScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.25),
+                  color: const Color(0xFFF2F5FA),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -357,7 +316,7 @@ class EmployeeActivityScreen extends StatelessWidget {
                         TextSpan(
                           text: oldV,
                           style: const TextStyle(
-                              color: Colors.redAccent, decoration: TextDecoration.lineThrough),
+                              color: Color(0xFFDC2626), decoration: TextDecoration.lineThrough),
                         ),
                       ];
                     } else if (log.action == 'added') {
@@ -372,10 +331,10 @@ class EmployeeActivityScreen extends StatelessWidget {
                         TextSpan(
                           text: oldV,
                           style: TextStyle(
-                              color: Colors.redAccent.withOpacity(0.85),
+                              color: Color(0xFFDC2626).withOpacity(0.85),
                               decoration: TextDecoration.lineThrough),
                         ),
-                        const TextSpan(text: '  →  ', style: TextStyle(color: Colors.white38)),
+                        const TextSpan(text: '  →  ', style: TextStyle(color: Color(0xFF9CA3AF))),
                         TextSpan(
                           text: newV,
                           style: const TextStyle(color: _green, fontWeight: FontWeight.w600),
@@ -392,7 +351,7 @@ class EmployeeActivityScreen extends StatelessWidget {
                             TextSpan(
                               text: '${e.key}: ',
                               style: const TextStyle(
-                                  color: Colors.white70, fontWeight: FontWeight.w600),
+                                  color: Color(0xFF4B5563), fontWeight: FontWeight.w600),
                             ),
                             ...valueSpans,
                           ],

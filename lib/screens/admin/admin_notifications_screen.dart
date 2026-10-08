@@ -19,6 +19,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/app_access_models.dart';
 import '../../services/access_control_service.dart';
+import 'admin_hero_banner.dart';
 
 class AdminNotificationsScreen extends StatefulWidget {
   const AdminNotificationsScreen({super.key});
@@ -28,9 +29,9 @@ class AdminNotificationsScreen extends StatefulWidget {
 }
 
 class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
-  static const _bg = Color(0xFF050A14);
-  static const _card = Color(0xFF0A1428);
-  static const _border = Color(0xFF1A2E50);
+  static const _bg = Color(0xFFF2F5FA);
+  static const _card = Colors.white;
+  static const _border = Color(0xFFD5DFEE);
   static const _blue = Color(0xFF1E5FC8);
 
   final _searchCtrl = TextEditingController();
@@ -66,76 +67,20 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   // in build()) so it can sit in a SliverToBoxAdapter and scroll away with
   // the rest of the page — see the note at the bottom of this file.
   Widget _buildHeroBanner() {
-    return Container(
-      width: double.infinity,
-      height: 300,
-      margin: const EdgeInsets.fromLTRB(14, 0, 14, 4),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: _card,
-        border: Border.all(color: _border),
-      ),
-      child: Stack(
+    return const AdminHeroBanner(
+      bottomLeft: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/pending.png',
-              fit: BoxFit.cover,
-              // A wide, short banner can only ever reveal a thin
-              // horizontal slice of this tall portrait photo — the
-              // drone (~20% down) and the city skyline (~90% down)
-              // are too far apart to both land in that slice at
-              // once. Biasing here toward the drone since that's
-              // the recurring hero subject in the other banners.
-              alignment: const Alignment(0, -0.6),
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-            ),
+          Text(
+            'Pending Requests',
+            style: TextStyle(
+                color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
           ),
-          // Dark scrim, heaviest at the bottom where the title sits,
-          // so the busy sunset sky doesn't fight with the text.
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.black.withOpacity(0.15),
-                    Colors.black.withOpacity(0.55),
-                    Colors.black.withOpacity(0.80),
-                  ],
-                  stops: const [0.0, 0.55, 1.0],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 14,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Text(
-                  'Pending Requests',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                SizedBox(height: 3),
-                Text(
-                  'Review and manage access requests',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-            ),
+          SizedBox(height: 3),
+          Text(
+            'Review and manage access requests',
+            style: TextStyle(color: Colors.white, fontSize: 12.5),
           ),
         ],
       ),
@@ -155,21 +100,21 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
           _StatusTab(
             label: 'Pending',
             selected: _statusFilter == 'pending',
-            color: Colors.amber,
+            color: Color(0xFFB7791F),
             onTap: () => setState(() => _statusFilter = 'pending'),
           ),
           const SizedBox(width: 8),
           _StatusTab(
             label: 'Approved',
             selected: _statusFilter == 'approved',
-            color: Colors.greenAccent,
+            color: Color(0xFF15803D),
             onTap: () => setState(() => _statusFilter = 'approved'),
           ),
           const SizedBox(width: 8),
           _StatusTab(
             label: 'Rejected',
             selected: _statusFilter == 'rejected',
-            color: Colors.redAccent,
+            color: Color(0xFFDC2626),
             onTap: () => setState(() => _statusFilter = 'rejected'),
           ),
           const SizedBox(width: 8),
@@ -191,15 +136,15 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
       child: TextField(
         controller: _searchCtrl,
         onChanged: (v) => setState(() => _query = v),
-        style: const TextStyle(color: Colors.white, fontSize: 14),
+        style: const TextStyle(color: Color(0xFF111827), fontSize: 14),
         decoration: InputDecoration(
           hintText: 'Search by name or email',
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
-          prefixIcon: const Icon(Icons.search_rounded, color: Colors.white38, size: 20),
+          hintStyle: TextStyle(color: Color(0xFF9CA3AF)),
+          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF9CA3AF), size: 20),
           suffixIcon: _query.isEmpty
               ? null
               : IconButton(
-            icon: const Icon(Icons.close_rounded, color: Colors.white38, size: 18),
+            icon: const Icon(Icons.close_rounded, color: Color(0xFF9CA3AF), size: 18),
             onPressed: () => setState(() {
               _searchCtrl.clear();
               _query = '';
@@ -244,7 +189,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Color(0xFF111827)),
       ),
       // A single CustomScrollView for the ENTIRE page (hero banner, status
       // tabs, search bar, and the requests list) — everything scrolls
@@ -285,7 +230,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                     child: Text(
                       'Could not load requests.\n${snapshot.error}',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                      style: TextStyle(color: Color(0xFF6B7280)),
                     ),
                   ),
                 ),
@@ -319,11 +264,11 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.inbox_rounded, size: 48, color: Colors.white.withOpacity(0.2)),
+                        Icon(Icons.inbox_rounded, size: 48, color: Color(0xFF9CA3AF)),
                         const SizedBox(height: 12),
                         Text(
                           label,
-                          style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 13),
+                          style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
                         ),
                       ],
                     ),
@@ -388,13 +333,13 @@ class _StatusTab extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? color.withOpacity(0.16) : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: selected ? color : Colors.white24),
+            border: Border.all(color: selected ? color : Color(0xFFD5DFEE)),
           ),
           child: Text(
             label,
             style: TextStyle(
               fontSize: 12.5,
-              color: selected ? color : Colors.white60,
+              color: selected ? color : Color(0xFF6B7280),
               fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
             ),
           ),
@@ -413,8 +358,8 @@ class _PendingRequestCard extends StatefulWidget {
 }
 
 class _PendingRequestCardState extends State<_PendingRequestCard> {
-  static const _card = Color(0xFF0A1428);
-  static const _border = Color(0xFF1A2E50);
+  static const _card = Colors.white;
+  static const _border = Color(0xFFD5DFEE);
   static const _blue = Color(0xFF1E5FC8);
 
   bool _busy = false;
@@ -450,16 +395,16 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: _card,
-        title: const Text('Reject request?', style: TextStyle(color: Colors.white)),
+        title: const Text('Reject request?', style: TextStyle(color: Color(0xFF111827))),
         content: Text(
           '${widget.user.name} will not be able to access the app unless approved again later.',
-          style: TextStyle(color: Colors.white.withOpacity(0.7)),
+          style: TextStyle(color: Color(0xFF374151)),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Reject', style: TextStyle(color: Colors.redAccent)),
+            child: const Text('Reject', style: TextStyle(color: Color(0xFFDC2626))),
           ),
         ],
       ),
@@ -489,9 +434,9 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
     final status = accessStatusToString(user.accessStatus); // 'pending' | 'approved' | 'rejected'
     final isPending = status == 'pending';
     final badgeColor = switch (status) {
-      'approved' => Colors.greenAccent,
-      'rejected' => Colors.redAccent,
-      _ => Colors.amber,
+      'approved' => Color(0xFF15803D),
+      'rejected' => Color(0xFFDC2626),
+      _ => Color(0xFFB7791F),
     };
     return Container(
       padding: const EdgeInsets.all(14),
@@ -510,7 +455,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                 backgroundColor: _blue.withOpacity(0.2),
                 child: Text(
                   user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Color(0xFF111827), fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(width: 10),
@@ -519,9 +464,9 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(user.name.isNotEmpty ? user.name : 'Unnamed',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                        style: const TextStyle(color: Color(0xFF111827), fontWeight: FontWeight.w700, fontSize: 14)),
                     Text(user.email,
-                        style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                        style: TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
                   ],
                 ),
               ),
@@ -540,10 +485,10 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Icon(Icons.event_rounded, size: 13, color: Colors.white.withOpacity(0.35)),
+              Icon(Icons.event_rounded, size: 13, color: Color(0xFF9CA3AF)),
               const SizedBox(width: 5),
               Text('Registered: $_registeredLabel',
-                  style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 11.5)),
+                  style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5)),
             ],
           ),
           const SizedBox(height: 14),
@@ -566,8 +511,8 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                   child: OutlinedButton(
                     onPressed: () => _approve(AccessLevel.viewer),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.amber,
-                      side: const BorderSide(color: Colors.amber),
+                      foregroundColor: Color(0xFFB7791F),
+                      side: const BorderSide(color: Color(0xFFB7791F)),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     child: const Text('Re-approve Viewer', style: TextStyle(fontSize: 12.5)),
@@ -594,8 +539,8 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                   child: OutlinedButton(
                     onPressed: _reject,
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.redAccent,
-                      side: const BorderSide(color: Colors.redAccent),
+                      foregroundColor: Color(0xFFDC2626),
+                      side: const BorderSide(color: Color(0xFFDC2626)),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     child: const Text('Reject', style: TextStyle(fontSize: 12.5)),
@@ -606,8 +551,8 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                   child: OutlinedButton(
                     onPressed: () => _approve(AccessLevel.viewer),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.amber,
-                      side: const BorderSide(color: Colors.amber),
+                      foregroundColor: Color(0xFFB7791F),
+                      side: const BorderSide(color: Color(0xFFB7791F)),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     child: const Text('Approve Viewer', style: TextStyle(fontSize: 12.5)),
