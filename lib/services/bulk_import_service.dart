@@ -77,6 +77,27 @@ class BulkImportService {
       //    for Sale / Reserved Quantity / Stock Value) — imported straight
       //    onto the matching NewProduct fields, no manual remapping. ────
       'salePrice': ['sale price', 'selling price', 'mrp'],
+      // GST option: "With GST" / "Without GST" / "GST 18%" / "18" ... The
+      // text is turned into a rate by NewProductGst.resolve().
+      'gstType': [
+        'gst',
+        'gst type',
+        'gst option',
+        'with gst / without gst',
+        'with gst without gst',
+        'with gst',
+        'without gst',
+        'tax',
+        'tax type',
+      ],
+      'gstPercent': [
+        'gst %',
+        'gst rate',
+        'gst percent',
+        'gst percentage',
+        'tax %',
+        'tax rate',
+      ],
       'availableQuantityForSale': [
         'available quantity for sale',
         'available qty for sale',
@@ -143,6 +164,8 @@ class BulkImportService {
     'quantity': 'Quantity',
     'unit': 'Unit',
     'salePrice': 'Sale Price',
+    'gstType': 'GST (With / Without)',
+    'gstPercent': 'GST %',
     'availableQuantityForSale': 'Available Quantity for Sale',
     'reservedQuantity': 'Reserved Quantity',
     'stockValue': 'Stock Value',
@@ -172,6 +195,8 @@ class BulkImportService {
       'unit',
       'purchaseCost',
       'salePrice',
+      'gstType',
+      'gstPercent',
       'availableQuantityForSale',
       'reservedQuantity',
       'stockValue',

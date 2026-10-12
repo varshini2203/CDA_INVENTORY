@@ -322,7 +322,8 @@ class ExcelExportService {
     _writeTitleRow(sheet, 'New Products Report', month);
     _writeHeaderRow(sheet, 2, [
       'Product', 'Category', 'Brand', 'Vendor', 'Branch', 'Qty',
-      'Purchase Cost (Rs.)', 'Sale Price (Rs.)', 'Stock Value (Rs.)', 'Status', 'Purchase Date',
+      'Purchase Cost (Rs.)', 'Sale Price (Rs.)', 'GST', 'GST %', 'GST Amount (Rs.)',
+      'Sale Price incl. GST (Rs.)', 'Stock Value (Rs.)', 'Status', 'Purchase Date',
     ]);
 
     var r = 3;
@@ -336,6 +337,12 @@ class ExcelExportService {
         IntCellValue(p.quantity),
         DoubleCellValue(p.purchaseCost),
         DoubleCellValue(p.salePrice),
+        // "Without GST" / "With GST 18%" — same wording as the PDF and the
+        // GST column bulk import reads back.
+        TextCellValue(p.gstLabel),
+        DoubleCellValue(p.gstRate),
+        DoubleCellValue(p.gstAmount),
+        DoubleCellValue(p.salePriceWithGst),
         DoubleCellValue(p.stockValue),
         TextCellValue(p.status),
         TextCellValue(DateFormat('dd-MM-yyyy').format(p.purchaseDate)),
@@ -351,13 +358,13 @@ class ExcelExportService {
     final totalValue = rows.fold<double>(0, (s, p) => s + p.stockValue);
     final totalRow = r + 1;
     sheet
-        .cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: totalRow))
+        .cell(CellIndex.indexByColumnRow(columnIndex: 11, rowIndex: totalRow))
         .value = TextCellValue('TOTAL STOCK VALUE');
     sheet
-        .cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: totalRow))
+        .cell(CellIndex.indexByColumnRow(columnIndex: 12, rowIndex: totalRow))
         .value = DoubleCellValue(totalValue);
 
-    for (var c = 0; c < 11; c++) {
+    for (var c = 0; c < 15; c++) {
       sheet.setColumnWidth(c, 20);
     }
   }

@@ -12,6 +12,7 @@ import 'activity_log_service.dart';
 import 'gamification_service.dart';
 import 'staff_reward_service.dart';
 import 'report_service.dart';
+import 'new_product_sale_service.dart';
 
 class InvoiceService {
   // ── Firestore collection reference ──────────────────────────────────────────
@@ -136,6 +137,10 @@ class InvoiceService {
     final before = existingDoc.data() ?? {};
     await _col.doc(id).delete();
     clearCache();
+    // Give the sold New Products back to the sellable Item list.
+    try {
+      await NewProductSaleService.deleteSalesForInvoice(id);
+    } catch (_) {}
     ActivityLogService.logDelete(
       module: 'Invoices',
       itemName: (before['invoice_no'] as String?) ?? id,
@@ -156,6 +161,11 @@ class InvoiceService {
     }
     await batch.commit();
     clearCache();
+    for (final id in ids) {
+      try {
+        await NewProductSaleService.deleteSalesForInvoice(id);
+      } catch (_) {}
+    }
     ActivityLogService.logAction(
       'Bulk deleted ${ids.length} invoice(s)',
       module: 'Invoices',

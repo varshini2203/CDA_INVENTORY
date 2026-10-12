@@ -9,6 +9,7 @@ class InvoiceLineItem {
   final double unitPrice;
   final double discountPercent;
   final double taxPercent;     // per-line GST rate, e.g. 0/5/12/18/28
+  final String? newProductId;  // link to new_products doc (null = free-typed item)
 
   InvoiceLineItem({
     required this.id,
@@ -20,6 +21,7 @@ class InvoiceLineItem {
     required this.unitPrice,
     this.discountPercent = 0,
     this.taxPercent = 0,
+    this.newProductId,
   });
 
   double get grossAmount => quantity * unitPrice;
@@ -38,6 +40,7 @@ class InvoiceLineItem {
     unitPrice: (m['unit_price'] as num?)?.toDouble() ?? 0.0,
     discountPercent: (m['discount_percent'] as num?)?.toDouble() ?? 0.0,
     taxPercent: (m['tax_percent'] as num?)?.toDouble() ?? 0.0,
+    newProductId: m['new_product_id']?.toString(),
   );
 
   Map<String, dynamic> toMap() => {
@@ -50,5 +53,6 @@ class InvoiceLineItem {
     'unit_price': unitPrice,
     'discount_percent': discountPercent,
     'tax_percent': taxPercent,
+    if (newProductId != null && newProductId!.isNotEmpty) 'new_product_id': newProductId,
   };
 }

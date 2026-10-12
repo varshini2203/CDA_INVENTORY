@@ -20,8 +20,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../constants/drone_categories.dart';
+import '../../core/access/access_scope.dart';
+import '../../services/drone_request_service.dart';
 import '../../data/seed_drones.dart';
 import '../../models/drone.dart';
 import '../../services/current_user_service.dart';
@@ -88,6 +91,8 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
   // Fleet-list drones that have no Firestore document yet (e.g. it was deleted).
   // They are still shown in the dropdown and are restored on first use.
   final Set<String> _virtualIds = {};
+  // New drones added by staff that the admin has not approved yet (shown RED).
+  final Map<String, DroneRequest> _pending = {}; // key = 'req_<docId>'
   bool _submitted = false; // set once a movement is saved — blocks repeats
   bool _loading = true;
   String? _error;
@@ -187,7 +192,41 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
       final i = kDroneMasterList.indexWhere((e) => e.key == droneNameKey(d.name));
       return i < 0 ? kDroneMasterList.length : i;
     }
-    list.sort((a, b) => rank(a).compareTo(rank(b)));
+    // ── Staff-requested new drones (admin approval flow) ────────────────
+    _pending.clear();
+    try {
+      final reqs = await DroneRequestService.fetchActive();
+      final have = list.map((d) => droneNameKey(d.name)).toSet();
+      for (final r in reqs) {
+        if (have.contains(droneNameKey(r.name))) continue;
+        if (r.isApproved) {
+          final real = result.data!.where((d) => d.id == r.droneId);
+          if (real.isNotEmpty) {
+            list.add(real.first);
+            have.add(droneNameKey(r.name));
+          }
+        } else if (r.isPending) {
+          final id = 'req_${r.id}';
+          _pending[id] = r;
+          list.add(Drone(
+            id: id,
+            name: r.name,
+            model: '',
+            serialNumber: r.serialNumber,
+            status: 'IN',
+            category: r.group,
+          ));
+          have.add(droneNameKey(r.name));
+        }
+      }
+    } catch (_) {
+      // Request list is optional — never block the fleet list.
+    }
+    // Group first (so a group header never repeats), then fleet-list order.
+    list.sort((a, b) {
+      final g = _groupRank(a.category).compareTo(_groupRank(b.category));
+      return g != 0 ? g : rank(a).compareTo(rank(b));
+    });
     setState(() {
       _loading = false;
       _drones = list;
@@ -218,7 +257,15 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
   }
 
   void _selectDrone(String? id) {
+    if (id == '__add_new') {
+      _showAddNewDroneDialog();
+      return;
+    }
     if (id == null || id.startsWith('__')) return;
+    if (_pending.containsKey(id)) {
+      _handlePendingDrone(_pending[id]!);
+      return;
+    }
     final d = _drones.firstWhere((x) => x.id == id);
     setState(() {
       _selectedId = id;
@@ -236,6 +283,220 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
       _condition = kDroneConditions.first;
       _fixSuggestionCtrl.clear();
     });
+  }
+
+  // ── Add New Drone (needs admin approval) ───────────────────────────────────
+
+  Future<void> _showAddNewDroneDialog() async {
+    final isAdmin = context.read<CurrentAccess>().isAdmin;
+    final nameCtrl = TextEditingController();
+    final serialCtrl = TextEditingController();
+    String group = kDroneGroups.first;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          // Explicit light colours: the app theme is dark, which made the
+          // typed text / labels invisible on this dialog.
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          title: const Text('Add New Drone',
+              style: TextStyle(color: kNavy, fontWeight: FontWeight.w800)),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: nameCtrl,
+                textCapitalization: TextCapitalization.characters,
+                style: const TextStyle(color: kNavy, fontSize: 15),
+                decoration: _dialogDeco('Drone name *'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: serialCtrl,
+                style: const TextStyle(color: kNavy, fontSize: 15),
+                decoration: _dialogDeco('Serial number'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: group,
+                dropdownColor: Colors.white,
+                style: const TextStyle(color: kNavy, fontSize: 15),
+                decoration: _dialogDeco('Group'),
+                items: kDroneGroups
+                    .map((g) => DropdownMenuItem(
+                    value: g,
+                    child: Text(g, style: const TextStyle(color: kNavy))))
+                    .toList(),
+                onChanged: (v) => setD(() => group = v ?? group),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                isAdmin
+                    ? 'As admin, this drone is added immediately.'
+                    : 'The drone will show in RED as "PENDING" until the admin approves it.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(isAdmin ? 'Add' : 'Send for approval',
+                    style: const TextStyle(color: kGreen, fontWeight: FontWeight.w800))),
+          ],
+        ),
+      ),
+    );
+    final name = nameCtrl.text.trim();
+    final serial = serialCtrl.text.trim();
+    nameCtrl.dispose();
+    serialCtrl.dispose();
+    if (ok != true || !mounted) return;
+    if (name.isEmpty) {
+      _snack('Drone name is required', error: true);
+      return;
+    }
+    final exists = kDroneMasterList.any((e) => e.key == droneNameKey(name)) ||
+        await DroneRequestService.nameTaken(name);
+    if (exists) {
+      if (mounted) _snack('"$name" is already in the drone list', error: true);
+      return;
+    }
+    try {
+      await DroneRequestService.submit(
+          name: name, group: group, serialNumber: serial, isAdmin: isAdmin);
+      if (!mounted) return;
+      _snack(isAdmin
+          ? 'Drone added'
+          : 'Sent to admin. Shown in RED until approved');
+      await _loadDrones();
+    } catch (e) {
+      if (mounted) _snack('Could not add drone: $e', error: true);
+    }
+  }
+
+  /// Tapping a RED (pending) drone: admin can approve / reject, everyone
+  /// else is told it is still waiting.
+  Future<void> _handlePendingDrone(DroneRequest r) async {
+    final isAdmin = context.read<CurrentAccess>().isAdmin;
+    if (!isAdmin) {
+      _snack('"${r.name}" is waiting for admin approval', error: true);
+      return;
+    }
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: Text('Approve "${r.name}"?',
+            style: const TextStyle(color: kNavy, fontWeight: FontWeight.w800)),
+        content: Text('Requested by ${r.requestedBy}\nGroup: ${r.group}'
+            '${r.serialNumber.isEmpty ? '' : '\nSerial: ${r.serialNumber}'}',
+            style: const TextStyle(color: kNavy)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Later')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, 'reject'),
+              child: const Text('Reject',
+                  style: TextStyle(color: Color(0xFFFF6B6B)))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, 'approve'),
+              child: const Text('Approve')),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    try {
+      if (choice == 'approve') {
+        await DroneRequestService.approve(r);
+        if (mounted) _snack('"${r.name}" approved');
+      } else {
+        await DroneRequestService.reject(r);
+        if (mounted) _snack('"${r.name}" rejected');
+      }
+      if (mounted) await _loadDrones();
+    } catch (e) {
+      if (mounted) _snack('Failed: $e', error: true);
+    }
+  }
+
+  InputDecoration _dialogDeco(String label) => InputDecoration(
+    labelText: label,
+    labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+    enabledBorder: UnderlineInputBorder(
+        borderSide: BorderSide(color: Colors.grey.shade400)),
+    focusedBorder:
+    const UnderlineInputBorder(borderSide: BorderSide(color: kTeal, width: 2)),
+  );
+
+  /// Only drones added through "Add New Drone" can be deleted. Fleet-list
+  /// (DRONE_LIST) drones are re-created from the fixed list, so they stay.
+  bool _canDelete(Drone d) =>
+      !kDroneMasterList.any((e) => e.key == droneNameKey(d.name));
+
+  /// ADMIN ONLY: deletes a drone that was added via "Add New Drone"
+  /// (or rejects a still-pending one).
+  Future<void> _deleteDrone(Drone d) async {
+    if (!context.read<CurrentAccess>().isAdmin) {
+      _snack('Only the admin can delete drones', error: true);
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Delete drone?',
+            style: TextStyle(color: kNavy, fontWeight: FontWeight.w800)),
+        content: Text(
+            '"${d.name}" and its IN / OUT history will be removed permanently.',
+            style: const TextStyle(color: kNavy)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete',
+                  style: TextStyle(color: kCoral, fontWeight: FontWeight.w800))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      final pending = _pending[d.id];
+      if (pending != null) {
+        await DroneRequestService.reject(pending);
+      } else {
+        final res = await widget.service.deleteDrone(d.id);
+        if (!res.success) {
+          if (mounted) _snack('Delete failed: ${res.error}', error: true);
+          return;
+        }
+        await DroneRequestService.markDeletedByDroneId(d.id);
+      }
+      if (_selectedId == d.id) _selectedId = null;
+      if (mounted) {
+        _snack('"${d.name}" deleted');
+        await _loadDrones();
+      }
+    } catch (e) {
+      if (mounted) _snack('Delete failed: $e', error: true);
+    }
+  }
+
+  void _snack(String msg, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: error ? kCoral : kGreen,
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   void _addCustomProduct() {
@@ -593,9 +854,23 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
   // ── Drone dropdown (grouped, from the fleet list) ──────────────────────────
 
   Widget _buildDroneDropdown() {
+    final isAdmin = context.watch<CurrentAccess>().isAdmin;
     final items = <DropdownMenuItem<String>>[];
     final selectedBuilders = <Widget>[];
     String? lastGroup;
+
+    // "+ Add New Drone" — always the first row.
+    items.add(const DropdownMenuItem<String>(
+      value: '__add_new',
+      child: Row(children: [
+        Icon(Icons.add_circle_outline_rounded, size: 18, color: kTeal),
+        SizedBox(width: 10),
+        Text('Add New Drone',
+            style: TextStyle(
+                color: kTeal, fontSize: 14, fontWeight: FontWeight.w800)),
+      ]),
+    ));
+    selectedBuilders.add(const SizedBox.shrink());
 
     for (final d in _drones) {
       final group = d.category ?? 'Other';
@@ -614,6 +889,7 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
         selectedBuilders.add(const SizedBox.shrink());
       }
       final isOut = d.status == 'OUT';
+      final isPending = _pending.containsKey(d.id);
       items.add(DropdownMenuItem<String>(
         value: d.id,
         child: Row(
@@ -622,23 +898,37 @@ class _AddDroneEntryScreenState extends State<AddDroneEntryScreen>
               width: 8,
               height: 8,
               decoration: BoxDecoration(
-                  color: isOut ? kAmber : kTeal, shape: BoxShape.circle),
+                  color: isPending ? kCoral : (isOut ? kAmber : kTeal),
+                  shape: BoxShape.circle),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(d.name,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: kNavy,
+                  style: TextStyle(
+                      color: isPending ? kCoral : kNavy,
                       fontSize: 14,
                       fontWeight: FontWeight.w600)),
             ),
             const SizedBox(width: 8),
-            Text(d.status,
+            Text(isPending ? 'PENDING' : d.status,
                 style: TextStyle(
-                    color: isOut ? kAmber : kTeal,
+                    color: isPending ? kCoral : (isOut ? kAmber : kTeal),
                     fontSize: 11,
                     fontWeight: FontWeight.w800)),
+            // ADMIN ONLY: delete icon (only for drones added via Add New Drone).
+            if (isAdmin && _canDelete(d))
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context); // close the dropdown menu first
+                  _deleteDrone(d);
+                },
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 10),
+                  child: Icon(Icons.delete_outline_rounded,
+                      size: 20, color: kCoral),
+                ),
+              ),
           ],
         ),
       ));

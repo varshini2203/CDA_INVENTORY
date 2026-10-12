@@ -222,6 +222,13 @@ class _NewProductDetailScreenState extends State<NewProductDetailScreen> {
                       _product.salePrice > 0
                           ? '₹${_product.salePrice.toStringAsFixed(2)}'
                           : '—'),
+                  _row('GST', _product.gstLabel),
+                  if (_product.hasGst && _product.salePrice > 0) ...[
+                    _row('GST Amount',
+                        '₹${_product.gstAmount.toStringAsFixed(2)}'),
+                    _row('Sale Price (with GST)',
+                        '₹${_product.salePriceWithGst.toStringAsFixed(2)}'),
+                  ],
                   _row('Available Quantity for Sale',
                       '${_product.availableQuantityForSale}'),
                   _row('Reserved Quantity', '${_product.reservedQuantity}'),

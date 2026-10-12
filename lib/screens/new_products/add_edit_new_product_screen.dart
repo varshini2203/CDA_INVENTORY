@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:cda_inventory/models/new_product.dart';
+import 'package:cda_inventory/constants/new_product_categories.dart';
 import 'package:cda_inventory/services/new_product_service.dart';
 import 'package:cda_inventory/services/current_user_service.dart';
 import 'package:cda_inventory/widgets/common/auto_user_field.dart';
@@ -35,7 +36,12 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
   late final TextEditingController _brand;
   late final TextEditingController _modelNumber;
   late final TextEditingController _description;
-  String _category = 'General';
+  String _category = 'Other';
+
+  // Which group the product belongs to. null until the user chooses
+  // (required when adding a new product).
+  bool? _listedOnWebsite;
+  bool _groupError = false;
 
   // Purchase Information
   late final TextEditingController _vendorName;
@@ -52,6 +58,12 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
   late final TextEditingController _availableQuantityForSale;
   late final TextEditingController _reservedQuantity;
   late final TextEditingController _stockValue;
+
+  // GST option — pick a default (Without GST / With GST 5-12-18-28 %) from
+  // the dropdown, or choose "Custom GST %" and type any rate manually.
+  // Rate 0 == Without GST. Saved on the product as `gstRate`.
+  late String _gstChoice;
+  late final TextEditingController _customGst;
 
   // Inventory / Stock Information
   String _branch = 'CDA Admin';
@@ -91,9 +103,10 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
     _brand = TextEditingController(text: e?.brand ?? '');
     _modelNumber = TextEditingController(text: e?.modelNumber ?? '');
     _description = TextEditingController(text: e?.description ?? '');
-    _category = (e != null && NewProductOptions.categories.contains(e.category))
-        ? e.category
-        : 'General';
+    // Legacy / imported values (e.g. 'General', 'Batteries') are mapped to
+    // the current list instead of being silently reset.
+    _category = NewProductCategories.normalize(e?.category);
+    _listedOnWebsite = e?.listedOnWebsite;
 
     _vendorName = TextEditingController(text: e?.vendorName ?? '');
     _vendorContact = TextEditingController(text: e?.vendorContact ?? '');
@@ -125,6 +138,13 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
             ? ''
             : e.stockValue.toStringAsFixed(2));
 
+    final savedGst = e?.gstRate ?? 0;
+    _gstChoice = NewProductGst.dropdownLabelFor(savedGst);
+    _customGst = TextEditingController(
+        text: NewProductGst.isPreset(savedGst)
+            ? ''
+            : NewProductGst.percentText(savedGst));
+
     _branch = (e != null && NewProductOptions.branches.contains(e.branch))
         ? e.branch
         : 'CDA Admin';
@@ -148,6 +168,9 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
     // reflects what the user is currently typing.
     _quantity.addListener(_refreshStockPreview);
     _minimumStockLevel.addListener(_refreshStockPreview);
+    // Same for the live "Sale Price incl. GST" preview.
+    _salePrice.addListener(_refreshStockPreview);
+    _customGst.addListener(_refreshStockPreview);
   }
 
   @override
@@ -163,7 +186,10 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
     _purchaseCost.dispose();
     _quantity.removeListener(_refreshStockPreview);
     _quantity.dispose();
+    _salePrice.removeListener(_refreshStockPreview);
     _salePrice.dispose();
+    _customGst.removeListener(_refreshStockPreview);
+    _customGst.dispose();
     _availableQuantityForSale.dispose();
     _reservedQuantity.dispose();
     _stockValue.dispose();
@@ -214,6 +240,18 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
         return Icons.check_circle_outline_rounded;
     }
   }
+
+  // ── GST (default dropdown + manual custom %) ─────────────────────────
+  bool get _isCustomGst => _gstChoice == NewProductGst.customLabel;
+
+  /// Effective GST rate: 0 == Without GST.
+  double get _gstRate {
+    if (_isCustomGst) return double.tryParse(_customGst.text.trim()) ?? 0;
+    return NewProductGst.presetFromDropdownLabel(_gstChoice) ?? 0;
+  }
+
+  double get _previewSalePrice =>
+      double.tryParse(_salePrice.text.trim()) ?? 0;
 
   // ── Date picker ───────────────────────────────────────────────────────
   Future<void> _pickPurchaseDate() async {
@@ -296,6 +334,18 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
       return;
     }
 
+    if (_listedOnWebsite == null) {
+      setState(() => _groupError = true);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text(
+            'Choose: List of Products in Website or Product Availability Branches'),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+      return;
+    }
+
     setState(() => _saving = true);
 
     try {
@@ -336,6 +386,7 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
         quantity: int.tryParse(_quantity.text.trim()) ?? 0,
         unit: _unit,
         salePrice: double.tryParse(_salePrice.text.trim()) ?? 0,
+        gstRate: _gstRate,
         availableQuantityForSale:
         int.tryParse(_availableQuantityForSale.text.trim()) ??
             (int.tryParse(_quantity.text.trim()) ?? 0),
@@ -347,6 +398,7 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
         // Stock status is derived, not chosen — kept on the record purely
         // as a convenient, queryable snapshot of the status at save time.
         status: _previewStockStatus,
+        listedOnWebsite: _listedOnWebsite ?? false,
         addedBy: addedBy,
         employeeId: _employeeId.text.trim(),
         department: _department.text.trim(),
@@ -430,6 +482,8 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
                     items: NewProductOptions.categories,
                     onChanged: (v) => setState(() => _category = v!),
                   ),
+                  const SizedBox(height: 14),
+                  _groupPicker(),
                   const SizedBox(height: 14),
                   _field(
                     controller: _brand,
@@ -570,6 +624,8 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 14),
+                  _gstSection(),
                   const SizedBox(height: 14),
                   Row(
                     children: [
@@ -740,6 +796,105 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
   }
 
   // ── Small building blocks ────────────────────────────────────────────
+
+  // ── GST option: dropdown (defaults) + manual custom % + live preview ──
+  Widget _gstSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _dropdown(
+          label: 'GST (With / Without)',
+          icon: Icons.percent_rounded,
+          value: _gstChoice,
+          items: NewProductGst.dropdownLabels,
+          onChanged: (v) => setState(() => _gstChoice = v!),
+        ),
+        if (_isCustomGst) ...[
+          const SizedBox(height: 14),
+          _field(
+            controller: _customGst,
+            label: 'Custom GST % (type manually)',
+            icon: Icons.edit_rounded,
+            keyboardType:
+            const TextInputType.numberWithOptions(decimal: true),
+            validator: (v) {
+              final n = double.tryParse((v ?? '').trim());
+              if (n == null || n <= 0 || n > 100) {
+                return 'Enter a GST % between 0.01 and 100';
+              }
+              return null;
+            },
+          ),
+        ],
+        const SizedBox(height: 14),
+        _gstPreview(),
+      ],
+    );
+  }
+
+  /// Live breakdown under the GST dropdown: price without GST, the GST
+  /// amount, and the final price with GST.
+  Widget _gstPreview() {
+    final rate = _gstRate;
+    final price = _previewSalePrice;
+    final withGst = rate > 0;
+    final color = withGst ? const Color(0xFF1976D2) : Colors.grey.shade600;
+
+    Widget line(String label, String value, {bool bold = false}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                    fontWeight: bold ? FontWeight.w700 : FontWeight.w500)),
+          ),
+          Text(value,
+              style: TextStyle(
+                  fontSize: bold ? 14 : 12.5,
+                  fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+                  color: bold ? color : Colors.black87)),
+        ],
+      ),
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(withGst ? Icons.receipt_long_rounded : Icons.money_off_rounded,
+                  color: color, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                NewProductGst.label(rate),
+                style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w800, color: color),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          line('Sale Price (without GST)', '₹${price.toStringAsFixed(2)}'),
+          if (withGst)
+            line('GST amount', '₹${NewProductGst.gstAmount(price, rate).toStringAsFixed(2)}'),
+          if (withGst)
+            line('Sale Price (with GST)',
+                '₹${NewProductGst.priceWithGst(price, rate).toStringAsFixed(2)}',
+                bold: true),
+        ],
+      ),
+    );
+  }
 
   // Live badge showing what Quantity / Minimum Stock Level currently
   // resolve to. Auto-updates as the user types — nothing to pick manually.
@@ -993,6 +1148,81 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
         fillColor: Colors.grey.shade50,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       ),
+    );
+  }
+
+  // ── Checkbox: List of Products in Website / Product Availability Branches
+  Widget _groupPicker() {
+    Widget tile(bool value, String label, IconData icon, Color color) {
+      final sel = _listedOnWebsite == value;
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => setState(() {
+            _listedOnWebsite = value;
+            _groupError = false;
+          }),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            decoration: BoxDecoration(
+              color: sel ? color.withOpacity(0.12) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: sel
+                      ? color
+                      : (_groupError ? Colors.red.shade400 : Colors.grey.shade300),
+                  width: sel ? 1.6 : 1),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                    sel
+                        ? Icons.check_box_rounded
+                        : Icons.check_box_outline_blank_rounded,
+                    color: sel ? color : Colors.grey.shade500),
+                const SizedBox(width: 8),
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(label,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: sel ? color : Colors.black87)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Checkbox *',
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54)),
+        const SizedBox(height: 8),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              tile(true, 'List of Products in Website', Icons.language_rounded,
+                  const Color(0xFF00A98B)),
+              const SizedBox(width: 10),
+              tile(false, 'Product Availability Branches', Icons.store_rounded,
+                  const Color(0xFF1976D2)),
+            ],
+          ),
+        ),
+        if (_groupError)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Text('Please choose one option',
+                style: TextStyle(color: Colors.red.shade700, fontSize: 12)),
+          ),
+      ],
     );
   }
 

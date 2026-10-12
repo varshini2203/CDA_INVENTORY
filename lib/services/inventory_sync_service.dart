@@ -63,6 +63,15 @@ class InventorySyncService {
     'RADIOS & RECEIVERS',
     'TOOLS & ACCESSORIES',
     'COMPLETE DRONE / KIT',
+    // New Products shop categories (same fixed-asset vs consumable split
+    // as the old equivalents: Frames/Motors/Cameras/Controllers = asset;
+    // Accessories/Battery/Propeller = consumable).
+    'MOTORS',
+    'ELECTRONICS',
+    'GOGGLES',
+    'ACTION CAMERA',
+    'R.T.F DRONES',
+    'VIDEO TRANSMITTER & CAMERAS & ANTENNAS',
   };
 
   static bool isFixedAsset(String category) {
@@ -78,6 +87,7 @@ class InventorySyncService {
   // ── Branch module category-key inference ────────────────────────────
   static String _branchCategoryKey(String category) {
     final c = category.toLowerCase();
+    if (c.contains('accessor')) return 'accessory'; // before 'drone': "Drone Accessories"
     if (c.contains('drone')) return 'drone';
     if (c.contains('batter')) return 'battery';
     if (c.contains('charg')) return 'charger';

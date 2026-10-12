@@ -26,6 +26,7 @@
 
 import '../../models/inventory_model.dart';
 import '../../models/new_product.dart';
+import '../../constants/new_product_categories.dart';
 import '../activity_log_service.dart';
 import '../current_user_service.dart';
 import '../inventory_service.dart';
@@ -72,6 +73,21 @@ double _asDouble(Map<String, dynamic> row, String key, [double fallback = 0]) {
   if (v is num) return v.toDouble();
   return fallback;
 }
+
+// Tick-style cell -> bool. Accepts Yes / Y / True / 1 / X / ✓ / ✔ / ☑ / ✅ ...
+// Public so the bulk-import preview screen can seed its per-row checkboxes
+// with exactly the same rule the importer uses.
+bool importTickValue(dynamic v) {
+  if (v is bool) return v;
+  if (v is num) return v != 0;
+  const yes = {
+    'yes', 'y', 'true', '1', 'x', '✓', '✔', '☑', '✅', 'tick', 'ticked',
+    'checked', 'website',
+  };
+  return yes.contains(_norm(v?.toString()));
+}
+
+bool _asTick(Map<String, dynamic> row, String key) => importTickValue(row[key]);
 
 DateTime? _asDate(Map<String, dynamic> row, String key) {
   final v = row[key];
@@ -237,7 +253,7 @@ final ModuleImportConfig newProductsImportConfig = ModuleImportConfig(
       key: 'category',
       label: 'Category',
       aliases: _categoryAliases,
-      defaultValue: 'General',
+      defaultValue: 'Other',
     ),
     const ImportFieldConfig(
       key: 'brand',
@@ -309,6 +325,43 @@ final ModuleImportConfig newProductsImportConfig = ModuleImportConfig(
       type: ImportValueType.decimal,
       defaultValue: 0.0,
     ),
+    // ── GST option (With GST / Without GST) ───────────────────────────
+    // Two optional columns, either or both may be present in the file:
+    //   "GST" / "GST Type" / "With GST / Without GST"  -> text such as
+    //       "With GST", "Without GST", "GST 18%", "18%", "No Tax" ...
+    //   "GST %" / "GST Rate" / "Tax %"                  -> 5 / 12 / 18 / 28 / 7.5 ...
+    // Both are read as TEXT (not decimal) so words like "Without GST" are
+    // never flagged as "not a number"; `NewProductGst.resolve` turns them
+    // into one rate (0 == Without GST). Blank / missing column == Without GST.
+    const ImportFieldConfig(
+      key: 'gstType',
+      label: 'GST (With / Without)',
+      aliases: [
+        'gst',
+        'gst type',
+        'gst option',
+        'with gst / without gst',
+        'with gst without gst',
+        'with gst',
+        'without gst',
+        'tax',
+        'tax type',
+      ],
+      defaultValue: '',
+    ),
+    const ImportFieldConfig(
+      key: 'gstPercent',
+      label: 'GST %',
+      aliases: [
+        'gst %',
+        'gst rate',
+        'gst percent',
+        'gst percentage',
+        'tax %',
+        'tax rate',
+      ],
+      defaultValue: '',
+    ),
     // No generic default — falls back to Quantity in `buildFields` below,
     // same behavior the previous bulk-import screen had.
     const ImportFieldConfig(
@@ -374,6 +427,15 @@ final ModuleImportConfig newProductsImportConfig = ModuleImportConfig(
       defaultValue: '',
     ),
     const ImportFieldConfig(
+      key: 'listedOnWebsite',
+      label: 'List of Products in Website',
+      aliases: [
+        'list of products in website', 'list of website', 'listed on website', 'list on website',
+        'website', 'on website', 'tick', 'checkbox', 'checked',
+      ],
+      defaultValue: '',
+    ),
+    const ImportFieldConfig(
       key: 'department',
       label: 'Department',
       aliases: ['department'],
@@ -404,7 +466,7 @@ final ModuleImportConfig newProductsImportConfig = ModuleImportConfig(
       productId: '',
       productName: _asText(row, 'productName'),
       productCode: _asText(row, 'productCode'),
-      category: _asText(row, 'category', 'General'),
+      category: NewProductCategories.normalize(_asText(row, 'category', 'Other')),
       brand: _asText(row, 'brand'),
       modelNumber: _asText(row, 'modelNumber'),
       description: _asText(row, 'description'),
@@ -416,6 +478,12 @@ final ModuleImportConfig newProductsImportConfig = ModuleImportConfig(
       quantity: quantity,
       unit: _asText(row, 'unit', 'Pcs'),
       salePrice: _asDouble(row, 'salePrice'),
+      // With GST / Without GST — from the file's GST column(s), or from the
+      // per-row GST dropdown on the preview screen (which writes both keys).
+      gstRate: NewProductGst.resolve(
+        type: row['gstType'],
+        percent: row['gstPercent'],
+      ),
       // Falls back to Quantity when the file has no dedicated "Available
       // Quantity for Sale" column, same as a fresh row on the Stock
       // Summary Report where the two start out equal.
@@ -429,6 +497,9 @@ final ModuleImportConfig newProductsImportConfig = ModuleImportConfig(
       storageLocation: _asText(row, 'storageLocation'),
       minimumStockLevel: _asInt(row, 'minimumStockLevel'),
       status: _asText(row, 'status', 'In Stock'),
+      // Ticked row -> "List of Products in Website"; not ticked -> "Product
+      // Availability Branches".
+      listedOnWebsite: _asTick(row, 'listedOnWebsite'),
       // Always the logged-in user — an "Added By" column in the file is ignored.
       addedBy: CurrentUserService.nameSync,
       employeeId: _asText(row, 'employeeId'),

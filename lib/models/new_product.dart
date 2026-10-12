@@ -38,6 +38,11 @@ class NewProduct {
   // can be bulk-imported straight into this module without any manual
   // remapping (see BulkImportService._aliases).
   final double salePrice; // "Sale Price"
+  // GST option — 0 means "Without GST"; any value > 0 means "With GST" at
+  // that percentage (5 / 12 / 18 / 28 from the preset list, or any custom
+  // % typed manually). Always read/written through [NewProductGst] so the
+  // Add/Edit screen, bulk import, PDF and Excel exports can never disagree.
+  final double gstRate;
   final int availableQuantityForSale; // "Available Quantity for Sale"
   final int reservedQuantity; // "Reserved Quantity"
   final double stockValue; // "Stock Value"
@@ -49,6 +54,11 @@ class NewProduct {
 
   // ── Status ────────────────────────────────────────────────────────────
   final String status;
+
+  // ── Grouping ──────────────────────────────────────────────────────────
+  // true  -> "List of Products in Website"
+  // false -> "Product Availability Branches"
+  final bool listedOnWebsite;
 
   // ── Requested By ──────────────────────────────────────────────────────
   final String addedBy;
@@ -78,6 +88,19 @@ class NewProduct {
   /// `Consumable.id`, …).
   String get id => productId;
 
+  // ── GST helpers (derived — nothing extra stored besides gstRate) ──────
+  bool get hasGst => gstRate > 0;
+
+  /// "Without GST" or "With GST 18%" — the exact text shown in the Add/Edit
+  /// dropdown, the PDF / Excel reports and written back by bulk import.
+  String get gstLabel => NewProductGst.label(gstRate);
+
+  /// GST amount charged on one unit at [salePrice] (0 when Without GST).
+  double get gstAmount => NewProductGst.gstAmount(salePrice, gstRate);
+
+  /// Sale price per unit including GST (== [salePrice] when Without GST).
+  double get salePriceWithGst => NewProductGst.priceWithGst(salePrice, gstRate);
+
   const NewProduct({
     required this.productId,
     required this.productName,
@@ -94,6 +117,7 @@ class NewProduct {
     this.quantity = 1,
     this.unit = 'Pcs',
     this.salePrice = 0,
+    this.gstRate = 0,
     this.availableQuantityForSale = 0,
     this.reservedQuantity = 0,
     this.stockValue = 0,
@@ -101,6 +125,7 @@ class NewProduct {
     this.storageLocation = '',
     this.minimumStockLevel = 0,
     this.status = 'In Stock',
+    this.listedOnWebsite = false,
     required this.addedBy,
     this.employeeId = '',
     this.department = '',
@@ -157,6 +182,11 @@ class NewProduct {
       quantity: _asInt(data['quantity'], 0),
       unit: _asString(data['unit'], 'Pcs'),
       salePrice: _asDouble(data['salePrice'], 0),
+      // Older documents have no GST fields at all -> "Without GST".
+      gstRate: NewProductGst.resolve(
+        type: data['gstType'],
+        percent: data['gstRate'],
+      ),
       availableQuantityForSale: _asInt(data['availableQuantityForSale'], 0),
       reservedQuantity: _asInt(data['reservedQuantity'], 0),
       stockValue: _asDouble(data['stockValue'], 0),
@@ -164,6 +194,8 @@ class NewProduct {
       storageLocation: _asString(data['storageLocation']),
       minimumStockLevel: _asInt(data['minimumStockLevel'], 0),
       status: _asString(data['status'], 'In Stock'),
+      listedOnWebsite: data['listedOnWebsite'] == true ||
+          _asString(data['listedOnWebsite']).toLowerCase() == 'true',
       addedBy: _asString(data['addedBy']),
       employeeId: _asString(data['employeeId']),
       department: _asString(data['department']),
@@ -197,6 +229,10 @@ class NewProduct {
     'quantity': quantity,
     'unit': unit,
     'salePrice': salePrice,
+    'gstRate': gstRate,
+    // Human-readable twin of gstRate ("With GST" / "Without GST") so the
+    // Firestore console, exports and bulk files are easy to read.
+    'gstType': hasGst ? 'With GST' : 'Without GST',
     'availableQuantityForSale': availableQuantityForSale,
     'reservedQuantity': reservedQuantity,
     'stockValue': stockValue,
@@ -204,6 +240,7 @@ class NewProduct {
     'storageLocation': storageLocation,
     'minimumStockLevel': minimumStockLevel,
     'status': status,
+    'listedOnWebsite': listedOnWebsite,
     'addedBy': addedBy,
     'employeeId': employeeId,
     'department': department,
@@ -233,6 +270,7 @@ class NewProduct {
     'Quantity': quantity,
     'Unit': unit,
     'Sale Price': salePrice,
+    'GST': gstLabel,
     'Available Quantity for Sale': availableQuantityForSale,
     'Reserved Quantity': reservedQuantity,
     'Stock Value': stockValue,
@@ -240,6 +278,7 @@ class NewProduct {
     'Storage Location': storageLocation,
     'Minimum Stock Level': minimumStockLevel,
     'Status': status,
+    'List of Products in Website': listedOnWebsite ? 'Yes' : 'No',
     'Added By': addedBy,
     'Employee ID': employeeId,
     'Department': department,
@@ -265,6 +304,7 @@ class NewProduct {
     int? quantity,
     String? unit,
     double? salePrice,
+    double? gstRate,
     int? availableQuantityForSale,
     int? reservedQuantity,
     double? stockValue,
@@ -272,6 +312,7 @@ class NewProduct {
     String? storageLocation,
     int? minimumStockLevel,
     String? status,
+    bool? listedOnWebsite,
     String? addedBy,
     String? employeeId,
     String? department,
@@ -301,6 +342,7 @@ class NewProduct {
       quantity: quantity ?? this.quantity,
       unit: unit ?? this.unit,
       salePrice: salePrice ?? this.salePrice,
+      gstRate: gstRate ?? this.gstRate,
       availableQuantityForSale:
       availableQuantityForSale ?? this.availableQuantityForSale,
       reservedQuantity: reservedQuantity ?? this.reservedQuantity,
@@ -309,6 +351,7 @@ class NewProduct {
       storageLocation: storageLocation ?? this.storageLocation,
       minimumStockLevel: minimumStockLevel ?? this.minimumStockLevel,
       status: status ?? this.status,
+      listedOnWebsite: listedOnWebsite ?? this.listedOnWebsite,
       addedBy: addedBy ?? this.addedBy,
       employeeId: employeeId ?? this.employeeId,
       department: department ?? this.department,
@@ -325,6 +368,131 @@ class NewProduct {
   }
 }
 
+/// Single source of truth for the GST option on a New Product.
+///
+///   • Add/Edit screen  -> dropdown of [presetRates] + a "Custom %" entry
+///   • Bulk import      -> [resolve] / [parse] turn any cell text into a rate
+///   • PDF / Excel      -> [label] prints "Without GST" / "With GST 18%"
+///
+/// A rate of 0 means "Without GST". Any rate > 0 means "With GST".
+class NewProductGst {
+  NewProductGst._();
+
+  static const String withoutLabel = 'Without GST';
+  static const String customLabel = 'Custom GST %';
+
+  /// Default presets — same slabs as the Add Sale / Invoice tax dropdown.
+  static const List<double> presetRates = [5, 12, 18, 28];
+
+  /// Rate used when a bulk file says "With GST" but gives no percentage.
+  static const double defaultWithGstRate = 18;
+
+  static bool isPreset(double rate) => rate == 0 || presetRates.contains(rate);
+
+  static String _fmt(double rate) => rate % 1 == 0
+      ? rate.toStringAsFixed(0)
+      : rate.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
+
+  /// "Without GST" / "With GST 18%" / "With GST 7.5%".
+  static String label(double rate) =>
+      rate <= 0 ? withoutLabel : 'With GST ${_fmt(rate)}%';
+
+  /// Short form for tight table cells: "No GST" / "GST 18%".
+  static String shortLabel(double rate) =>
+      rate <= 0 ? 'No GST' : 'GST ${_fmt(rate)}%';
+
+  /// Plain text for an editable % field ("" when Without GST).
+  static String percentText(double rate) => rate <= 0 ? '' : _fmt(rate);
+
+  static double gstAmount(double price, double rate) =>
+      rate <= 0 ? 0 : price * rate / 100;
+
+  static double priceWithGst(double price, double rate) =>
+      price + gstAmount(price, rate);
+
+  /// Options shown in the dropdown, in order: Without GST, presets, Custom.
+  static List<String> get dropdownLabels => [
+    withoutLabel,
+    ...presetRates.map(label),
+    customLabel,
+  ];
+
+  /// Dropdown label that represents [rate].
+  static String dropdownLabelFor(double rate) =>
+      isPreset(rate) ? label(rate) : customLabel;
+
+  /// Reverse of [dropdownLabelFor] for presets; null for "Custom GST %".
+  static double? presetFromDropdownLabel(String text) {
+    if (text == withoutLabel) return 0;
+    for (final r in presetRates) {
+      if (label(r) == text) return r;
+    }
+    return null;
+  }
+
+  /// Reads a single cell / value and returns a GST rate, or null when the
+  /// text isn't recognisable as a GST option at all. Accepts:
+  ///   Without GST / Without Tax / No GST / No Tax / Nil / Exempt / - / 0 / 0%  -> 0
+  ///   18 / 18% / GST 18% / With GST 18% / IGST 18                              -> 18
+  ///   0.18 (an Excel "%"-formatted cell)                                       -> 18
+  ///   With GST / Yes / Y / Included (no number)                                -> 18 (default)
+  static double? parse(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is bool) return raw ? defaultWithGstRate : 0;
+    if (raw is num) return _fromNumber(raw.toDouble());
+
+    final text = raw.toString().trim().toLowerCase();
+    if (text.isEmpty) return null;
+
+    const without = {
+      'without gst', 'without tax', 'no gst', 'no tax', 'non gst', 'non-gst',
+      'nil', 'nil rated', 'exempt', 'exempted', 'none', 'no', 'n', 'false',
+      '-', '--', 'na', 'n/a', 'without', 'wo gst', 'w/o gst', 'excl gst',
+      'excluding gst', 'ex gst',
+    };
+    if (without.contains(text)) return 0;
+
+    final number = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(text);
+    if (number != null) {
+      final v = double.tryParse(number.group(1)!);
+      if (v != null) return _fromNumber(v, hasPercentSign: text.contains('%'));
+    }
+
+    const withGst = {
+      'with gst', 'with tax', 'gst', 'tax', 'yes', 'y', 'true', 'included',
+      'incl gst', 'including gst', 'inc gst', 'with',
+    };
+    if (withGst.contains(text)) return defaultWithGstRate;
+
+    return null;
+  }
+
+  static double _fromNumber(double v, {bool hasPercentSign = false}) {
+    if (v <= 0) return 0;
+    // Excel stores a %-formatted 18% cell as 0.18.
+    if (v < 1 && !hasPercentSign) {
+      return double.parse((v * 100).toStringAsFixed(2));
+    }
+    if (v > 100) return 0; // not a plausible GST rate
+    return v;
+  }
+
+  /// Combines the two bulk-file columns that may exist:
+  ///   [type]    -> "With GST" / "Without GST" / "GST 18%" / "18%" ...
+  ///   [percent] -> 18 / "18%" / 0.18 ...
+  /// "Without" always wins; otherwise a percentage (from either column)
+  /// wins; a bare "With GST" falls back to [defaultWithGstRate].
+  static double resolve({dynamic type, dynamic percent}) {
+    final fromType = parse(type);
+    final fromPercent = parse(percent);
+
+    if (fromType != null && fromType <= 0) return 0;
+    if (fromPercent != null && fromPercent > 0) return fromPercent;
+    if (fromType != null && fromType > 0) return fromType;
+    return 0;
+  }
+}
+
 /// Dropdown / chip option lists shared by the list, add/edit and detail
 /// screens so they never drift out of sync with each other.
 class NewProductOptions {
@@ -338,17 +506,22 @@ class NewProductOptions {
     'Out of Stock',
   ];
 
+  /// Same category list as the shop. 'Other' is the catch-all and must
+  /// stay last. Icons / colours / legacy-value mapping live in
+  /// lib/constants/new_product_categories.dart.
   static const List<String> categories = [
-    'General',
+    'Accessories',
+    'Action Camera',
+    'Battery',
+    'Drone Accessories',
+    'Electronics',
     'Frames',
-    'Motors & ESCs',
-    'Flight Controllers',
-    'Batteries',
-    'Cameras & FPV',
-    'Radios & Receivers',
-    'Propellers',
-    'Tools & Accessories',
-    'Complete Drone / Kit',
+    'Goggles',
+    'Motors',
+    'Propeller',
+    'R.T.F Drones',
+    'Remote Controller',
+    'Video Transmitter & Cameras & Antennas',
     'Other',
   ];
 

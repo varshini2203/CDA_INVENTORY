@@ -12,10 +12,10 @@ import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/models/invoice_line_item.dart';
 import 'package:cda_inventory/models/customer_details.dart';
 import 'package:cda_inventory/models/payment_record.dart';
-import 'package:cda_inventory/models/product.dart';
 import 'package:cda_inventory/services/invoice_service.dart';
 import 'package:cda_inventory/services/invoice_pdf_service.dart';
-import 'package:cda_inventory/services/product_service.dart';
+import 'package:cda_inventory/services/new_product_sale_service.dart';
+import 'package:cda_inventory/services/new_product_service.dart';
 import 'package:cda_inventory/widgets/reports/branch_filter_bar.dart';
 import 'package:cda_inventory/constants/payment_modes.dart';
 
@@ -39,6 +39,8 @@ class _ItemRow {
   final TextEditingController discController = TextEditingController(text: '0');
   double taxPercent;
   String unit;
+  String? newProductId; // set when picked from the New Products list
+  int maxQty = 0; // stock left for that product (0 = unknown / free-typed)
 
   _ItemRow({required this.id, this.unit = 'NONE', this.taxPercent = 0});
 
@@ -65,6 +67,7 @@ class _ItemRow {
     unitPrice: price,
     discountPercent: discPercent,
     taxPercent: taxPercent,
+    newProductId: newProductId,
   );
 
   void dispose() {
@@ -91,7 +94,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
 
   String _customerName = '';
   List<CustomerDetails> _customerSuggestions = [];
-  List<Product> _productSuggestions = [];
+  List<SellableNewProduct> _productSuggestions = [];
 
   String _paymentMode = kDefaultPaymentMode;
   // Which branch this invoice belongs to. Previously there was no field for
@@ -170,7 +173,8 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
 
       if (inv.usesLineItems) {
         for (final li in inv.lineItems) {
-          final row = _ItemRow(id: li.id, unit: li.unit, taxPercent: li.taxPercent);
+          final row = _ItemRow(id: li.id, unit: li.unit, taxPercent: li.taxPercent)
+            ..newProductId = li.newProductId;
           row.itemController.text = li.description;
           row.serialController.text = li.hsnCode ?? '';
           row.qtyController.text = li.quantity.toString();
@@ -196,7 +200,14 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   Future<void> _loadSuggestions() async {
     try {
       final customers = await _invoiceService.fetchCustomerSuggestions();
-      final products = await ProductService.getProducts();
+      final products = await NewProductSaleService.getSellableProducts(
+        excludeInvoiceId: widget.invoiceToEdit?.id,
+      );
+      // Stock left per product (used for qty validation).
+      final left = {for (final p in products) p.product.productId: p.remaining};
+      for (final r in _rows) {
+        if (r.newProductId != null) r.maxQty = left[r.newProductId] ?? 0;
+      }
       if (!_isEditMode) {
         final nextNo = await _invoiceService.suggestNextInvoiceNumber();
         if (mounted) _invoiceNoController.text = nextNo;
@@ -347,6 +358,16 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       return;
     }
 
+    for (final r in _validRows) {
+      if (r.newProductId != null && r.qty > r.maxQty) {
+        _showSnack(
+          '"${r.itemController.text.trim()}" – only ${r.maxQty} in stock',
+          isError: true,
+        );
+        return;
+      }
+    }
+
     setState(() => _isSaving = true);
     try {
       final invoiceNo = _invoiceNoController.text.trim();
@@ -366,10 +387,22 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       }
 
       final invoice = _buildInvoiceFromForm();
+      Invoice saved;
       if (_isEditMode) {
-        await _invoiceService.updateInvoice(invoice);
+        saved = await _invoiceService.updateInvoice(invoice);
       } else {
-        await _invoiceService.createInvoice(invoice);
+        saved = await _invoiceService.createInvoice(invoice);
+      }
+      // Mark the sold New Products so they leave the Item list and show
+      // up in History.
+      try {
+        await NewProductSaleService.recordSales(saved);
+        NewProductService.clearCache();
+      } catch (e) {
+        // Do NOT hide this: if stock update fails the New Products list
+        // would stay unchanged without any sign of why.
+        debugPrint('New product stock update failed: $e');
+        if (mounted) _showSnack('Invoice saved, but New Product stock update failed: $e', isError: true);
       }
 
       if (mounted) {
@@ -391,6 +424,79 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
     }
     final invoice = _buildInvoiceFromForm();
     await Printing.layoutPdf(onLayout: (format) => InvoicePdfService.generate(invoice));
+  }
+
+  // ── History: which New Products were sold (and on which invoice) ───────
+  Future<void> _showSoldHistory() async {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        maxChildSize: 0.95,
+        builder: (_, scroll) => FutureBuilder<List<NewProductSale>>(
+          future: NewProductSaleService.getSalesHistory(),
+          builder: (c, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final list = snap.data ?? const <NewProductSale>[];
+            return Column(children: [
+              const SizedBox(height: 12),
+              const Text('Sold New Products',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: kNavy)),
+              const SizedBox(height: 8),
+              Expanded(
+                child: list.isEmpty
+                    ? const Center(child: Text('No new product sold yet'))
+                    : ListView.separated(
+                  controller: scroll,
+                  padding: const EdgeInsets.all(12),
+                  itemCount: list.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final x = list[i];
+                    final d = x.soldAt;
+                    String date = '';
+                    if (d != null) {
+                      final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
+                      final ap = d.hour >= 12 ? 'PM' : 'AM';
+                      date = '${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}  '
+                          '${h12.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')} $ap';
+                    }
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.check_circle_rounded, color: kTeal),
+                      title: Text(x.productName,
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: kNavy)),
+                      isThreeLine: true,
+                      subtitle: Text(
+                          'Customer: ${x.customerName}\n${x.invoiceNo}  •  $date',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                      trailing: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('Qty ${x.quantity}',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kNavy)),
+                          Text('₹${x.unitPrice.toStringAsFixed(2)}',
+                              style: const TextStyle(fontSize: 12, color: kNavy)),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ]);
+          },
+        ),
+      ),
+    );
   }
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -431,6 +537,15 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
           _isEditMode ? 'Edit Invoice' : 'New Sale',
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
         ),
+        actions: [
+          TextButton.icon(
+            onPressed: _showSoldHistory,
+            icon: const Icon(Icons.history_rounded, size: 18, color: Colors.white),
+            label: const Text('History',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: Form(
         key: _formKey,
@@ -983,20 +1098,33 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   }
 
   Widget _itemAutocomplete(_ItemRow row, Color accentColor) {
-    return Autocomplete<Product>(
+    return Autocomplete<SellableNewProduct>(
       initialValue: TextEditingValue(text: row.itemController.text),
-      displayStringForOption: (p) => p.name,
+      displayStringForOption: (p) => p.product.productName,
       optionsBuilder: (value) {
-        if (value.text.trim().isEmpty) return const Iterable<Product>.empty();
-        final q = value.text.toLowerCase();
-        return _productSuggestions.where((p) => p.name.toLowerCase().contains(q));
+        // Only New Products that still have stock. Products already
+        // picked on another row of this invoice are hidden too.
+        final usedElsewhere = _rows
+            .where((r) => !identical(r, row) && r.newProductId != null)
+            .map((r) => r.newProductId)
+            .toSet();
+        final q = value.text.trim().toLowerCase();
+        return _productSuggestions.where((p) =>
+        !usedElsewhere.contains(p.product.productId) &&
+            (q.isEmpty || p.product.productName.toLowerCase().contains(q)));
       },
-      onSelected: (selection) {
+      onSelected: (sel) {
+        final p = sel.product;
         setState(() {
-          row.itemController.text = selection.name;
-          if (row.priceController.text.trim().isEmpty || row.priceController.text.trim() == '0') {
-            row.priceController.text = selection.price.toStringAsFixed(2);
-          }
+          row.newProductId = p.productId;
+          row.maxQty = sel.remaining;
+          row.itemController.text = p.productName;
+          row.qtyController.text = '1';
+          row.priceController.text = p.salePrice.toStringAsFixed(2);
+          // Tax dropdown only knows 0/5/12/18/28 – anything else -> no tax.
+          row.taxPercent = _taxRates.contains(p.gstRate) ? p.gstRate : 0;
+          final u = p.unit.toUpperCase();
+          if (_units.contains(u)) row.unit = u;
         });
       },
       optionsViewBuilder: (context, onSelected, options) {
@@ -1006,19 +1134,20 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
             elevation: 4,
             borderRadius: BorderRadius.circular(12),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 200, maxWidth: 340),
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 340),
               child: ListView.builder(
                 padding: EdgeInsets.zero,
                 shrinkWrap: true,
                 itemCount: options.length,
                 itemBuilder: (context, index) {
-                  final option = options.elementAt(index);
+                  final o = options.elementAt(index);
                   return ListTile(
                     dense: true,
                     leading: const Icon(Icons.inventory_2_outlined, size: 18),
-                    title: Text(option.name, style: const TextStyle(fontSize: 14)),
-                    trailing: Text('₹${option.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12)),
-                    onTap: () => onSelected(option),
+                    title: Text(o.product.productName, style: const TextStyle(fontSize: 14)),
+                    subtitle: Text('Qty: ${o.remaining}', style: const TextStyle(fontSize: 11)),
+                    trailing: Text('₹${o.product.salePrice.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12)),
+                    onTap: () => onSelected(o),
                   );
                 },
               ),
@@ -1035,7 +1164,19 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
           controller: controller,
           focusNode: focusNode,
           textCapitalization: TextCapitalization.words,
-          onChanged: (v) => setState(() => row.itemController.text = v),
+          onChanged: (v) => setState(() {
+            row.itemController.text = v;
+            // Name edited by hand -> no longer the picked New Product.
+            if (row.newProductId != null) {
+              final match = _productSuggestions.any((p) =>
+              p.product.productId == row.newProductId &&
+                  p.product.productName == v);
+              if (!match) {
+                row.newProductId = null;
+                row.maxQty = 0;
+              }
+            }
+          }),
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: kNavy),
           decoration: InputDecoration(
             labelText: 'Item',

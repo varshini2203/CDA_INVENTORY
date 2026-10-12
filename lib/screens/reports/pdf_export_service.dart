@@ -203,14 +203,23 @@ class PdfExportService {
       List<NewProduct> rows, DateTime month) async {
     final logoBytes = await _loadLogo();
     final totalValue = rows.fold<double>(0, (s, p) => s + p.stockValue);
+    final withGstCount = rows.where((p) => p.hasGst).length;
+    final withoutGstCount = rows.length - withGstCount;
     final doc = pw.Document();
     doc.addPage(pw.MultiPage(
-      pageTheme: _pageTheme(logoBytes),
+      // Landscape: the table now carries Sale Price / GST / Price + GST
+      // columns on top of the original ones.
+      pageTheme: _pageTheme(logoBytes)
+          .copyWith(pageFormat: PdfPageFormat.a4.landscape),
       header: (ctx) => _header('New Products Report', month),
       footer: (ctx) => _footer(ctx),
       build: (ctx) => [
         pw.Text(
-            '${rows.length} products  —  Stock Value: ${_currency.format(totalValue)}',
+          // Plain "|" separators: the default PDF font has no "—" glyph
+          // (it printed as a box).
+            '${rows.length} products  |  With GST: $withGstCount  |  '
+                'Without GST: $withoutGstCount  |  '
+                'Stock Value: ${_currency.format(totalValue)}',
             style: pw.TextStyle(color: _muted, fontSize: 10)),
         pw.SizedBox(height: 10),
         _newProductsTable(rows),
@@ -478,8 +487,12 @@ class PdfExportService {
   static pw.Widget _newProductsTable(List<NewProduct> rows) {
     if (rows.isEmpty) return _emptyNote('No new products in this period.');
     return pw.TableHelper.fromTextArray(
+      // "GST" prints exactly "Without GST" or "With GST 18%" (whatever rate
+      // was picked / typed on the Add Product page or in the bulk file);
+      // "Price + GST" is the sale price including that GST.
       headers: const [
-        'Product', 'Category', 'Vendor', 'Branch', 'Qty', 'Purchase Cost', 'Stock Value', 'Status', 'Date'
+        'Product', 'Category', 'Vendor', 'Branch', 'Qty', 'Purchase Cost',
+        'Sale Price', 'GST', 'Price + GST', 'Stock Value', 'Status', 'Date'
       ],
       data: rows
           .map((p) => [
@@ -489,6 +502,9 @@ class PdfExportService {
         p.branch,
         '${p.quantity}',
         _currency.format(p.purchaseCost),
+        _currency.format(p.salePrice),
+        p.gstLabel,
+        _currency.format(p.salePriceWithGst),
         _currency.format(p.stockValue),
         p.status,
         DateFormat('dd-MM-yyyy').format(p.purchaseDate),
@@ -498,6 +514,22 @@ class PdfExportService {
       headerDecoration: const pw.BoxDecoration(color: _navy),
       cellStyle: const pw.TextStyle(fontSize: 8),
       cellHeight: 20,
+      // Proportional widths so Product gets the room and narrow columns
+      // (Category, Status, Date, GST) no longer wrap letter by letter.
+      columnWidths: const {
+        0: pw.FlexColumnWidth(3.4), // Product
+        1: pw.FlexColumnWidth(1.7), // Category
+        2: pw.FlexColumnWidth(1.7), // Vendor
+        3: pw.FlexColumnWidth(1.3), // Branch
+        4: pw.FlexColumnWidth(0.7), // Qty
+        5: pw.FlexColumnWidth(1.5), // Purchase Cost
+        6: pw.FlexColumnWidth(1.5), // Sale Price
+        7: pw.FlexColumnWidth(1.7), // GST
+        8: pw.FlexColumnWidth(1.6), // Price + GST
+        9: pw.FlexColumnWidth(1.6), // Stock Value
+        10: pw.FlexColumnWidth(1.2), // Status
+        11: pw.FlexColumnWidth(1.4), // Date
+      },
       cellAlignments: const {
         0: pw.Alignment.centerLeft,
         1: pw.Alignment.centerLeft,
@@ -508,6 +540,9 @@ class PdfExportService {
         6: pw.Alignment.centerRight,
         7: pw.Alignment.center,
         8: pw.Alignment.centerRight,
+        9: pw.Alignment.centerRight,
+        10: pw.Alignment.center,
+        11: pw.Alignment.centerRight,
       },
       border: pw.TableBorder.all(color: _border, width: 0.5),
       oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF4F7FB)),

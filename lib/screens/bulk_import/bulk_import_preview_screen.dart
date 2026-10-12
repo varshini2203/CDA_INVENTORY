@@ -23,6 +23,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../models/new_product.dart';
 import '../../shared/inventory_ui.dart';
 import '../../services/bulk_import/dynamic_bulk_import_engine.dart';
 import '../../services/bulk_import/dynamic_import_parser.dart';
@@ -69,11 +70,58 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
   DuplicateAction _duplicateAction = DuplicateAction.update;
   String? _loadError;
 
+  // ── New Products only: per-row tick ───────────────────────────────────
+  // true  -> "List of Products in Website"
+  // false -> "Product Availability Branches"
+  // Keyed by ParsedImportRow.sourceRowNumber. Seeded from the file's
+  // tick column (if any); the user can change every row before importing.
+  final Map<int, bool> _tick = {};
+
+  // ── New Products only: per-row GST option ─────────────────────────────
+  // 0  -> "Without GST"; any value > 0 -> "With GST <rate>%".
+  // Keyed by ParsedImportRow.sourceRowNumber. Seeded from the file's GST
+  // column(s) (if any); the user can change every row before importing.
+  final Map<int, double> _gst = {};
+  bool get _isNewProducts => widget.config.moduleKey == 'newProducts';
+
   @override
   void initState() {
     super.initState();
+    if (_isNewProducts) {
+      for (final r in widget.parseResult.validRows) {
+        _tick[r.sourceRowNumber] = importTickValue(r.values['listedOnWebsite']);
+        _gst[r.sourceRowNumber] = NewProductGst.resolve(
+          type: r.values['gstType'],
+          percent: r.values['gstPercent'],
+        );
+      }
+    }
     _loadDuplicates();
   }
+
+  List<ParsedImportRow> _rowsForCommit() {
+    final valid = widget.parseResult.validRows;
+    if (!_isNewProducts) return valid;
+    return valid.map((r) {
+      final rate = _gst[r.sourceRowNumber] ?? 0;
+      return r.copyWithValues({
+        ...r.values,
+        'listedOnWebsite': _tick[r.sourceRowNumber] ?? false,
+        // Written back in the same two keys the importer reads, so the
+        // user's choice on this screen always wins over the raw file text.
+        'gstType': NewProductGst.label(rate),
+        'gstPercent': rate > 0 ? NewProductGst.percentText(rate) : '',
+      });
+    }).toList();
+  }
+
+  int get _tickedCount => _tick.values.where((v) => v).length;
+
+  void _setAllTicks(bool value) =>
+      setState(() => _tick.updateAll((_, __) => value));
+
+  void _setAllGst(double rate) =>
+      setState(() => _gst.updateAll((_, __) => rate));
 
   Future<void> _loadDuplicates() async {
     try {
@@ -115,7 +163,7 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
 
     final result = await DynamicBulkImportEngine.commit(
       config: widget.config,
-      rows: widget.parseResult.validRows,
+      rows: _rowsForCommit(),
       duplicateAction: _duplicateAction,
       importedBy: widget.importedBy,
       onProgress: (done, total) {
@@ -234,6 +282,12 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
         children: [
           _buildSummaryCard(parse),
           const SizedBox(height: 12),
+          if (_isNewProducts) ...[
+            _buildTickSummaryCard(),
+            const SizedBox(height: 12),
+            _buildGstSummaryCard(),
+            const SizedBox(height: 12),
+          ],
           if (parse.recognizedHeaders.isNotEmpty || parse.unrecognizedHeaders.isNotEmpty)
             _buildColumnMappingCard(parse),
           const SizedBox(height: 12),
@@ -443,6 +497,178 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
     );
   }
 
+  // New Products shows more rows so every product can be ticked / unticked.
+  int get _rowCap => _isNewProducts ? 2000 : 200;
+
+  Widget _buildTickSummaryCard() {
+    final ticked = _tickedCount;
+    final unticked = _tick.length - ticked;
+    return Container(
+      decoration: _cardDecoration,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Checkbox for each product',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 13, color: _textPrimary)),
+          const SizedBox(height: 4),
+          const Text(
+            'Tick a product → it goes to "List of Products in Website". '
+                'Leave it unticked → it goes to "Product Availability Branches".',
+            style: TextStyle(fontSize: 12, color: _textSecondary),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _countPill(Icons.language_rounded,
+                    'List of Products in Website', ticked, _accent),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _countPill(Icons.store_rounded,
+                    'Product Availability Branches', unticked, const Color(0xFF1976D2)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: _tick.isEmpty ? null : () => _setAllTicks(true),
+                icon: const Icon(Icons.check_box_rounded, size: 18),
+                label: const Text('Tick all'),
+              ),
+              TextButton.icon(
+                onPressed: _tick.isEmpty ? null : () => _setAllTicks(false),
+                icon: const Icon(Icons.check_box_outline_blank_rounded, size: 18),
+                label: const Text('Untick all'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── GST summary: counts + "set all rows" shortcuts ────────────────────
+  Widget _buildGstSummaryCard() {
+    final withGst = _gst.values.where((r) => r > 0).length;
+    final withoutGst = _gst.length - withGst;
+    const gstBlue = Color(0xFF1976D2);
+    return Container(
+      decoration: _cardDecoration,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('GST for each product (With GST / Without GST)',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 13, color: _textPrimary)),
+          const SizedBox(height: 4),
+          const Text(
+            'Read from the file\'s GST column when it has one (e.g. "With GST", '
+                '"Without GST", "GST 18%", "18"); a blank cell or no GST column '
+                'means Without GST. You can change any row below, or set every row at once.',
+            style: TextStyle(fontSize: 12, color: _textSecondary),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _countPill(Icons.receipt_long_rounded, 'With GST',
+                    withGst, gstBlue),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _countPill(Icons.money_off_rounded, 'Without GST',
+                    withoutGst, _textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final rate in <double>[0, ...NewProductGst.presetRates])
+                ActionChip(
+                  label: Text('All: ${NewProductGst.label(rate)}',
+                      style: const TextStyle(fontSize: 11.5)),
+                  onPressed: _gst.isEmpty ? null : () => _setAllGst(rate),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // One row's GST dropdown (shown on every valid New Products row).
+  Widget _buildRowGstPicker(ParsedImportRow row) {
+    final rate = _gst[row.sourceRowNumber] ?? 0;
+    // Presets, plus the file's own rate if it isn't one of them (e.g. 7.5).
+    final options = <double>{0, ...NewProductGst.presetRates, rate}.toList();
+    final color = rate > 0 ? const Color(0xFF1976D2) : _textSecondary;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Icon(Icons.percent_rounded, size: 14, color: color),
+          const SizedBox(width: 6),
+          const Text('GST',
+              style: TextStyle(fontSize: 11, color: _textSecondary)),
+          const SizedBox(width: 8),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<double>(
+              value: rate,
+              isDense: true,
+              dropdownColor: Colors.white,
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: color),
+              items: options
+                  .map((r) => DropdownMenuItem<double>(
+                value: r,
+                child: Text(NewProductGst.label(r),
+                    style: const TextStyle(
+                        fontSize: 12, color: _textPrimary)),
+              ))
+                  .toList(),
+              onChanged: (v) =>
+                  setState(() => _gst[row.sourceRowNumber] = v ?? 0),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _countPill(IconData icon, String label, int count, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.w700, color: color)),
+          ),
+          Text('$count',
+              style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRowsCard(ImportParseResult parse) {
     return Container(
       decoration: _cardDecoration,
@@ -453,12 +679,12 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
           const Text('Rows',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: _textPrimary)),
           const SizedBox(height: 8),
-          ...parse.rows.take(200).map(_buildRowTile),
-          if (parse.rows.length > 200)
+          ...parse.rows.take(_rowCap).map(_buildRowTile),
+          if (parse.rows.length > _rowCap)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'Showing the first 200 of ${parse.rows.length} rows — every row '
+                'Showing the first $_rowCap of ${parse.rows.length} rows — every row '
                     'is still imported when you confirm.',
                 style: const TextStyle(fontSize: 11.5, color: _textSecondary),
               ),
@@ -498,6 +724,20 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
         children: [
           Row(
             children: [
+              if (_isNewProducts && row.isValid)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: Checkbox(
+                      value: _tick[row.sourceRowNumber] ?? false,
+                      activeColor: _accent,
+                      onChanged: (v) =>
+                          setState(() => _tick[row.sourceRowNumber] = v == true),
+                    ),
+                  ),
+                ),
               Expanded(
                 child: Text(
                   title.isEmpty ? 'Row ${row.sourceRowNumber}' : title,
@@ -523,8 +763,39 @@ class _BulkImportPreviewScreenState extends State<BulkImportPreviewScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          Text('Row ${row.sourceRowNumber}',
-              style: const TextStyle(fontSize: 10.5, color: _textSecondary)),
+          Row(
+            children: [
+              Text('Row ${row.sourceRowNumber}',
+                  style: const TextStyle(fontSize: 10.5, color: _textSecondary)),
+              if (_isNewProducts && row.isValid) ...[
+                const SizedBox(width: 8),
+                Icon(
+                    (_tick[row.sourceRowNumber] ?? false)
+                        ? Icons.language_rounded
+                        : Icons.store_rounded,
+                    size: 12,
+                    color: (_tick[row.sourceRowNumber] ?? false)
+                        ? _accent
+                        : const Color(0xFF1976D2)),
+                const SizedBox(width: 3),
+                Flexible(
+                  child: Text(
+                    (_tick[row.sourceRowNumber] ?? false)
+                        ? 'List of Products in Website'
+                        : 'Product Availability Branches',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: (_tick[row.sourceRowNumber] ?? false)
+                            ? _accent
+                            : const Color(0xFF1976D2)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (_isNewProducts && row.isValid) _buildRowGstPicker(row),
           if (!row.isValid)
             Padding(
               padding: const EdgeInsets.only(top: 4),

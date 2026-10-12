@@ -160,15 +160,24 @@ class NewProductService {
         final newQuantity = existing.quantity + product.quantity;
         final newAvailable = existing.availableQuantityForSale + product.quantity;
 
+        // If this add came with a GST rate (With GST ...), carry it onto the
+        // existing record too — otherwise the GST the user just chose would
+        // be silently dropped. A plain "Without GST" add never overwrites a
+        // GST rate that was already saved; use Edit to switch a product back.
+        final newGstRate = product.gstRate > 0 ? product.gstRate : existing.gstRate;
+
         await existingDoc.reference.update({
           'quantity': newQuantity,
           'availableQuantityForSale': newAvailable,
+          'gstRate': newGstRate,
+          'gstType': newGstRate > 0 ? 'With GST' : 'Without GST',
           'updatedAt': FieldValue.serverTimestamp(),
         });
 
         final updated = existing.copyWith(
           quantity: newQuantity,
           availableQuantityForSale: newAvailable,
+          gstRate: newGstRate,
           updatedAt: DateTime.now(),
         );
 
@@ -296,6 +305,21 @@ class NewProductService {
         );
       }
     }
+  }
+
+  // ── LIST OF WEBSITE tick (cheap single-field update, batched) ─────────
+  static Future<void> setListedOnWebsite(List<String> ids, bool value) async {
+    for (var i = 0; i < ids.length; i += 400) {
+      final batch = FirebaseFirestore.instance.batch();
+      for (final id in ids.skip(i).take(400)) {
+        batch.update(_col.doc(id), {
+          'listedOnWebsite': value,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+    clearCache();
   }
 
   // ── DELETE ────────────────────────────────────────────────────────────

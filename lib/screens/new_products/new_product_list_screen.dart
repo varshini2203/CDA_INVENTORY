@@ -1,8 +1,11 @@
 // lib/screens/new_products/new_product_list_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:cda_inventory/models/new_product.dart';
+import 'package:cda_inventory/constants/new_product_categories.dart';
 import 'package:cda_inventory/services/new_product_service.dart';
+import 'package:cda_inventory/services/pdf_export_service.dart';
 import 'add_edit_new_product_screen.dart';
 import 'new_product_detail_screen.dart';
 import 'package:cda_inventory/screens/bulk_import/bulk_import_screen.dart';
@@ -62,6 +65,14 @@ class _NewProductListScreenState extends State<NewProductListScreen>
   List<NewProduct>? _products;
   String? _loadError;
 
+  // null = show both groups; 'website' = List of Products in Website only;
+  // 'availability' = Product Availability Branches only.
+  String? _groupFilter;
+  bool _exporting = false;
+  static const String _grpWeb = 'website';
+  static const String _grpAvail = 'availability';
+  static const Color _blue = Color(0xFF1976D2);
+
   static const List<String> _branches = ['All', 'CDA Admin', 'CDA Ops'];
 
   static const Color _navy = Color(0xFF0A1628);
@@ -96,8 +107,7 @@ class _NewProductListScreenState extends State<NewProductListScreen>
 
   // ── Derived filter option lists ──────────────────────────────────────
   List<String> _categoryOptions(List<NewProduct> all) {
-    final set = <String>{'All', ...all.map((p) => p.category)};
-    return set.toList();
+    return ['All', ...NewProductOptions.categories];
   }
 
   List<String> _vendorOptions(List<NewProduct> all) {
@@ -109,11 +119,12 @@ class _NewProductListScreenState extends State<NewProductListScreen>
   }
 
   // ── Filtering ─────────────────────────────────────────────────────────
-  List<NewProduct> _filterList(List<NewProduct> all) {
+  List<NewProduct> _filterList(List<NewProduct> all, {bool applyGroup = true}) {
     return all.where((p) {
       final matchBranch = _branchFilter == 'All' || p.branch == _branchFilter;
       final matchCategory =
-          _categoryFilter == 'All' || p.category == _categoryFilter;
+          _categoryFilter == 'All' ||
+              NewProductCategories.normalize(p.category) == _categoryFilter;
       final matchVendor =
           _vendorFilter == 'All' || p.vendorName == _vendorFilter;
       final matchStock = _stockFilter == 'All' ||
@@ -122,13 +133,18 @@ class _NewProductListScreenState extends State<NewProductListScreen>
       final matchSearch = q.isEmpty ||
           p.productName.toLowerCase().contains(q) ||
           p.vendorName.toLowerCase().contains(q) ||
+          NewProductCategories.normalize(p.category).toLowerCase().contains(q) ||
           p.category.toLowerCase().contains(q) ||
           p.brand.toLowerCase().contains(q) ||
           p.productCode.toLowerCase().contains(q);
+      final matchGroup = !applyGroup ||
+          _groupFilter == null ||
+          (_groupFilter == _grpWeb ? p.listedOnWebsite : !p.listedOnWebsite);
       return matchBranch &&
           matchCategory &&
           matchVendor &&
           matchStock &&
+          matchGroup &&
           matchSearch;
     }).toList();
   }
@@ -452,6 +468,7 @@ class _NewProductListScreenState extends State<NewProductListScreen>
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader(stats)),
                 SliverToBoxAdapter(child: _buildFilters(sorted.length)),
+                SliverToBoxAdapter(child: _buildGroupBar()),
                 if (sorted.isEmpty)
                   SliverFillRemaining(
                     hasScrollBody: false,
@@ -802,6 +819,8 @@ class _NewProductListScreenState extends State<NewProductListScreen>
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          _buildCategoryChips(),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -820,6 +839,89 @@ class _NewProductListScreenState extends State<NewProductListScreen>
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  // ── CATEGORY CHIPS (same style as Inventory dashboard) ───────────────
+  Widget _buildCategoryChips() {
+    final all = _products ?? const <NewProduct>[];
+    final scoped = _branchFilter == 'All'
+        ? all
+        : all.where((p) => p.branch == _branchFilter).toList();
+    final counts = <String, int>{};
+    for (final p in scoped) {
+      final c = NewProductCategories.normalize(p.category);
+      counts[c] = (counts[c] ?? 0) + 1;
+    }
+    final cats = ['All', ...NewProductOptions.categories];
+
+    return SizedBox(
+      height: 40,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: cats.length,
+        itemBuilder: (_, i) {
+          final cat = cats[i];
+          final selected = _categoryFilter == cat;
+          final color = NewProductCategories.colorOf(cat);
+          final count = cat == 'All' ? scoped.length : (counts[cat] ?? 0);
+          return GestureDetector(
+            onTap: () => setState(() =>
+            _categoryFilter = (selected && cat != 'All') ? 'All' : cat),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 8, top: 2, bottom: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: selected ? color : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: selected ? color : Colors.grey.shade300),
+                boxShadow: selected
+                    ? [
+                  BoxShadow(
+                      color: color.withOpacity(0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2))
+                ]
+                    : [],
+              ),
+              child: Row(
+                children: [
+                  Icon(NewProductCategories.iconOf(cat),
+                      size: 14, color: selected ? Colors.white : color),
+                  const SizedBox(width: 5),
+                  Text(cat,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? Colors.white : Colors.grey[700],
+                      )),
+                  if (count > 0) ...[
+                    const SizedBox(width: 4),
+                    Container(
+                      padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? Colors.white.withOpacity(0.25)
+                            : color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text('$count',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: selected ? Colors.white : color,
+                          )),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -851,41 +953,280 @@ class _NewProductListScreenState extends State<NewProductListScreen>
 
   // ── LIST ──────────────────────────────────────────────────────────────
   Widget _buildListSliver(List<NewProduct> products) {
+    final web = products.where((p) => p.listedOnWebsite).toList();
+    final avail = products.where((p) => !p.listedOnWebsite).toList();
+
+    // Flat list: String = section header, NewProduct = card.
+    final items = <Object>[];
+    if (_groupFilter == null) {
+      if (web.isNotEmpty) {
+        items.add('List of Products in Website (${web.length})');
+        items.addAll(web);
+      }
+      if (avail.isNotEmpty) {
+        items.add('Product Availability Branches (${avail.length})');
+        items.addAll(avail);
+      }
+    } else {
+      items.addAll(products);
+    }
+
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
-              (ctx, i) => _NewProductCard(
-            product: products[i],
-            stockStatus: NewProductService.stockStatus(products[i]),
-            statusColor: _stockColor(NewProductService.stockStatus(products[i])),
-            onView: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  settings: const RouteSettings(name: 'New Product Detail'),
-                  builder: (_) => NewProductDetailScreen(product: products[i]),
+              (ctx, i) {
+            final item = items[i];
+            if (item is String) {
+              final isWeb = item.startsWith('List of Products in Website');
+              final c = isWeb ? _accent : _blue;
+              return Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 10),
+                child: Row(
+                  children: [
+                    Icon(isWeb ? Icons.language_rounded : Icons.store_rounded,
+                        size: 18, color: c),
+                    const SizedBox(width: 6),
+                    Text(item,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            color: c)),
+                  ],
                 ),
               );
-              _loadProducts();
-            },
-            onEdit: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  settings: const RouteSettings(name: 'Edit New Product'),
-                  builder: (_) =>
-                      AddEditNewProductScreen(existing: products[i]),
-                ),
-              );
-              _loadProducts();
-            },
-            onDelete: () => _delete(products[i]),
-          ),
-          childCount: products.length,
+            }
+            final p = item as NewProduct;
+            return _NewProductCard(
+              product: p,
+              stockStatus: NewProductService.stockStatus(p),
+              statusColor: _stockColor(NewProductService.stockStatus(p)),
+              checked: p.listedOnWebsite,
+              onChecked: (v) => _toggleWebsite(p, v == true),
+              onView: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    settings: const RouteSettings(name: 'New Product Detail'),
+                    builder: (_) => NewProductDetailScreen(product: p),
+                  ),
+                );
+                _loadProducts();
+              },
+              onEdit: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    settings: const RouteSettings(name: 'Edit New Product'),
+                    builder: (_) => AddEditNewProductScreen(existing: p),
+                  ),
+                );
+                _loadProducts();
+              },
+              onDelete: () => _delete(p),
+            );
+          },
+          childCount: items.length,
         ),
       ),
     );
+  }
+
+  // ── CHECKBOX GROUPS: List of Products in Website / Product Availability Branches ──
+  // Counts and PDFs follow the current branch / category / stock / search
+  // filters, so with everything on "All" the PDF has every product in
+  // that group.
+  Widget _buildGroupBar() {
+    final base = _filterList(_products ?? const <NewProduct>[], applyGroup: false);
+    final web = base.where((p) => p.listedOnWebsite).toList();
+    final avail = base.where((p) => !p.listedOnWebsite).toList();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.check_box_rounded, size: 16, color: Colors.black45),
+              const SizedBox(width: 6),
+              const Text('Checkbox',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
+                      color: Colors.black54)),
+              const Spacer(),
+              TextButton(
+                onPressed: base.isEmpty ? null : () => _tickAllShown(true),
+                child: const Text('Tick all shown'),
+              ),
+              TextButton(
+                onPressed: base.isEmpty ? null : () => _tickAllShown(false),
+                child: const Text('Untick all shown'),
+              ),
+            ],
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _groupTile(
+                  groupKey: _grpWeb,
+                  label: 'List of Products in Website',
+                  icon: Icons.language_rounded,
+                  color: _accent,
+                  rows: web,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _groupTile(
+                  groupKey: _grpAvail,
+                  label: 'Product Availability Branches',
+                  icon: Icons.store_rounded,
+                  color: _blue,
+                  rows: avail,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _groupTile({
+    required String groupKey,
+    required String label,
+    required IconData icon,
+    required Color color,
+    required List<NewProduct> rows,
+  }) {
+    final selected = _groupFilter == groupKey;
+    return InkWell(
+      onTap: () =>
+          setState(() => _groupFilter = selected ? null : groupKey),
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+        decoration: BoxDecoration(
+          color: selected ? color.withOpacity(0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: selected ? color : Colors.grey.shade300,
+              width: selected ? 1.6 : 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 18, color: color),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(label,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                          color: selected ? color : Colors.black87)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Text('${rows.length} product${rows.length == 1 ? '' : 's'}',
+                    style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600)),
+                const Spacer(),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: color,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  onPressed: _exporting || rows.isEmpty
+                      ? null
+                      : () => _exportGroupPdf(rows,
+                      website: groupKey == _grpWeb),
+                  icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                  label: const Text('PDF',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _replaceProduct(NewProduct n) {
+    setState(() {
+      final list = _products;
+      if (list == null) return;
+      final i = list.indexWhere((x) => x.id == n.id);
+      if (i >= 0) list[i] = n;
+    });
+  }
+
+  Future<void> _toggleWebsite(NewProduct p, bool value) async {
+    _replaceProduct(p.copyWith(listedOnWebsite: value)); // instant UI
+    try {
+      await NewProductService.setListedOnWebsite([p.id], value);
+    } catch (e) {
+      _replaceProduct(p); // roll back
+      _snack('Update failed: $e', isError: true);
+    }
+  }
+
+  Future<void> _tickAllShown(bool value) async {
+    final shown = _filterList(_products ?? const <NewProduct>[], applyGroup: false)
+        .where((p) => p.listedOnWebsite != value)
+        .toList();
+    if (shown.isEmpty) return;
+    final ok = await _confirm(
+      title: value ? 'Tick all shown' : 'Untick all shown',
+      message: value
+          ? 'Move ${shown.length} product(s) to "List of Products in Website"?'
+          : 'Move ${shown.length} product(s) to "Product Availability Branches"?',
+      confirmLabel: 'Yes',
+    );
+    if (!ok) return;
+    for (final p in shown) {
+      _replaceProduct(p.copyWith(listedOnWebsite: value));
+    }
+    try {
+      await NewProductService.setListedOnWebsite(
+          shown.map((p) => p.id).toList(), value);
+    } catch (e) {
+      _snack('Update failed: $e', isError: true);
+      _loadProducts();
+    }
+  }
+
+  Future<void> _exportGroupPdf(List<NewProduct> rows,
+      {required bool website}) async {
+    setState(() => _exporting = true);
+    try {
+      final label = website ? 'List of Products in Website' : 'Product Availability Branches';
+      final cat = _categoryFilter == 'All' ? '' : ' ($_categoryFilter)';
+      final bytes = await PdfExportService.buildNewProductsReport(
+        _sortList(rows),
+        DateTime.now(),
+        title: 'New Products - $label$cat',
+      );
+      final stamp = DateFormat('ddMMMyyyy_HHmm').format(DateTime.now());
+      await PdfExportService.download(
+          bytes, 'New_Products_${label.replaceAll(' ', '')}_$stamp.pdf');
+    } catch (e) {
+      _snack('PDF export failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   // ── EMPTY / ERROR ─────────────────────────────────────────────────────
@@ -965,6 +1306,8 @@ class _NewProductCard extends StatelessWidget {
     required this.product,
     required this.statusColor,
     required this.stockStatus,
+    required this.checked,
+    required this.onChecked,
     required this.onView,
     required this.onEdit,
     required this.onDelete,
@@ -973,6 +1316,8 @@ class _NewProductCard extends StatelessWidget {
   final NewProduct product;
   final Color statusColor;
   final String stockStatus;
+  final bool checked;
+  final ValueChanged<bool?> onChecked;
   final VoidCallback onView;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -1020,9 +1365,24 @@ class _NewProductCard extends StatelessWidget {
             child: Row(
               children: [
                 Container(width: 5, color: statusColor),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Checkbox(
+                        value: checked,
+                        onChanged: onChecked,
+                        activeColor: const Color(0xFF00D4AA),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ),
+                ),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                    padding: const EdgeInsets.fromLTRB(6, 14, 14, 14),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1073,6 +1433,10 @@ class _NewProductCard extends StatelessWidget {
                                   icon: Icons.sell_rounded,
                                   text:
                                   '₹${product.salePrice.toStringAsFixed(2)}'),
+                            // "Without GST" / "With GST 18%"
+                            _InfoPill(
+                                icon: Icons.percent_rounded,
+                                text: product.gstLabel),
                             _InfoPill(
                                 icon: Icons.calendar_today_rounded,
                                 text: _formatDate(product.purchaseDate)),
