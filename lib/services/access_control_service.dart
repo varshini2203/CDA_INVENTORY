@@ -409,6 +409,33 @@ class AccessControlService {
     );
   }
 
+  /// Grant or revoke the restricted finance modules (Invoices / Sales /
+  /// Purchases) for one employee. [modules] is the COMPLETE new set —
+  /// pass an empty set to hide all of them from that person.
+  static Future<void> setModuleAccess({
+    required String userId,
+    required Set<String> modules,
+  }) async {
+    final beforeDoc = await _users.doc(userId).get();
+    final beforeRaw = beforeDoc.data()?['moduleAccess'];
+    final before = beforeRaw is List
+        ? (beforeRaw.whereType<String>().toList()..sort())
+        : <String>[];
+    final after = modules.toList()..sort();
+
+    await _users.doc(userId).set({
+      'moduleAccess': after,
+    }, SetOptions(merge: true));
+
+    ActivityLogService.logEdit(
+      module: 'Employees',
+      itemName: (beforeDoc.data()?['name'] as String?) ??
+          (beforeDoc.data()?['email'] as String?) ?? userId,
+      before: {'finance_modules': before.isEmpty ? 'none' : before.join(', ')},
+      after: {'finance_modules': after.isEmpty ? 'none' : after.join(', ')},
+    );
+  }
+
   /// Phase 4 "Remove Employee". We can't disable another user's Firebase
   /// Auth account from the client SDK (that needs the Admin SDK / a Cloud
   /// Function), so per the spec's "or mark inactive" fallback we:

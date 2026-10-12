@@ -242,20 +242,29 @@ class InvoiceService {
     return '${two(now.day)}${two(now.month)}${two(now.year % 100)}';
   }
 
-  // ── Next invoice number suggestion (e.g. "INV-230726-4F2K") ───────────────
-  // Generates a date-prefixed code and checks it against existing invoices
-  // so each one is guaranteed unique, retrying a few times on the (very
-  // unlikely) chance of a same-day collision before falling back to a
-  // timestamp-based suffix.
+  // ── Next invoice number suggestion (sequential: 001, 002, 003 …) ──────────
+  // Looks at every existing invoice whose number is purely digits, takes the
+  // highest, and returns that + 1 padded to at least 3 digits (it grows
+  // naturally to 1000, 1001 … after 999). Old random-style numbers such as
+  // "INV-230726-4F2K" are ignored, so the sequence starts at 001 and carries
+  // on from there. A final server-side duplicate check guards against two
+  // people creating an invoice at the same moment.
   Future<String> suggestNextInvoiceNumber({bool forceRefresh = false}) async {
-    final prefix = _datePrefix();
-    for (int attempt = 0; attempt < 8; attempt++) {
-      final candidate = 'INV-$prefix-${_randomInvoiceSuffix()}';
-      final exists = await invoiceNumberExists(candidate);
-      if (!exists) return candidate;
+    final invoices = await fetchInvoices(forceRefresh: true);
+    int maxNo = 0;
+    final digitsOnly = RegExp(r'^\d+$');
+    for (final inv in invoices) {
+      final no = inv.invoiceNo.trim();
+      if (!digitsOnly.hasMatch(no)) continue;
+      final n = int.tryParse(no) ?? 0;
+      if (n > maxNo) maxNo = n;
     }
-    final ts = DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase();
-    return 'INV-$prefix-$ts';
+    int next = maxNo + 1;
+    String fmt(int n) => n.toString().padLeft(3, '0');
+    while (await invoiceNumberExists(fmt(next))) {
+      next++;
+    }
+    return fmt(next);
   }
 
   // ── Quick status update (e.g. "Mark as Paid") without touching other fields ─

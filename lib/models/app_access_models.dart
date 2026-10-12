@@ -78,6 +78,11 @@ class AppUserAccess {
   final DateTime? lastLogin;
   final bool isOnline;
 
+  /// Restricted finance modules (see RestrictedModules) this user has been
+  /// granted by the admin: any of 'invoices' | 'sales' | 'purchases'.
+  /// Empty by default — nobody gets these unless the admin ticks them.
+  final Set<String> moduleAccess;
+
   AppUserAccess({
     required this.uid,
     required this.name,
@@ -92,9 +97,16 @@ class AppUserAccess {
     this.createdAt,
     this.lastLogin,
     this.isOnline = false,
+    this.moduleAccess = const <String>{},
   });
 
   bool get isAdmin => role == 'admin';
+
+  /// True if this user may see/open the restricted module [key].
+  /// Admins always can; everyone else needs to be approved AND have the
+  /// module explicitly granted by the admin.
+  bool canAccessModule(String key) =>
+      isAdmin || (canView && moduleAccess.contains(key));
   bool get canEdit => isAdmin || accessLevel == AccessLevel.editor;
   bool get canView =>
       isAdmin ||
@@ -130,6 +142,9 @@ class AppUserAccess {
           ? (data['lastLogin'] as Timestamp).toDate()
           : null,
       isOnline: (data['isOnline'] as bool?) ?? false,
+      moduleAccess: data['moduleAccess'] is List
+          ? (data['moduleAccess'] as List).whereType<String>().toSet()
+          : const <String>{},
     );
   }
 }

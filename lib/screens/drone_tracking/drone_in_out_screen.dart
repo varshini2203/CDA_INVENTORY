@@ -1428,6 +1428,12 @@ class _InOutDateStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final fmt = DateFormat('d MMM, h:mm a');
     final segments = <Widget>[];
+    // An IN can never be earlier than its OUT — never show a mismatched pair.
+    final inAt = (checkedInAt != null &&
+        checkedOutAt != null &&
+        checkedInAt!.isBefore(checkedOutAt!))
+        ? null
+        : checkedInAt;
 
     if (checkedOutAt != null) {
       segments.add(Expanded(
@@ -1440,13 +1446,13 @@ class _InOutDateStrip extends StatelessWidget {
         ),
       ));
     }
-    if (checkedInAt != null) {
+    if (inAt != null) {
       segments.add(Expanded(
         child: _segment(
           color: _kGreen,
           icon: Icons.flight_land_rounded,
           label: 'In',
-          value: fmt.format(checkedInAt!),
+          value: fmt.format(inAt),
           alignEnd: true,
         ),
       ));

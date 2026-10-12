@@ -39,13 +39,16 @@ class ExcelExportService {
     required List<DroneReportRow> drones,
     required List<StockTransaction> stock,
     required List<Invoice> invoices,
+    // False for users without Invoices access: the invoice rows in the
+    // summary and the whole Invoices sheet are left out of the workbook.
+    bool includeInvoices = true,
   }) {
     final excel = Excel.createExcel();
 
-    _writeSummarySheet(excel, month, summary);
+    _writeSummarySheet(excel, month, summary, includeInvoices: includeInvoices);
     _writeDroneSheet(excel, month, drones);
     _writeStockSheet(excel, month, stock);
-    _writeInvoiceSheet(excel, month, invoices);
+    if (includeInvoices) _writeInvoiceSheet(excel, month, invoices);
 
     if (excel.sheets.containsKey('Sheet1')) {
       excel.delete('Sheet1');
@@ -141,7 +144,8 @@ class ExcelExportService {
   }
 
   static void _writeSummarySheet(
-      Excel excel, DateTime month, MonthlySummary s) {
+      Excel excel, DateTime month, MonthlySummary s,
+      {bool includeInvoices = true}) {
     final sheet = excel['Summary'];
     _writeTitleRow(sheet, 'Monthly Consolidated Report', month);
 
@@ -153,8 +157,10 @@ class ExcelExportService {
       [TextCellValue('Stock OUT transactions'), IntCellValue(s.stockOutCount)],
       [TextCellValue('Stock IN quantity'), IntCellValue(s.stockInQty)],
       [TextCellValue('Stock OUT quantity'), IntCellValue(s.stockOutQty)],
-      [TextCellValue('Invoice count'), IntCellValue(s.invoiceCount)],
-      [TextCellValue('Invoice total (Rs.)'), DoubleCellValue(s.invoiceTotal)],
+      if (includeInvoices) ...[
+        [TextCellValue('Invoice count'), IntCellValue(s.invoiceCount)],
+        [TextCellValue('Invoice total (Rs.)'), DoubleCellValue(s.invoiceTotal)],
+      ],
     ];
     var r = 3;
     for (final row in rows) {

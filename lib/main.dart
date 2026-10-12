@@ -24,18 +24,26 @@ import 'providers/language_provider.dart';
 
 import 'core/access/access_scope.dart';
 import 'core/access/access_route_observer.dart';
+
 import 'services/drone_reminder_service.dart';
 import 'services/drone_service_alert_service.dart';
 import 'services/push_notification_service.dart';
+
 import 'widgets/in_app_notification_banner.dart';
 
-// Flutter's default scroll behavior only lets touch/stylus drag a
-// scrollable — a mouse click-and-drag is deliberately excluded, which is
-// why every list in the app (including the Live Activity Feed) looked
-// scrollable but didn't respond to a mouse drag when running on web or
-// desktop Chrome. Only the mouse wheel worked. Adding PointerDeviceKind
-// .mouse to dragDevices here fixes drag-to-scroll app-wide in one place,
-// instead of patching every individual screen.
+
+// ============================================================
+// APP SCROLL BEHAVIOR
+// ============================================================
+//
+// Flutter's default scroll behavior allows touch/stylus dragging,
+// but mouse drag scrolling is not enabled by default.
+//
+// This enables mouse dragging for scrollable widgets across the
+// entire application, which is useful when running the application
+// on Windows desktop or Flutter Web.
+//
+
 class AppScrollBehavior extends MaterialScrollBehavior {
   @override
   Set<PointerDeviceKind> get dragDevices => {
@@ -44,135 +52,352 @@ class AppScrollBehavior extends MaterialScrollBehavior {
   };
 }
 
+
+// ============================================================
+// MAIN
+// ============================================================
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ----------------------------------------------------------
+  // FIREBASE
+  // ----------------------------------------------------------
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Some networks (VPNs, proxies, certain WiFi setups) block or drop the
-  // QUIC/WebChannel transport Firestore's web client prefers, which shows
-  // up as ERR_QUIC_PROTOCOL_ERROR / stuck "Listen" streams and can leave
-  // screens that wait on a Firestore read looking blank. This makes the
-  // client auto-detect that case and transparently fall back to
-  // long-polling instead, with no visible difference to the user.
+  // ----------------------------------------------------------
+  // FIRESTORE
+  // ----------------------------------------------------------
+  //
+  // Some networks, VPNs, proxies and Wi-Fi configurations can
+  // interfere with Firestore's preferred WebChannel / QUIC
+  // transport.
+  //
+  // This allows Firestore Web to automatically fall back to
+  // long-polling when required.
+  //
+
   FirebaseFirestore.instance.settings = const Settings(
     webExperimentalAutoDetectLongPolling: true,
   );
 
-  // Full push-notification pipeline (FCM + system tray while foregrounded +
-  // in-app slide-down banner). See lib/services/push_notification_service.dart.
+  // ----------------------------------------------------------
+  // PUSH NOTIFICATIONS
+  // ----------------------------------------------------------
+  //
+  // PushNotificationService now contains Windows initialization
+  // settings for flutter_local_notifications.
+  //
+  // On Android/iOS:
+  //   Firebase Cloud Messaging is initialized.
+  //
+  // On Windows:
+  //   Windows local notification settings are initialized.
+  //   FCM-specific Android/iOS operations are skipped.
+  //
+
   await PushNotificationService.instance.init();
 
-  // Local notifications used for the "did you forget to bring the drone
-  // back?" 1-hour reminder — see lib/services/drone_reminder_service.dart.
+  // ----------------------------------------------------------
+  // DRONE REMINDER NOTIFICATIONS
+  // ----------------------------------------------------------
+  //
+  // Initializes the local notification service responsible for
+  // the "did you forget to bring the drone back?" reminder.
+  //
+
   await DroneReminderService.instance.init();
-  // Drone Services: alert when a service passes its scheduled date.
+
+  // ----------------------------------------------------------
+  // DRONE SERVICE ALERTS
+  // ----------------------------------------------------------
+  //
+  // Initializes alerts for drones whose scheduled service date
+  // has passed.
+  //
+
   await DroneServiceAlertService.instance.init();
 
-  runApp(const ChennaiDroneInventoryApp());
+  // ----------------------------------------------------------
+  // START APPLICATION
+  // ----------------------------------------------------------
+
+  runApp(
+    const ChennaiDroneInventoryApp(),
+  );
 }
 
-class ChennaiDroneInventoryApp extends StatelessWidget {
-  const ChennaiDroneInventoryApp({super.key});
 
-  // Created ONCE per app lifetime, not once per rebuild. MaterialApp is
-  // rebuilt every time ThemeProvider notifies its Consumer below (e.g. a
-  // dark-mode toggle) — if AccessRouteObserver() were instantiated inline
-  // in that build() method, every one of those rebuilds silently swapped
-  // in a brand-new observer with empty `_lastLabel` / `_lastLoggedAt`
-  // state, which defeated its own duplicate-visit throttle and let the
-  // same screen get logged repeatedly in quick succession.
-  static final AccessRouteObserver _accessRouteObserver = AccessRouteObserver();
+// ============================================================
+// MAIN APPLICATION
+// ============================================================
+
+class ChennaiDroneInventoryApp extends StatelessWidget {
+  const ChennaiDroneInventoryApp({
+    super.key,
+  });
+
+  // Created ONCE for the entire application lifetime.
+  //
+  // This prevents the AccessRouteObserver from being recreated
+  // every time ThemeProvider causes MaterialApp to rebuild.
+  //
+  // The observer maintains its own state for preventing duplicate
+  // activity-feed entries.
+  static final AccessRouteObserver _accessRouteObserver =
+  AccessRouteObserver();
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => BillsProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider(create: (_) => LanguageProvider()),
-        // Live "who am I / what can I edit" state, populated right after
-        // login and read by EditGuard / ViewOnlyBanner / admin screens
-        // anywhere in the widget tree.
-        ChangeNotifierProvider(create: (_) => CurrentAccess()),
-        // If you already have other ChangeNotifierProviders declared
-        // elsewhere (e.g. wrapping DashboardScreen), move them into this
-        // list too so there's a single MultiProvider at the app root.
+        // ------------------------------------------------------
+        // BILLS
+        // ------------------------------------------------------
+
+        ChangeNotifierProvider(
+          create: (_) => BillsProvider(),
+        ),
+
+        // ------------------------------------------------------
+        // THEME
+        // ------------------------------------------------------
+
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(),
+        ),
+
+        // ------------------------------------------------------
+        // LANGUAGE
+        // ------------------------------------------------------
+
+        ChangeNotifierProvider(
+          create: (_) => LanguageProvider(),
+        ),
+
+        // ------------------------------------------------------
+        // ACCESS CONTROL
+        // ------------------------------------------------------
+        //
+        // Keeps track of the logged-in user's access level.
+        //
+
+        ChangeNotifierProvider(
+          create: (_) => CurrentAccess(),
+        ),
       ],
+
       child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, _) {
+        builder: (
+            context,
+            themeProvider,
+            _,
+            ) {
           return MaterialApp(
+            // --------------------------------------------------
+            // BASIC APP SETTINGS
+            // --------------------------------------------------
+
             debugShowCheckedModeBanner: false,
+
             title: 'Chennai Drone Academy Inventory',
+
+            // --------------------------------------------------
+            // THEME
+            // --------------------------------------------------
+
             theme: themeProvider.themeData,
+
+            // --------------------------------------------------
+            // SCROLL BEHAVIOR
+            // --------------------------------------------------
+
             scrollBehavior: AppScrollBehavior(),
-            // Lets a notification tap navigate even without a BuildContext
-            // handy (e.g. app was terminated and just launched by a tap).
-            navigatorKey: PushNotificationService.instance.navigatorKey,
-            // Wraps every screen so a push that arrives while the app is
-            // open shows a slide-down in-app banner, not just the system
-            // tray notification.
-            builder: (context, child) =>
-                InAppNotificationBanner(child: child!),
-            // Logs every screen push app-wide so the admin's Live Activity
-            // Feed sees "whatever happens in the app" without needing to
-            // instrument each of the 100+ individual screens by hand.
-            navigatorObservers: [_accessRouteObserver],
-            initialRoute: '/',
-            routes: {
-              '/': (context) => const SplashScreen(),
-              '/login': (context) => const LoginScreen(),
-              '/register': (context) => const RegisterScreen(),
-              '/dashboard': (context) {
-                // Role is passed as a route argument by login_screen.dart /
-                // waiting_approval_screen.dart / splash_screen.dart after
-                // they've resolved it from Firestore via AuthService /
-                // AccessControlService.
-                // Defaulting to 'employee' (not 'admin') is the safe
-                // fallback if anything ever navigates here without an
-                // argument.
-                final role =
-                ModalRoute.of(context)?.settings.arguments as String?;
-                return DashboardScreen(userRole: role ?? 'employee');
-              },
-              '/inventory': (context) => const InventoryDashboard(),
-              '/bills': (context) => const BillsScreen(),
-              '/waiting-approval': (context) => const WaitingApprovalScreen(),
-              '/admin/notifications': (context) =>
-              const AdminGuard(child: AdminNotificationsScreen()),
-              '/admin/employees': (context) =>
-              const AdminGuard(child: EmployeeAccessScreen()),
-              '/admin/activity': (context) =>
-              const AdminGuard(child: ActivityFeedScreen()),
+
+            // --------------------------------------------------
+            // NAVIGATION KEY
+            // --------------------------------------------------
+            //
+            // Allows PushNotificationService to navigate to a
+            // route when a notification is tapped.
+            //
+
+            navigatorKey:
+            PushNotificationService.instance.navigatorKey,
+
+            // --------------------------------------------------
+            // GLOBAL IN-APP NOTIFICATION BANNER
+            // --------------------------------------------------
+            //
+            // Foreground push notifications are sent to this
+            // widget through PushNotificationService.
+            //
+
+            builder: (
+                context,
+                child,
+                ) {
+              return InAppNotificationBanner(
+                child: child!,
+              );
             },
-            // Several screens (Employee Access / "Manage Employees",
-            // Admin Notifications / "Pending Requests", Waiting Approval,
-            // Add Invoice, Stock In/Out, etc.) are opened with
-            // Navigator.push(MaterialPageRoute(settings: RouteSettings(name: '...')))
-            // purely so the Activity Feed can log a human-readable screen
-            // name. Those names ('Employee Access', 'Admin Notifications', ...)
-            // are NOT entries in the `routes` table above.
+
+            // --------------------------------------------------
+            // ROUTE OBSERVER
+            // --------------------------------------------------
             //
-            // On mobile that's harmless — the route name is never used to
-            // reload anything. On Flutter Web it becomes the browser's URL
-            // fragment (e.g. #Employee%20Access), and hitting refresh makes
-            // Flutter try to look that name up in `routes` directly. Since
-            // it isn't there, and there was previously no fallback, the app
-            // got stuck on a blank/loading screen forever.
+            // Records screen navigation for the Admin Activity
+            // Feed.
             //
-            // onUnknownRoute is the fallback for exactly this case: any
-            // route name that doesn't match `routes` and isn't handled by
-            // onGenerateRoute lands here. We send the user back through
-            // SplashScreen, which already knows how to check auth state and
-            // redirect to the correct place (dashboard / waiting-approval /
-            // login), so a refresh on any of these screens now recovers
-            // instead of hanging.
-            onUnknownRoute: (settings) {
+
+            navigatorObservers: [
+              _accessRouteObserver,
+            ],
+
+            // --------------------------------------------------
+            // INITIAL ROUTE
+            // --------------------------------------------------
+
+            initialRoute: '/',
+
+            // ==================================================
+            // APPLICATION ROUTES
+            // ==================================================
+
+            routes: {
+              // ------------------------------------------------
+              // SPLASH
+              // ------------------------------------------------
+
+              '/': (
+                  context,
+                  ) =>
+              const SplashScreen(),
+
+              // ------------------------------------------------
+              // AUTH
+              // ------------------------------------------------
+
+              '/login': (
+                  context,
+                  ) =>
+              const LoginScreen(),
+
+              '/register': (
+                  context,
+                  ) =>
+              const RegisterScreen(),
+
+              '/waiting-approval': (
+                  context,
+                  ) =>
+              const WaitingApprovalScreen(),
+
+              // ------------------------------------------------
+              // DASHBOARD
+              // ------------------------------------------------
+
+              '/dashboard': (
+                  context,
+                  ) {
+                final String? role =
+                ModalRoute.of(context)
+                    ?.settings
+                    .arguments as String?;
+
+                return DashboardScreen(
+                  userRole: role ?? 'employee',
+                );
+              },
+
+              // ------------------------------------------------
+              // INVENTORY
+              // ------------------------------------------------
+
+              '/inventory': (
+                  context,
+                  ) =>
+              const InventoryDashboard(),
+
+              // ------------------------------------------------
+              // BILLS
+              // ------------------------------------------------
+
+              '/bills': (
+                  context,
+                  ) =>
+              const BillsScreen(),
+
+              // ------------------------------------------------
+              // ADMIN - NOTIFICATIONS
+              // ------------------------------------------------
+
+              '/admin/notifications': (
+                  context,
+                  ) =>
+              const AdminGuard(
+                child: AdminNotificationsScreen(),
+              ),
+
+              // ------------------------------------------------
+              // ADMIN - EMPLOYEE ACCESS
+              // ------------------------------------------------
+
+              '/admin/employees': (
+                  context,
+                  ) =>
+              const AdminGuard(
+                child: EmployeeAccessScreen(),
+              ),
+
+              // ------------------------------------------------
+              // ADMIN - ACTIVITY
+              // ------------------------------------------------
+
+              '/admin/activity': (
+                  context,
+                  ) =>
+              const AdminGuard(
+                child: ActivityFeedScreen(),
+              ),
+            },
+
+            // ==================================================
+            // UNKNOWN ROUTES
+            // ==================================================
+            //
+            // Some screens are opened using:
+            //
+            // Navigator.push(
+            //   MaterialPageRoute(
+            //     settings: RouteSettings(
+            //       name: 'Employee Access',
+            //     ),
+            //   ),
+            // );
+            //
+            // These human-readable names are not necessarily
+            // present in the routes map above.
+            //
+            // On Web/Desktop, refreshing such a route can cause
+            // Flutter to look for that name in the routes table.
+            //
+            // If it cannot find the route, send the user back
+            // through SplashScreen.
+            //
+
+            onUnknownRoute: (
+                RouteSettings settings,
+                ) {
               return MaterialPageRoute(
                 settings: settings,
-                builder: (context) => const SplashScreen(),
+                builder: (
+                    context,
+                    ) =>
+                const SplashScreen(),
               );
             },
           );

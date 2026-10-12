@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'admin_hero_banner.dart';
 
+import '../../core/access/restricted_modules.dart';
 import '../../models/app_access_models.dart';
 import '../../services/access_control_service.dart';
 import 'employee_activity_screen.dart';
@@ -204,6 +205,21 @@ class _EmployeeCard extends StatelessWidget {
     await AccessControlService.setAccessLevel(userId: user.uid, level: level);
   }
 
+  /// Grants/revokes one restricted finance module (Invoices / Sales /
+  /// Purchases) for this employee. Writes the complete new set.
+  Future<void> _toggleModule(BuildContext context, String key, bool grant) async {
+    final next = {...user.moduleAccess};
+    grant ? next.add(key) : next.remove(key);
+    try {
+      await AccessControlService.setModuleAccess(userId: user.uid, modules: next);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update module access: $e')),
+      );
+    }
+  }
+
   Future<void> _confirmDelete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -363,6 +379,53 @@ class _EmployeeCard extends StatelessWidget {
                   onTap: () => _setLevel(context, AccessLevel.none),
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1, color: Color(0xFFE5EAF3)),
+          const SizedBox(height: 10),
+          // ── Finance modules: Invoices / Sales / Purchases are hidden
+          // from everyone except the people ticked here. Off by default.
+          Row(
+            children: const [
+              Icon(Icons.lock_outline_rounded, size: 14, color: Color(0xFF6B7280)),
+              SizedBox(width: 6),
+              Text(
+                'Finance modules this person can see',
+                style: TextStyle(
+                    color: Color(0xFF374151), fontSize: 11.5, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (final key in RestrictedModules.all)
+                FilterChip(
+                  label: Text(RestrictedModules.label(key)),
+                  selected: user.moduleAccess.contains(key),
+                  showCheckmark: true,
+                  selectedColor: EmployeeAccessScreen._blue.withOpacity(0.16),
+                  checkmarkColor: EmployeeAccessScreen._blue,
+                  side: BorderSide(
+                    color: user.moduleAccess.contains(key)
+                        ? EmployeeAccessScreen._blue
+                        : const Color(0xFFD5DFEE),
+                  ),
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    fontWeight: user.moduleAccess.contains(key)
+                        ? FontWeight.w800
+                        : FontWeight.w500,
+                    color: user.moduleAccess.contains(key)
+                        ? EmployeeAccessScreen._blue
+                        : const Color(0xFF6B7280),
+                  ),
+                  backgroundColor: Colors.transparent,
+                  onSelected: (v) => _toggleModule(context, key, v),
+                ),
             ],
           ),
         ],

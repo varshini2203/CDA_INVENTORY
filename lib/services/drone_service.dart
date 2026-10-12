@@ -263,6 +263,13 @@ class DroneService {
           drone.status.toUpperCase() != (beforeStatus ?? '');
       if (statusChanged) {
         updates['pilot_name'] = who;
+        final newStatus = drone.status.toUpperCase();
+        if (newStatus == 'OUT') {
+          updates['checked_out_at'] = FieldValue.serverTimestamp();
+          updates['checked_in_at'] = FieldValue.delete();
+        } else if (newStatus == 'IN') {
+          updates['checked_in_at'] = FieldValue.serverTimestamp();
+        }
       } else {
         updates.remove('pilot_name');
       }
@@ -371,6 +378,7 @@ class DroneService {
         if (isOut) ...{
           'purpose': purpose,
           'checked_out_at': ts,
+          'checked_in_at': FieldValue.delete(),
           'reminder_acknowledged': false,
         } else ...{
           'purpose': null,
@@ -448,6 +456,21 @@ class DroneService {
     return trips;
   }
 
+  /// The correct Out / In stamps of a drone's LIVE (latest) record.
+  /// • OUT drone  → Out only (an open trip has no In yet).
+  /// • IN drone   → Out + In of the same trip; an In earlier than its Out
+  ///                is stale and is replaced by the real last-updated time.
+  _Stamps _liveStamps(Drone d, _Trip? last) {
+    final outAt = last?.out?.timestamp ?? d.checkedOutAt;
+    if (d.status.toUpperCase() == 'OUT') return _Stamps(outAt, null);
+    DateTime? inAt = last?.inn?.timestamp ?? d.checkedInAt;
+    if (outAt != null && (inAt == null || inAt.isBefore(outAt))) {
+      final lu = d.lastUpdated;
+      inAt = (lu != null && lu.isAfter(outAt)) ? lu : null;
+    }
+    return _Stamps(outAt, inAt);
+  }
+
   Future<ApiResult<List<Drone>>> getMovementRecords() async {
     try {
       final drones = await _fetchAllDrones();
@@ -464,11 +487,23 @@ class DroneService {
         if (!d.hasMovement) continue;
         final trips = _pairTrips(byDrone[d.id] ?? const []);
         if (trips.isEmpty) {
-          records.add(d); // legacy drone with no history
+          final legacy = _liveStamps(d, null);
+          records.add(d.copyWith(
+            checkedOutAt: legacy.out,
+            checkedInAt: legacy.inn,
+            clearCheckedInAt: legacy.inn == null,
+          )); // legacy drone with no history
           continue;
         }
         final last = trips.last;
-        records.add(d.copyWith(tripId: last.out?.id, tripInId: last.inn?.id));
+        final st = _liveStamps(d, last);
+        records.add(d.copyWith(
+          tripId: last.out?.id,
+          tripInId: last.inn?.id,
+          checkedOutAt: st.out,
+          checkedInAt: st.inn,
+          clearCheckedInAt: st.inn == null,
+        ));
         for (final t in trips.sublist(0, trips.length - 1)) {
           records.add(Drone(
             id: d.id,
@@ -588,29 +623,28 @@ class DroneService {
   Future<int> backfillCheckInOutTimestamps(List<Drone> drones) async {
     var updatedCount = 0;
     for (final d in drones) {
-      if (d.checkedInAt != null && d.checkedOutAt != null) continue;
+      if (!d.hasMovement) continue;
+      final isOut = d.status.toUpperCase() == 'OUT';
+      final out = d.checkedOutAt;
+      final inn = d.checkedInAt;
+      final needsFix = isOut
+          ? (out == null || inn != null)
+          : (out == null || inn == null || inn.isBefore(out));
+      if (!needsFix) continue;
       try {
         final historyResult = await getHistory(d.id);
-        if (!historyResult.success) continue;
-
-        DateTime? inAt = d.checkedInAt;
-        DateTime? outAt = d.checkedOutAt;
-        for (final h in historyResult.data!) {
-          if (inAt == null && h.status == 'IN' && h.timestamp != null) {
-            inAt = h.timestamp;
-          }
-          if (outAt == null && h.status == 'OUT' && h.timestamp != null) {
-            outAt = h.timestamp;
-          }
-          if (inAt != null && outAt != null) break;
-        }
+        final trips = _pairTrips(
+            historyResult.success ? historyResult.data! : const []);
+        final st = _liveStamps(d, trips.isEmpty ? null : trips.last);
 
         final updates = <String, dynamic>{};
-        if (inAt != null && d.checkedInAt == null) {
-          updates['checked_in_at'] = Timestamp.fromDate(inAt);
+        if (st.out != null && st.out != d.checkedOutAt) {
+          updates['checked_out_at'] = Timestamp.fromDate(st.out!);
         }
-        if (outAt != null && d.checkedOutAt == null) {
-          updates['checked_out_at'] = Timestamp.fromDate(outAt);
+        if (st.inn != d.checkedInAt) {
+          updates['checked_in_at'] = st.inn != null
+              ? Timestamp.fromDate(st.inn!)
+              : FieldValue.delete();
         }
         if (updates.isNotEmpty) {
           await _drones.doc(d.id).update(updates);
@@ -720,6 +754,12 @@ class DroneService {
 }
 
 /// One OUT→IN pair rebuilt from history (internal helper).
+class _Stamps {
+  final DateTime? out;
+  final DateTime? inn;
+  const _Stamps(this.out, this.inn);
+}
+
 class _Trip {
   DroneHistory? out;
   DroneHistory? inn;

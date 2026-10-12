@@ -97,6 +97,13 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   List<SellableNewProduct> _productSuggestions = [];
 
   String _paymentMode = kDefaultPaymentMode;
+
+  // Payment received? Paid / Not Paid are mutually exclusive checkboxes.
+  // When Paid, the "Amount Received" field defaults to the invoice total
+  // but can be lowered for a partial payment.
+  bool _isPaid = true;
+  bool _receivedEdited = false;
+  final _receivedController = TextEditingController();
   // Which branch this invoice belongs to. Previously there was no field for
   // this at all, so every new invoice silently saved branch: null — which
   // is why filtering Reports by "CDA Admin" or "CDA Ops" always showed 0
@@ -162,6 +169,9 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       _phoneController.text = inv.customer?.phone ?? '';
       _stateOfSupply = inv.customer?.placeOfSupply ?? 'Tamil Nadu';
       _paymentMode = resolvePaymentMode(inv.paymentMode);
+      _isPaid = inv.amountPaid > 0;
+      _receivedEdited = true;
+      _receivedController.text = inv.amountPaid.toStringAsFixed(2);
       _selectedBranch = normalizeBranch(inv.branch) ?? kBranch1;
       _termsTitle = inv.termsTitle;
       _termsNotesController.text = inv.termsNotes ?? _termsNotesController.text;
@@ -259,6 +269,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
     _invoiceNoController.dispose();
     _phoneController.dispose();
     _shippingController.dispose();
+    _receivedController.dispose();
     _termsNotesController.dispose();
     _descriptionController.dispose();
     for (final r in _rows) {
@@ -277,6 +288,14 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   double get _roundOffAmount =>
       _roundOffEnabled ? (_preRoundTotal.roundToDouble() - _preRoundTotal) : 0.0;
   double get _grandTotal => _preRoundTotal + _roundOffAmount;
+  double get _amountReceived {
+    if (!_isPaid) return 0.0;
+    final v = _receivedEdited
+        ? (double.tryParse(_receivedController.text.trim()) ?? 0.0)
+        : _grandTotal;
+    return v.clamp(0.0, _grandTotal).toDouble();
+  }
+  double get _balance => (_grandTotal - _amountReceived).clamp(0.0, double.infinity).toDouble();
 
   void _addRow() {
     setState(() => _rows.add(_ItemRow(id: 'row_${_rowSeq++}')));
@@ -297,24 +316,26 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   Invoice _buildInvoiceFromForm() {
     final lineItems = _validRows.map((r) => r.toLineItem()).toList();
 
-    // There's no separate Payment-In step any more: a sale invoice is only
-    // ever saved once its amount has been received, so we record a single
-    // payment for the full invoice total (using whatever payment mode was
-    // picked above) right here. That keeps "Received" and "Balance" correct
-    // everywhere without a second screen. On edit we reuse the original
-    // payment's id/date (if any) and just re-amount it, so re-saving an
-    // invoice after changing items/prices keeps the received amount in sync
-    // with the new total instead of drifting out of balance.
+    // Payment is recorded only when "Paid" is ticked. The received amount
+    // defaults to the full total but may be partial. "Not Paid" saves the
+    // invoice with no payment (balance = full total). On edit we reuse the
+    // original payment's id/date so re-saving keeps things consistent.
     final existingPayment =
     (_isEditMode && widget.invoiceToEdit!.payments.isNotEmpty)
         ? widget.invoiceToEdit!.payments.first
         : null;
-    final payment = PaymentRecord(
-      id: existingPayment?.id ?? 'pay_${DateTime.now().millisecondsSinceEpoch}',
-      amount: _grandTotal,
-      date: existingPayment?.date ?? _invoiceDate,
-      method: _paymentMode,
-    );
+    final received = _amountReceived;
+    final payments = (_isPaid && received > 0)
+        ? [
+      PaymentRecord(
+        id: existingPayment?.id ?? 'pay_${DateTime.now().millisecondsSinceEpoch}',
+        amount: received,
+        date: existingPayment?.date ?? _invoiceDate,
+        method: _paymentMode,
+      )
+    ]
+        : <PaymentRecord>[];
+    final fullyPaid = _isPaid && (_grandTotal - received) <= 0.01;
 
     return Invoice(
       id: widget.invoiceToEdit?.id,
@@ -322,7 +343,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       vendorName: _customerName.trim(),
       purchaseDate:
       '${_invoiceDate.day.toString().padLeft(2, '0')}-${_invoiceDate.month.toString().padLeft(2, '0')}-${_invoiceDate.year}',
-      status: 'Paid',
+      status: fullyPaid ? 'Paid' : 'Pending',
       notes: _descriptionController.text.trim().isEmpty
           ? null
           : _descriptionController.text.trim(),
@@ -333,7 +354,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
         placeOfSupply: _stateOfSupply,
       ),
       gstEnabled: false,
-      payments: [payment],
+      payments: payments,
       addedBy: widget.invoiceToEdit?.addedBy,
       addedAt: _isEditMode ? widget.invoiceToEdit!.addedAt : DateTime.now(),
       branch: _selectedBranch,
@@ -579,7 +600,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
               _field(
                 controller: _invoiceNoController,
                 label: _isEditMode ? 'Invoice Number' : 'Invoice Number (auto-generated)',
-                hint: _invoiceNoAutoGenerating ? 'Generating…' : 'e.g. INV-230726-4F2K',
+                hint: _invoiceNoAutoGenerating ? 'Generating…' : 'e.g. 001',
                 icon: Icons.tag_rounded,
                 accentColor: accentColor,
                 readOnly: !_isEditMode && !_invoiceNoAutoFailed,
@@ -724,6 +745,8 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
               ]),
               const Divider(height: 28),
               _totalPreview(),
+              const Divider(height: 28),
+              _paymentReceivedSection(accentColor),
             ]),
 
             const SizedBox(height: 100),
@@ -841,6 +864,78 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _paymentReceivedSection(Color accentColor) {
+    if (_isPaid && !_receivedEdited) {
+      _receivedController.text = _grandTotal.toStringAsFixed(2);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('PAYMENT RECEIVED?',
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: kNavy,
+                letterSpacing: 1.0)),
+        const SizedBox(height: 4),
+        Row(children: [
+          Checkbox(
+            value: _isPaid,
+            activeColor: Colors.green,
+            side: const BorderSide(color: kNavy, width: 2),
+            visualDensity: VisualDensity.compact,
+            onChanged: (v) => setState(() {
+              _isPaid = v ?? false;
+              if (_isPaid) _receivedEdited = false;
+            }),
+          ),
+          const Text('Paid',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kNavy)),
+          const SizedBox(width: 24),
+          Checkbox(
+            value: !_isPaid,
+            activeColor: Colors.red,
+            side: const BorderSide(color: kNavy, width: 2),
+            visualDensity: VisualDensity.compact,
+            onChanged: (v) => setState(() => _isPaid = !(v ?? false)),
+          ),
+          const Text('Not Paid',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kNavy)),
+        ]),
+        if (_isPaid) ...[
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _receivedController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Amount Received',
+              prefixIcon: Icon(Icons.payments_outlined, color: accentColor),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onChanged: (_) => setState(() => _receivedEdited = true),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('Received',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+          Text(_amountReceived.toStringAsFixed(2),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.green)),
+        ]),
+        const SizedBox(height: 4),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('Balance',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+          Text(_balance.toStringAsFixed(2),
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _balance > 0.01 ? Colors.red : Colors.green)),
+        ]),
+      ],
     );
   }
 

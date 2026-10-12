@@ -27,6 +27,13 @@ class CurrentAccess extends ChangeNotifier {
   bool get isAdmin => _access?.isAdmin ?? false;
   bool get canEdit => _access?.canEdit ?? false;
   bool get canView => _access?.canView ?? false;
+
+  /// True once the first snapshot of users/{uid} has arrived.
+  bool get isLoaded => _access != null;
+
+  /// Whether the signed-in user may see the restricted finance module
+  /// [key] (see RestrictedModules). Fails closed: false until loaded.
+  bool canAccessModule(String key) => _access?.canAccessModule(key) ?? false;
   AccessStatus get status => _access?.accessStatus ?? AccessStatus.pending;
 
   /// [knownName]/[knownRole] let the caller (a login screen that already
@@ -141,6 +148,58 @@ bool requireEditAccess(BuildContext context) {
     ),
   );
   return false;
+}
+
+/// Wrap a screen that belongs to a restricted finance module (Invoices /
+/// Sales / Purchases). Users who haven't been granted [module] see a
+/// "No access" page instead of the screen — and because this watches the
+/// live access stream, revoking someone mid-session locks the screen
+/// immediately. Firestore rules are the real enforcement; this is the UI
+/// layer on top.
+class ModuleGuard extends StatelessWidget {
+  final String module;
+  final Widget child;
+  const ModuleGuard({super.key, required this.module, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final allowed = context.watch<CurrentAccess>().canAccessModule(module);
+    if (allowed) return child;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F5FA),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF111827)),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline_rounded, size: 44, color: Color(0xFF9CA3AF)),
+              const SizedBox(height: 16),
+              const Text('No access',
+                  style: TextStyle(color: Color(0xFF111827), fontSize: 16, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              const Text(
+                'You have not been given access to this module. '
+                'Please contact your admin if you need it.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Go back'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Client-side guard for admin-only routes (Pending Requests, Manage

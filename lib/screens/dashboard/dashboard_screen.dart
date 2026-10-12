@@ -32,6 +32,7 @@ import 'package:cda_inventory/screens/drone_tracking/drone_reminders_screen.dart
 import 'package:cda_inventory/services/access_control_service.dart';
 import 'package:cda_inventory/models/app_access_models.dart';
 import 'package:cda_inventory/core/access/access_scope.dart';
+import 'package:cda_inventory/core/access/restricted_modules.dart';
 import 'package:cda_inventory/screens/admin/admin_notifications_screen.dart';
 import 'package:cda_inventory/screens/admin/employee_access_screen.dart';
 import 'package:cda_inventory/screens/admin/activity_feed_screen.dart';
@@ -308,6 +309,40 @@ const _drawerItems = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// RESTRICTED-MODULE VISIBILITY
+// Invoices / Sales / Purchases are only visible to the employees the admin
+// has granted them to (admins always see everything). Which title belongs to
+// which module lives in core/access/restricted_modules.dart.
+// ═══════════════════════════════════════════════════════════════════════════════
+bool _canSeeModule(CurrentAccess access, String title) {
+  final key = RestrictedModules.forTitle(title);
+  return key == null || access.canAccessModule(key);
+}
+
+/// Dashboard cards the current user is allowed to see.
+List<Map<String, dynamic>> _filterModules(CurrentAccess access) =>
+    _modules.where((m) => _canSeeModule(access, m['title'] as String)).toList();
+
+/// Drawer entries the current user is allowed to see. A parent with
+/// children (e.g. "Sales") is dropped entirely when none of its children
+/// are visible to them.
+List<Map<String, dynamic>> _filterDrawerItems(CurrentAccess access) {
+  final out = <Map<String, dynamic>>[];
+  for (final item in _drawerItems) {
+    final children = item['children'] as List<Map<String, String>>?;
+    if (children != null) {
+      final allowed =
+      children.where((c) => _canSeeModule(access, c['key']!)).toList();
+      if (allowed.isEmpty) continue;
+      out.add({...item, 'children': allowed});
+    } else if (_canSeeModule(access, item['key'] as String)) {
+      out.add(item);
+    }
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 class DashboardScreen extends StatefulWidget {
@@ -336,6 +371,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _navigate(BuildContext context, String title) {
+    // Hard stop for restricted modules, even if a stale card/menu entry is
+    // tapped right as the admin revokes access.
+    final moduleKey = RestrictedModules.forTitle(title);
+    if (moduleKey != null &&
+        !context.read<CurrentAccess>().canAccessModule(moduleKey)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have access to this module. Please contact your admin.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     Widget? screen;
     switch (title) {
       case 'Fixed Assets':     screen = const FixedProductListScreen(); break;
@@ -371,7 +419,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         context,
         MaterialPageRoute(
           settings: RouteSettings(name: title),
-          builder: (_) => screen!,
+          // Wrapped so the screen locks live if access is revoked while open.
+          builder: (_) => moduleKey == null
+              ? screen!
+              : ModuleGuard(module: moduleKey, child: screen!),
         ),
       );
     } else {
@@ -1361,7 +1412,8 @@ class _DashboardBodyState extends State<_DashboardBody>
   // Inventory Movement is now shown to every role, admin included — no
   // filtering here anymore. _modules stays the single source of truth for
   // all roles.
-  List<Map<String, dynamic>> get _visibleModules => _modules;
+  List<Map<String, dynamic>> _visibleModulesCache = _modules;
+  List<Map<String, dynamic>> get _visibleModules => _visibleModulesCache;
 
   @override
   void initState() {
@@ -1377,6 +1429,8 @@ class _DashboardBodyState extends State<_DashboardBody>
 
   @override
   Widget build(BuildContext context) {
+    // Re-filter whenever the admin changes this user's module access.
+    _visibleModulesCache = _filterModules(context.watch<CurrentAccess>());
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
@@ -2069,7 +2123,8 @@ class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMi
   // Inventory Movement is now shown to every role in the side menu too —
   // no filtering here anymore. _drawerItems stays the single source of
   // truth for all roles.
-  List<Map<String, dynamic>> get _visibleDrawerItems => _drawerItems;
+  List<Map<String, dynamic>> _visibleDrawerItemsCache = _drawerItems;
+  List<Map<String, dynamic>> get _visibleDrawerItems => _visibleDrawerItemsCache;
 
   @override
   void initState() {
@@ -2082,6 +2137,8 @@ class _CDADrawerState extends State<_CDADrawer> with SingleTickerProviderStateMi
 
   @override
   Widget build(BuildContext context) {
+    // Re-filter whenever the admin changes this user's module access.
+    _visibleDrawerItemsCache = _filterDrawerItems(context.watch<CurrentAccess>());
     return Drawer(
       backgroundColor: const Color(0xFFF4F7FC),
       child: Stack(

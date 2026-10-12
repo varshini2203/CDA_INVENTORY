@@ -107,12 +107,20 @@ class EstimateService {
 
   Future<String> suggestNextReferenceNumber({bool forceRefresh = false}) async {
     final list = await fetchEstimates(forceRefresh: forceRefresh);
+    // Sequential with an EST- prefix: EST-001, EST-002, EST-003 …
+    // Existing plain numbers (1, 2, 3) are still counted, so the sequence
+    // continues from the highest one instead of restarting.
     int maxNum = 0;
     for (final e in list) {
       final n = int.tryParse(e.referenceNo.replaceAll(RegExp(r'[^0-9]'), ''));
       if (n != null && n > maxNum) maxNum = n;
     }
-    return (maxNum + 1).toString();
+    String fmt(int n) => 'EST-${n.toString().padLeft(3, '0')}';
+    int next = maxNum + 1;
+    while (await referenceNoExists(fmt(next))) {
+      next++;
+    }
+    return fmt(next);
   }
 
   Future<List<CustomerDetails>> fetchCustomerSuggestions({bool forceRefresh = false}) async {

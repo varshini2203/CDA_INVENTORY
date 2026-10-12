@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:cda_inventory/core/access/access_scope.dart';
+import 'package:cda_inventory/core/access/restricted_modules.dart';
+import 'package:cda_inventory/models/invoice.dart';
 import 'drone_inout_report_screen.dart';
 import 'invoice_report_screen.dart';
 import 'stock_history_report_screen.dart';
@@ -170,6 +172,12 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
       final rangeEndExclusive =
       DateTime(_range.end.year, _range.end.month, _range.end.day).add(const Duration(days: 1));
 
+      // Invoice / purchase figures are only loaded for people the admin has
+      // granted those modules to — everyone else never even fetches them.
+      final moduleAccess = context.read<CurrentAccess>();
+      final canInvoices = moduleAccess.canAccessModule(RestrictedModules.invoices);
+      final canPurchases = moduleAccess.canAccessModule(RestrictedModules.purchases);
+
       final droneAll = await ReportService.fetchDroneInOutReportRange(
           rangeStart, rangeEndExclusive);
       final stockAll = await ReportService.fetchStockHistoryReportRange(
@@ -177,7 +185,8 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
       // fetchAllInvoices() only pays for a real Firestore read the first
       // time it's called in a session (see ReportService's internal
       // cache) — every call after that, including this one, is free.
-      final invoiceAll = await ReportService.fetchAllInvoices();
+      final invoiceAll =
+          canInvoices ? await ReportService.fetchAllInvoices() : <Invoice>[];
 
       final droneFiltered = droneAll
           .where((r) => r.timestamp != null && _dateInRange(r.timestamp!, _range))
@@ -191,7 +200,8 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
         return d != null && _dateInRange(d, _range);
       }).toList();
 
-      final allPurchases = await PurchaseService.getAllPurchases();
+      final allPurchases =
+          canPurchases ? await PurchaseService.getAllPurchases() : <Purchase>[];
       final purchasesFiltered = _filterPurchasesByRange(allPurchases, _range);
 
       // New Products — date-ranged like Purchases/Invoices above.
@@ -248,7 +258,12 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
       final month = DateTime(_range.start.year, _range.start.month);
       final rawDrones = await ReportService.fetchDroneInOutReport(month.year, month.month);
       final rawStock = await ReportService.fetchStockHistoryReport(month.year, month.month);
-      final rawInvoices = await ReportService.fetchInvoiceReport(month.year, month.month);
+      final canInvoices = context
+          .read<CurrentAccess>()
+          .canAccessModule(RestrictedModules.invoices);
+      final rawInvoices = canInvoices
+          ? await ReportService.fetchInvoiceReport(month.year, month.month)
+          : <Invoice>[];
 
       // Scope the export to the branch currently selected on the dashboard
       // (null = both branches, unchanged behaviour).
@@ -283,6 +298,7 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
           drones: drones,
           stock: stock,
           invoices: invoices,
+          includeInvoices: canInvoices,
         );
         await PdfExportService.download(bytes, 'Monthly_Report_$label.pdf');
       } else {
@@ -292,6 +308,7 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
           drones: drones,
           stock: stock,
           invoices: invoices,
+          includeInvoices: canInvoices,
         );
         ExcelExportService.download(bytes, 'Monthly_Report_$label.xlsx');
       }
@@ -332,6 +349,10 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
     // this independently, so a locked user still can't escape it by
     // navigating directly). Admins are unaffected (lockedBranch stays null).
     final lockedBranch = lockedReportBranch(context);
+    // Watched so tiles appear/disappear live if the admin changes access.
+    final moduleAccess = context.watch<CurrentAccess>();
+    final canInvoices = moduleAccess.canAccessModule(RestrictedModules.invoices);
+    final canPurchases = moduleAccess.canAccessModule(RestrictedModules.purchases);
     if (lockedBranch != null && _selectedBranch != lockedBranch) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() => _selectedBranch = lockedBranch);
@@ -451,6 +472,7 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
                                 initialRange: _range, initialBranch: _selectedBranch)),
                       ),
                     ),
+                    if (canInvoices)
                     _ReportListTile(
                       icon: Icons.receipt_long_rounded,
                       title: 'Invoice List',
@@ -459,10 +481,13 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(settings: const RouteSettings(name: 'Invoice Report'),
-                            builder: (_) => InvoiceReportScreen(
-                                initialRange: _range, initialBranch: _selectedBranch)),
+                            builder: (_) => ModuleGuard(
+                                module: RestrictedModules.invoices,
+                                child: InvoiceReportScreen(
+                                    initialRange: _range, initialBranch: _selectedBranch))),
                       ),
                     ),
+                    if (canPurchases)
                     _ReportListTile(
                       icon: Icons.shopping_cart_rounded,
                       title: 'Purchases',
@@ -471,8 +496,10 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(settings: const RouteSettings(name: 'Purchase Report'),
-                            builder: (_) => PurchaseReportScreen(
-                                initialRange: _range, initialBranch: _selectedBranch)),
+                            builder: (_) => ModuleGuard(
+                                module: RestrictedModules.purchases,
+                                child: PurchaseReportScreen(
+                                    initialRange: _range, initialBranch: _selectedBranch))),
                       ),
                     ),
                     _ReportListTile(
@@ -595,6 +622,9 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
   }
 
   Widget _summaryGrid() {
+    final moduleAccess = context.read<CurrentAccess>();
+    final canInvoices = moduleAccess.canAccessModule(RestrictedModules.invoices);
+    final canPurchases = moduleAccess.canAccessModule(RestrictedModules.purchases);
     final currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     final droneIn = _droneRows.where((r) => r.status == 'IN').length;
@@ -615,10 +645,14 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
       ('Drone OUT', '$droneOut', kCoral, Icons.flight_takeoff_rounded),
       ('Stock IN qty', '$stockInQty', kGreen, Icons.arrow_downward_rounded),
       ('Stock OUT qty', '$stockOutQty', kCoral, Icons.arrow_upward_rounded),
-      ('Invoices', '${_invoiceRows.length}', kPurple, Icons.receipt_long_rounded),
-      ('Invoice Total', currency.format(invoiceTotal), kTeal, Icons.currency_rupee_rounded),
-      ('Purchases', '${_purchasesInRange.length}', kAmber, Icons.shopping_cart_rounded),
-      ('Purchase Total', currency.format(purchaseTotal), kAmber, Icons.currency_rupee_rounded),
+      if (canInvoices) ...[
+        ('Invoices', '${_invoiceRows.length}', kPurple, Icons.receipt_long_rounded),
+        ('Invoice Total', currency.format(invoiceTotal), kTeal, Icons.currency_rupee_rounded),
+      ],
+      if (canPurchases) ...[
+        ('Purchases', '${_purchasesInRange.length}', kAmber, Icons.shopping_cart_rounded),
+        ('Purchase Total', currency.format(purchaseTotal), kAmber, Icons.currency_rupee_rounded),
+      ],
       ('New Products', '${_newProductsInRange.length}', kIndigo, Icons.inventory_2_rounded),
       ('Low Stock Items', '${_stockItems.where((i) => i.isLowStock).length}',
       _stockItems.any((i) => i.isLowStock) ? kCoral : kGreen, Icons.warehouse_rounded),
@@ -668,6 +702,11 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
   }
 
   Widget _fullReportCard() {
+    final dataLabel = context
+            .read<CurrentAccess>()
+            .canAccessModule(RestrictedModules.invoices)
+        ? 'Drone, stock & invoice data'
+        : 'Drone & stock data';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -685,8 +724,8 @@ class _ReportsDashboardScreenState extends State<ReportsDashboardScreen>
         const SizedBox(height: 4),
         Text(
           _selectedBranch == null
-              ? 'Drone, stock & invoice data for ${DateFormat('MMMM yyyy').format(_range.start)} — everything, one file.'
-              : 'Drone, stock & invoice data for ${DateFormat('MMMM yyyy').format(_range.start)} — ${branchDisplayName(_selectedBranch)} only.',
+              ? '$dataLabel for ${DateFormat('MMMM yyyy').format(_range.start)} — everything, one file.'
+              : '$dataLabel for ${DateFormat('MMMM yyyy').format(_range.start)} — ${branchDisplayName(_selectedBranch)} only.',
           style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11.5),
         ),
         const SizedBox(height: 14),

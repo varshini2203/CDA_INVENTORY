@@ -75,6 +75,8 @@ class _AddEstimateScreenState extends State<AddEstimateScreen> {
   final EstimateService _service = EstimateService();
 
   final _refNoController = TextEditingController();
+  // Reference No. is auto-generated and locked; only unlocked if generation fails (e.g. offline).
+  bool _refNoAutoFailed = false;
   final _partyNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _shippingController = TextEditingController(text: '0');
@@ -122,6 +124,8 @@ class _AddEstimateScreenState extends State<AddEstimateScreen> {
     } else {
       _service.suggestNextReferenceNumber().then((n) {
         if (mounted) setState(() => _refNoController.text = n);
+      }).catchError((_) {
+        if (mounted) setState(() => _refNoAutoFailed = true);
       });
     }
     if (_rows.isEmpty) _addRow();
@@ -397,7 +401,15 @@ class _AddEstimateScreenState extends State<AddEstimateScreen> {
               _label('Reference No.'),
               TextFormField(
                 controller: _refNoController,
-                decoration: _fieldDecoration(hint: 'e.g. 20'),
+                readOnly: !_refNoAutoFailed,
+                style: const TextStyle(fontWeight: FontWeight.w700, color: kTextDark),
+                decoration: _fieldDecoration(hint: _refNoAutoFailed ? 'e.g. EST-001' : 'Generating…').copyWith(
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  suffixIcon: _refNoAutoFailed
+                      ? null
+                      : const Icon(Icons.lock_outline_rounded, size: 18, color: kTextMute),
+                ),
                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
             ]),

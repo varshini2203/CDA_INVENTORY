@@ -85,6 +85,9 @@ class PdfExportService {
     required List<DroneReportRow> drones,
     required List<StockTransaction> stock,
     required List<Invoice> invoices,
+    // False for users without Invoices access: the invoice tiles and the
+    // whole invoice section are left out of the document entirely.
+    bool includeInvoices = true,
   }) async {
     final logoBytes = await _loadLogo();
     final doc = pw.Document();
@@ -98,7 +101,7 @@ class PdfExportService {
       header: (ctx) => _header('Monthly Consolidated Report', month),
       footer: (ctx) => _footer(ctx),
       build: (ctx) => [
-        _summaryGrid(summary),
+        _summaryGrid(summary, includeInvoices: includeInvoices),
         pw.SizedBox(height: 18),
         _sectionTitle('Drone In / Out (${drones.length})'),
         pw.SizedBox(height: 6),
@@ -107,11 +110,13 @@ class PdfExportService {
         _sectionTitle('Stock / Inventory History (${stock.length})'),
         pw.SizedBox(height: 6),
         _stockTable(stock),
-        pw.SizedBox(height: 18),
-        _sectionTitle(
-            'Invoices (${invoices.length})  —  Total: ${_currency.format(summary.invoiceTotal)}'),
-        pw.SizedBox(height: 6),
-        _invoiceTable(invoices),
+        if (includeInvoices) ...[
+          pw.SizedBox(height: 18),
+          _sectionTitle(
+              'Invoices (${invoices.length})  —  Total: ${_currency.format(summary.invoiceTotal)}'),
+          pw.SizedBox(height: 6),
+          _invoiceTable(invoices),
+        ],
       ],
     ));
 
@@ -345,7 +350,7 @@ class PdfExportService {
         fontSize: 10.5, fontWeight: pw.FontWeight.bold, color: _navy),
   );
 
-  static pw.Widget _summaryGrid(MonthlySummary s) {
+  static pw.Widget _summaryGrid(MonthlySummary s, {bool includeInvoices = true}) {
     pw.Widget cell(String label, String value, PdfColor color) {
       return pw.Expanded(
         child: pw.Container(
@@ -374,13 +379,14 @@ class PdfExportService {
       pw.Row(children: [
         cell('DRONE IN', '${s.droneInCount}', _green),
         cell('DRONE OUT', '${s.droneOutCount}', _red),
-        cell('INVOICES', '${s.invoiceCount}', _blue),
+        if (includeInvoices) cell('INVOICES', '${s.invoiceCount}', _blue),
       ]),
       pw.SizedBox(height: 6),
       pw.Row(children: [
         cell('STOCK IN QTY', '${s.stockInQty}', _green),
         cell('STOCK OUT QTY', '${s.stockOutQty}', _red),
-        cell('INVOICE TOTAL', _currency.format(s.invoiceTotal), _blue),
+        if (includeInvoices)
+          cell('INVOICE TOTAL', _currency.format(s.invoiceTotal), _blue),
       ]),
     ]);
   }
