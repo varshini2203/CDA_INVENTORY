@@ -31,6 +31,7 @@ class Estimate {
 
   final String? notes;
   final String? termsNotes;
+  final String? bankDetails;
 
   final String? addedBy;
   final DateTime? addedAt;
@@ -59,6 +60,7 @@ class Estimate {
     this.convertedInvoiceNo,
     this.notes,
     this.termsNotes,
+    this.bankDetails,
     this.addedBy,
     this.addedAt,
     this.branch,
@@ -142,6 +144,7 @@ class Estimate {
       convertedInvoiceNo: data['converted_invoice_no']?.toString(),
       notes: data['notes']?.toString(),
       termsNotes: data['terms_notes']?.toString(),
+      bankDetails: data['bank_details']?.toString(),
       addedBy: data['added_by']?.toString(),
       addedAt: (data['added_at'] as Timestamp?)?.toDate(),
       branch: data['branch']?.toString(),
@@ -169,6 +172,7 @@ class Estimate {
       'converted_invoice_no': convertedInvoiceNo,
       'notes': notes,
       'terms_notes': termsNotes,
+      'bank_details': bankDetails,
       'added_by': addedBy,
       'added_at': addedAt != null ? Timestamp.fromDate(addedAt!) : null,
       'branch': branch,
@@ -198,6 +202,7 @@ class Estimate {
     String? convertedInvoiceNo,
     String? notes,
     String? termsNotes,
+    String? bankDetails,
     String? addedBy,
     DateTime? addedAt,
     String? branch,
@@ -223,6 +228,7 @@ class Estimate {
       convertedInvoiceNo: convertedInvoiceNo ?? this.convertedInvoiceNo,
       notes: notes ?? this.notes,
       termsNotes: termsNotes ?? this.termsNotes,
+      bankDetails: bankDetails ?? this.bankDetails,
       addedBy: addedBy ?? this.addedBy,
       addedAt: addedAt ?? this.addedAt,
       branch: branch ?? this.branch,

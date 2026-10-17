@@ -6,6 +6,7 @@ import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/models/customer_details.dart';
 import 'invoice_service.dart';
 import 'activity_log_service.dart';
+import 'customer_service.dart';
 
 class ProformaService {
   // ── Firestore collection reference ───────────────────────────────────
@@ -45,6 +46,7 @@ class ProformaService {
     final data = proforma.toFirestore()..['created_at'] = FieldValue.serverTimestamp();
     final docRef = await _col.add(data);
     clearCache();
+    CustomerService.upsertFromTransaction(proforma.customer);
     ActivityLogService.logAdd(
       module: 'Proforma Invoice',
       itemName: proforma.proformaNo,
@@ -65,6 +67,7 @@ class ProformaService {
     final before = existingDoc.data() ?? {};
     await _col.doc(proforma.id).update(proforma.toFirestore());
     clearCache();
+    CustomerService.upsertFromTransaction(proforma.customer);
     ActivityLogService.logEdit(
       module: 'Proforma Invoice',
       itemName: proforma.proformaNo,
@@ -128,8 +131,8 @@ class ProformaService {
       final key = '${c.name.trim().toLowerCase()}|${c.phone ?? ''}';
       if (seen.add(key)) customers.add(c);
     }
-    customers.sort((a, b) => a.name.compareTo(b.name));
-    return customers;
+    // Saved customers first, then any found only in older documents.
+    return CustomerService().fetchSuggestions(customers);
   }
 
   /// Converts an Open proforma invoice into a real Sale Invoice — mirrors

@@ -906,6 +906,10 @@ class _AddProformaScreenState extends State<AddProformaScreen> {
         setState(() {
           _partyName = selection.name;
           _phoneController.text = selection.phone ?? '';
+          _emailController.text = selection.email ?? '';
+          _gstinController.text = selection.gstin ?? '';
+          _billingAddressController.text = selection.billingAddress ?? '';
+          _shippingAddressController.text = selection.shippingAddress ?? '';
         });
       },
       optionsViewBuilder: (context, onSelected, options) {

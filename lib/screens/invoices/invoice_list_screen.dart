@@ -20,6 +20,7 @@ import 'package:cda_inventory/services/invoice_pdf_service.dart';
 import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/screens/invoices/add_invoice_screen.dart';
 import 'package:cda_inventory/utils/status_helpers.dart';
+import 'package:cda_inventory/widgets/common/sales_filters.dart';
 
 class InvoiceListScreen extends StatefulWidget {
   const InvoiceListScreen({super.key});
@@ -44,18 +45,20 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
   // ── Filters (mirrors the "All Sale Invoices / Pick a date / All Firms /
   //    All Users" filter row in the reference design) ─────────────────────
   static const List<String> _statusFilterOptions = ['All', 'Paid', 'Pending', 'Overdue'];
-  String _statusFilter = 'All';
-  String _branchFilter = 'All';
-  String _userFilter   = 'All';
+  String _statusFilter = kFilterAll;
+  String _periodFilter = SalesPeriod.all;
+  String _branchFilter = kFilterAll;
+  String _userFilter   = kFilterAll;
   DateTimeRange? _dateRangeFilter;
 
-  List<String> _branchList = [];
-  List<String> _userList   = [];
+  List<FilterOption> _branchOptions = SalesFilterData.branchOptions(const []);
+  List<FilterOption> _userOptions   = [];
 
   bool get _isFilterActive =>
-      _statusFilter != 'All' ||
-          _branchFilter != 'All' ||
-          _userFilter != 'All' ||
+      _statusFilter != kFilterAll ||
+          _periodFilter != SalesPeriod.all ||
+          _branchFilter != kFilterAll ||
+          _userFilter != kFilterAll ||
           _dateRangeFilter != null;
 
   // ── Design tokens ──────────────────────────────────────────────────────
@@ -98,20 +101,13 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     });
     try {
       final invoices = await _invoiceService.fetchInvoices(forceRefresh: forceRefresh);
+      if (!mounted) return;
       setState(() {
         _allInvoices = invoices;
-        _branchList = invoices
-            .map((i) => i.branch ?? '')
-            .where((v) => v.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-        _userList = invoices
-            .map((i) => i.addedBy ?? '')
-            .where((v) => v.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
+        _branchOptions =
+            SalesFilterData.branchOptions(invoices.map((i) => i.branch));
+        // "All Users" lists the PARTY (customer) names, not app users.
+        _userOptions = SalesFilterData.partyOptions(invoices.map(_partyName));
         _isLoading = false;
       });
       _applySortAndFilter();
@@ -135,35 +131,25 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
           phone.contains(query) ||
           amountStr.contains(query);
       final matchesStatus =
-          _statusFilter == 'All' || inv.effectiveStatus == _statusFilter;
-      final matchesBranch =
-          _branchFilter == 'All' || (inv.branch ?? '') == _branchFilter;
-      final matchesUser =
-          _userFilter == 'All' || (inv.addedBy ?? '') == _userFilter;
-
-      bool matchesDate = true;
-      if (_dateRangeFilter != null) {
-        final d = inv.purchaseDateTime;
-        if (d == null) {
-          matchesDate = false;
-        } else {
-          matchesDate = !d.isBefore(_dateRangeFilter!.start) &&
-              !d.isAfter(_dateRangeFilter!.end);
-        }
-      }
+          _statusFilter == kFilterAll || inv.effectiveStatus == _statusFilter;
+      final matchesBranch = SalesFilterData.branchMatches(_branchFilter, inv.branch);
+      final matchesUser = SalesFilterData.userMatches(_userFilter, _partyName(inv));
+      final matchesDate = SalesPeriod.inRange(inv.purchaseDateTime, _dateRangeFilter);
 
       return matchesQuery && matchesStatus && matchesBranch && matchesUser && matchesDate;
     }).toList()
-      ..sort((a, b) => b.purchaseDate.compareTo(a.purchaseDate));
+      ..sort((a, b) => (b.purchaseDateTime ?? DateTime(2000))
+          .compareTo(a.purchaseDateTime ?? DateTime(2000)));
 
     setState(() => _filteredInvoices = filtered);
   }
 
   void _clearFilters() {
     setState(() {
-      _statusFilter    = 'All';
-      _branchFilter    = 'All';
-      _userFilter      = 'All';
+      _statusFilter    = kFilterAll;
+      _periodFilter    = SalesPeriod.all;
+      _branchFilter    = kFilterAll;
+      _userFilter      = kFilterAll;
       _dateRangeFilter = null;
     });
     _applySortAndFilter();
@@ -516,52 +502,64 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(children: [
-        _FilterChip(
+        SalesFilterChip(
           icon: Icons.receipt_long_rounded,
-          label: _statusFilter == 'All' ? 'All Sale Invoices' : _statusFilter,
-          active: _statusFilter != 'All',
+          label: _statusFilter == kFilterAll ? 'All Sale Invoices' : _statusFilter,
+          active: _statusFilter != kFilterAll,
           onTap: _showStatusMenu,
         ),
         const SizedBox(width: 8),
-        _FilterChip(
+        SalesFilterChip(
+          icon: Icons.calendar_month_rounded,
+          label: _periodFilter,
+          active: _periodFilter != SalesPeriod.all,
+          onTap: _showPeriodMenu,
+        ),
+        const SizedBox(width: 8),
+        SalesFilterChip(
           icon: Icons.calendar_today_rounded,
           label: _dateRangeFilter == null
               ? 'Pick a date'
-              : '${DateFormat('dd/MM/yy').format(_dateRangeFilter!.start)} – ${DateFormat('dd/MM/yy').format(_dateRangeFilter!.end)}',
+              : SalesPeriod.rangeLabel(_dateRangeFilter!),
           active: _dateRangeFilter != null,
           onTap: _pickDateRange,
         ),
         const SizedBox(width: 8),
-        _FilterChip(
+        SalesFilterChip(
           icon: Icons.apartment_rounded,
-          label: _branchFilter == 'All' ? 'All Firms' : _branchFilter,
-          active: _branchFilter != 'All',
-          onTap: () => _showListMenu(
-            title: 'Firm / Branch',
-            allLabel: 'All Firms',
-            options: _branchList,
-            current: _branchFilter,
-            onSelected: (v) {
-              setState(() => _branchFilter = v);
-              _applySortAndFilter();
-            },
-          ),
+          label: SalesFilterData.labelFor(_branchOptions, _branchFilter, 'All Firms'),
+          active: _branchFilter != kFilterAll,
+          onTap: () async {
+            final v = await showSalesOptionSheet(
+              context,
+              title: 'Firm / Branch',
+              allLabel: 'All Firms',
+              options: _branchOptions,
+              current: _branchFilter,
+            );
+            if (v == null) return;
+            setState(() => _branchFilter = v);
+            _applySortAndFilter();
+          },
         ),
         const SizedBox(width: 8),
-        _FilterChip(
+        SalesFilterChip(
           icon: Icons.person_outline_rounded,
-          label: _userFilter == 'All' ? 'All Users' : _userFilter,
-          active: _userFilter != 'All',
-          onTap: () => _showListMenu(
-            title: 'User',
-            allLabel: 'All Users',
-            options: _userList,
-            current: _userFilter,
-            onSelected: (v) {
-              setState(() => _userFilter = v);
-              _applySortAndFilter();
-            },
-          ),
+          label: SalesFilterData.labelFor(_userOptions, _userFilter, 'All Users'),
+          active: _userFilter != kFilterAll,
+          onTap: () async {
+            final v = await showSalesOptionSheet(
+              context,
+              title: 'Party',
+              allLabel: 'All Users',
+              options: _userOptions,
+              current: _userFilter,
+              emptyText: 'No parties yet',
+            );
+            if (v == null) return;
+            setState(() => _userFilter = v);
+            _applySortAndFilter();
+          },
         ),
         if (_isFilterActive) ...[
           const SizedBox(width: 8),
@@ -575,84 +573,53 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     );
   }
 
-  void _showStatusMenu() async {
-    final selected = await showMenu<String>(
-      context: context,
-      position: const RelativeRect.fromLTRB(24, 200, 24, 0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      items: _statusFilterOptions
-          .map((opt) => PopupMenuItem(
-        value: opt,
-        child: Row(children: [
-          Icon(
-            _statusFilter == opt ? Icons.radio_button_checked : Icons.radio_button_off,
-            size: 17,
-            color: _statusFilter == opt ? kBlue : Colors.grey,
-          ),
-          const SizedBox(width: 10),
-          Text(opt == 'All' ? 'All Sale Invoices' : opt),
-        ]),
-      ))
+  Future<void> _showStatusMenu() async {
+    final v = await showSalesOptionSheet(
+      context,
+      title: 'Invoice status',
+      allLabel: 'All Sale Invoices',
+      options: _statusFilterOptions
+          .where((o) => o != 'All')
+          .map((o) => FilterOption(o, o))
           .toList(),
+      current: _statusFilter,
     );
-    if (selected != null) {
-      setState(() => _statusFilter = selected);
-      _applySortAndFilter();
-    }
+    if (v == null) return;
+    setState(() => _statusFilter = v);
+    _applySortAndFilter();
   }
 
-  void _showListMenu({
-    required String title,
-    required String allLabel,
-    required List<String> options,
-    required String current,
-    required void Function(String) onSelected,
-  }) async {
-    final all = ['All', ...options];
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kTextDark)),
-              ),
-            ),
-            if (all.length == 1)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('No data yet', style: TextStyle(color: kTextMute)),
-              ),
-            ...all.map((v) => ListTile(
-              title: Text(v == 'All' ? allLabel : v),
-              trailing: current == v ? const Icon(Icons.check_rounded, color: kBlue) : null,
-              onTap: () => Navigator.pop(ctx, v),
-            )),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+  // Today / This Week / This Month / This Quarter / This Year / Custom
+  Future<void> _showPeriodMenu() async {
+    final v = await showSalesOptionSheet(
+      context,
+      title: 'Select period',
+      options: SalesPeriod.options.map((o) => FilterOption(o, o)).toList(),
+      current: _periodFilter,
     );
-    if (selected != null) onSelected(selected);
+    if (v == null) return;
+    if (v == SalesPeriod.custom) {
+      await _pickDateRange();
+      return;
+    }
+    setState(() {
+      _periodFilter = v;
+      _dateRangeFilter = SalesPeriod.rangeFor(v); // null for "All Time"
+    });
+    _applySortAndFilter();
   }
 
   Future<void> _pickDateRange() async {
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      initialDateRange: _dateRangeFilter,
+    final picked = await showSalesDateRangePicker(
+      context,
+      initial: _dateRangeFilter,
     );
-    if (picked != null) {
-      setState(() => _dateRangeFilter = picked);
-      _applySortAndFilter();
-    }
+    if (picked == null) return;
+    setState(() {
+      _dateRangeFilter = picked;
+      _periodFilter = SalesPeriod.custom;
+    });
+    _applySortAndFilter();
   }
 
   // ── Total Sales Amount card ─────────────────────────────────────────────
@@ -813,46 +780,6 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
             ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// FILTER CHIP
-// ═══════════════════════════════════════════════════════════════════════════
-class _FilterChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _FilterChip({required this.icon, required this.label, required this.onTap, this.active = false});
-
-  @override
-  Widget build(BuildContext context) {
-    const blue = _InvoiceListScreenState.kBlue;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: active ? blue.withOpacity(0.08) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? blue.withOpacity(0.5) : _InvoiceListScreenState.kBorder),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 14, color: active ? blue : _InvoiceListScreenState.kTextSub),
-          const SizedBox(width: 6),
-          Text(label,
-              style: TextStyle(
-                fontSize: 12.5,
-                color: active ? blue : _InvoiceListScreenState.kTextDark,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              )),
-          const SizedBox(width: 4),
-          Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: active ? blue : _InvoiceListScreenState.kTextMute),
-        ]),
       ),
     );
   }

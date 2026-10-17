@@ -403,28 +403,12 @@ class _EmployeeCard extends StatelessWidget {
             runSpacing: 6,
             children: [
               for (final key in RestrictedModules.all)
-                FilterChip(
-                  label: Text(RestrictedModules.label(key)),
+                _ModuleChip(
+                  moduleKey: key,
+                  label: RestrictedModules.label(key),
                   selected: user.moduleAccess.contains(key),
-                  showCheckmark: true,
-                  selectedColor: EmployeeAccessScreen._blue.withOpacity(0.16),
-                  checkmarkColor: EmployeeAccessScreen._blue,
-                  side: BorderSide(
-                    color: user.moduleAccess.contains(key)
-                        ? EmployeeAccessScreen._blue
-                        : const Color(0xFFD5DFEE),
-                  ),
-                  labelStyle: TextStyle(
-                    fontSize: 12,
-                    fontWeight: user.moduleAccess.contains(key)
-                        ? FontWeight.w800
-                        : FontWeight.w500,
-                    color: user.moduleAccess.contains(key)
-                        ? EmployeeAccessScreen._blue
-                        : const Color(0xFF6B7280),
-                  ),
-                  backgroundColor: Colors.transparent,
-                  onSelected: (v) => _toggleModule(context, key, v),
+                  onTap: () => _toggleModule(
+                      context, key, !user.moduleAccess.contains(key)),
                 ),
             ],
           ),
@@ -540,6 +524,92 @@ class _AccessButton extends StatelessWidget {
               color: active ? color : Color(0xFF6B7280),
               fontWeight: active ? FontWeight.w800 : FontWeight.w500,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Theme-independent toggle chip for the finance modules (Invoices / Sales /
+/// Purchases). Selected = solid blue gradient pill with white text;
+/// unselected = soft blue-grey pill with a muted icon. Each module has its
+/// own icon.
+class _ModuleChip extends StatelessWidget {
+  final String moduleKey;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ModuleChip({
+    required this.moduleKey,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  IconData get _icon {
+    switch (moduleKey) {
+      case RestrictedModules.invoices:
+        return Icons.receipt_long_rounded;
+      case RestrictedModules.sales:
+        return Icons.trending_up_rounded;
+      case RestrictedModules.purchases:
+        return Icons.shopping_cart_rounded;
+      default:
+        return Icons.folder_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            gradient: selected
+                ? const LinearGradient(
+              colors: [Color(0xFF1E5FC8), Color(0xFF38A3F5)],
+            )
+                : null,
+            color: selected ? null : const Color(0xFFEEF2F9),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: selected
+                ? [
+              BoxShadow(
+                color: const Color(0xFF1E5FC8).withOpacity(0.30),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _icon,
+                size: 16,
+                color: selected ? Colors.white : const Color(0xFF8A94A6),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  color: selected ? Colors.white : const Color(0xFF6B7280),
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(width: 6),
+                const Icon(Icons.check_rounded, size: 15, color: Colors.white),
+              ],
+            ],
           ),
         ),
       ),

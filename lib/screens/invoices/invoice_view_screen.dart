@@ -145,8 +145,8 @@ INVOICE DETAILS
 ───────────────────────
 Invoice No  : ${_invoice.invoiceNo}
 Product     : ${_invoice.displayProductName}
-Vendor      : ${_invoice.vendorName}
-Quantity    : ${_invoice.displayQuantity}
+Customer    : ${_invoice.customer?.name ?? _invoice.vendorName}
+${(_invoice.customer?.phone ?? '').isNotEmpty ? 'Phone       : ${_invoice.customer!.phone}\n' : ''}${(_invoice.customer?.gstin ?? '').isNotEmpty ? 'GSTIN       : ${_invoice.customer!.gstin}\n' : ''}${(_invoice.customer?.billingAddress ?? '').isNotEmpty ? 'Address     : ${_invoice.customer!.billingAddress}\n' : ''}Quantity    : ${_invoice.displayQuantity}
 Amount      : ₹${_invoice.displayAmount.toStringAsFixed(2)}
 Date        : ${_invoice.purchaseDate}
 ───────────────────────
@@ -267,7 +267,19 @@ Date        : ${_invoice.purchaseDate}
                       const Divider(height: 30),
                       _buildDetailRow('Invoice Number', _invoice.invoiceNo, Icons.tag, copyable: true),
                       _buildDetailRow('Product Name', _invoice.displayProductName, Icons.inventory_2),
-                      _buildDetailRow('Vendor Name', _invoice.vendorName, Icons.store),
+                      _buildDetailRow('Customer Name', _invoice.customer?.name ?? _invoice.vendorName, Icons.store),
+                      if ((_invoice.customer?.phone ?? '').isNotEmpty)
+                        _buildDetailRow('Phone', _invoice.customer!.phone!, Icons.call_outlined, copyable: true),
+                      if ((_invoice.customer?.email ?? '').isNotEmpty)
+                        _buildDetailRow('Email', _invoice.customer!.email!, Icons.email_outlined, copyable: true),
+                      if ((_invoice.customer?.gstin ?? '').isNotEmpty)
+                        _buildDetailRow('GSTIN', _invoice.customer!.gstin!, Icons.badge_outlined, copyable: true),
+                      if ((_invoice.customer?.billingAddress ?? '').isNotEmpty)
+                        _buildDetailRow('Billing Address', _invoice.customer!.billingAddress!, Icons.home_outlined),
+                      if ((_invoice.customer?.shippingAddress ?? '').isNotEmpty)
+                        _buildDetailRow('Shipping Address', _invoice.customer!.shippingAddress!, Icons.local_shipping_outlined),
+                      if (_invoice.customer != null)
+                        _buildDetailRow('State of Supply', _invoice.customer!.placeOfSupply, Icons.map_outlined),
                       _buildDetailRow('Quantity', _invoice.displayQuantity.toString(), Icons.numbers),
                       _buildDetailRow('Amount', '₹${_invoice.displayAmount.toStringAsFixed(2)}',
                           Icons.currency_rupee, valueColor: Colors.green.shade700),

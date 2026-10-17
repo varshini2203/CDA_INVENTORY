@@ -48,6 +48,7 @@ class RestrictedModules {
     'Invoice Report': invoices,
 
     // Sales
+    'Customers': sales,
     'Estimate/ Quotation': sales,
     'Payment-In': sales,
     'Sale Order': sales,

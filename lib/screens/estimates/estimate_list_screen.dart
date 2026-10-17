@@ -17,6 +17,7 @@ import 'package:cda_inventory/models/estimate.dart';
 import 'package:cda_inventory/screens/estimates/add_estimate_screen.dart';
 import 'package:cda_inventory/screens/invoices/add_invoice_screen.dart';
 import 'package:cda_inventory/screens/purchases/add_purchase_screen.dart';
+import 'package:cda_inventory/widgets/common/sales_filters.dart';
 
 class EstimateListScreen extends StatefulWidget {
   const EstimateListScreen({super.key});
@@ -40,20 +41,20 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
 
   // ── Filters: "This Month / Pick a date / All Firms / All Users" row,
   //    mirroring the reference design exactly ───────────────────────────
-  static const List<String> _periodOptions = [
-    'Today', 'This Week', 'This Month', 'This Quarter', 'This Year', 'Custom'
-  ];
-  String _periodFilter = 'This Month';
-  String _statusFilter = 'All';
-  String _branchFilter = 'All';
-  String _userFilter   = 'All';
+  String _periodFilter = SalesPeriod.thisMonth;
+  String _statusFilter = kFilterAll;
+  String _branchFilter = kFilterAll;
+  String _userFilter   = kFilterAll;
   DateTimeRange? _dateRangeFilter;
 
-  List<String> _branchList = [];
-  List<String> _userList   = [];
+  List<FilterOption> _branchOptions = SalesFilterData.branchOptions(const []);
+  List<FilterOption> _userOptions   = [];
 
   bool get _isFilterActive =>
-      _statusFilter != 'All' || _branchFilter != 'All' || _userFilter != 'All';
+      _statusFilter != kFilterAll ||
+          _branchFilter != kFilterAll ||
+          _userFilter != kFilterAll ||
+          _periodFilter != SalesPeriod.thisMonth;
 
   // ── Design tokens (same palette as the rest of the app's Vyapar-style
   //    screens — Sale Invoices / Purchases) ────────────────────────────
@@ -76,7 +77,7 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
   @override
   void initState() {
     super.initState();
-    _dateRangeFilter = _rangeForThisMonth();
+    _dateRangeFilter = SalesPeriod.rangeFor(SalesPeriod.thisMonth);
     _searchController.addListener(_applySortAndFilter);
     _loadEstimates();
   }
@@ -89,13 +90,6 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
     super.dispose();
   }
 
-  DateTimeRange _rangeForThisMonth() {
-    final now = DateTime.now();
-    final start = DateTime(now.year, now.month, 1);
-    final end = DateTime(now.year, now.month + 1, 0);
-    return DateTimeRange(start: start, end: end);
-  }
-
   Future<void> _loadEstimates({bool forceRefresh = false}) async {
     setState(() {
       _isLoading    = true;
@@ -103,20 +97,13 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
     });
     try {
       final estimates = await _estimateService.fetchEstimates(forceRefresh: forceRefresh);
+      if (!mounted) return;
       setState(() {
         _allEstimates = estimates;
-        _branchList = estimates
-            .map((e) => e.branch ?? '')
-            .where((v) => v.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-        _userList = estimates
-            .map((e) => e.addedBy ?? '')
-            .where((v) => v.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
+        _branchOptions =
+            SalesFilterData.branchOptions(estimates.map((e) => e.branch));
+        // "All Users" lists the PARTY (customer) names, not app users.
+        _userOptions = SalesFilterData.partyOptions(estimates.map((e) => e.partyName));
         _isLoading = false;
       });
       _applySortAndFilter();
@@ -134,20 +121,10 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
       final matchesQuery = query.isEmpty ||
           est.referenceNo.toLowerCase().contains(query) ||
           est.partyName.toLowerCase().contains(query);
-      final matchesStatus = _statusFilter == 'All' || est.effectiveStatus == _statusFilter;
-      final matchesBranch = _branchFilter == 'All' || (est.branch ?? '') == _branchFilter;
-      final matchesUser   = _userFilter == 'All' || (est.addedBy ?? '') == _userFilter;
-
-      bool matchesDate = true;
-      if (_dateRangeFilter != null) {
-        final d = est.estimateDateTime;
-        if (d == null) {
-          matchesDate = false;
-        } else {
-          matchesDate = !d.isBefore(_dateRangeFilter!.start) &&
-              !d.isAfter(_dateRangeFilter!.end);
-        }
-      }
+      final matchesStatus = _statusFilter == kFilterAll || est.effectiveStatus == _statusFilter;
+      final matchesBranch = SalesFilterData.branchMatches(_branchFilter, est.branch);
+      final matchesUser   = SalesFilterData.userMatches(_userFilter, est.partyName);
+      final matchesDate   = SalesPeriod.inRange(est.estimateDateTime, _dateRangeFilter);
 
       return matchesQuery && matchesStatus && matchesBranch && matchesUser && matchesDate;
     }).toList()
@@ -159,9 +136,11 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
 
   void _clearFilters() {
     setState(() {
-      _statusFilter = 'All';
-      _branchFilter = 'All';
-      _userFilter   = 'All';
+      _statusFilter = kFilterAll;
+      _branchFilter = kFilterAll;
+      _userFilter   = kFilterAll;
+      _periodFilter = SalesPeriod.thisMonth;
+      _dateRangeFilter = SalesPeriod.rangeFor(SalesPeriod.thisMonth);
     });
     _applySortAndFilter();
   }
@@ -630,7 +609,7 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
     );
   }
 
-  // ── Filter chip row: This Month / date range / All Firms / All Users ──
+  // ── Filter chip row: period / date range / firm / user / status ───────
   Widget _buildFilterRow() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -638,58 +617,63 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
         const Text('Filter by :',
             style: TextStyle(fontSize: 12.5, color: kTextSub, fontWeight: FontWeight.w600)),
         const SizedBox(width: 10),
-        _FilterChip(
+        SalesFilterChip(
           icon: Icons.calendar_month_rounded,
           label: _periodFilter,
-          active: _periodFilter != 'This Month',
+          active: _periodFilter != SalesPeriod.thisMonth,
           onTap: _showPeriodMenu,
         ),
         const SizedBox(width: 8),
-        _FilterChip(
+        SalesFilterChip(
           icon: Icons.calendar_today_rounded,
           label: _dateRangeFilter == null
               ? 'Pick a date'
-              : '${DateFormat('dd/MM/yyyy').format(_dateRangeFilter!.start)} To ${DateFormat('dd/MM/yyyy').format(_dateRangeFilter!.end)}',
-          active: true,
+              : SalesPeriod.rangeLabel(_dateRangeFilter!),
+          active: _dateRangeFilter != null,
           onTap: _pickDateRange,
         ),
         const SizedBox(width: 8),
-        _FilterChip(
+        SalesFilterChip(
           icon: Icons.apartment_rounded,
-          label: _branchFilter == 'All' ? 'All Firms' : _branchFilter,
-          active: _branchFilter != 'All',
-          onTap: () => _showListMenu(
-            title: 'Firm / Branch',
-            allLabel: 'All Firms',
-            options: _branchList,
-            current: _branchFilter,
-            onSelected: (v) {
-              setState(() => _branchFilter = v);
-              _applySortAndFilter();
-            },
-          ),
+          label: SalesFilterData.labelFor(_branchOptions, _branchFilter, 'All Firms'),
+          active: _branchFilter != kFilterAll,
+          onTap: () async {
+            final v = await showSalesOptionSheet(
+              context,
+              title: 'Firm / Branch',
+              allLabel: 'All Firms',
+              options: _branchOptions,
+              current: _branchFilter,
+            );
+            if (v == null) return;
+            setState(() => _branchFilter = v);
+            _applySortAndFilter();
+          },
         ),
         const SizedBox(width: 8),
-        _FilterChip(
+        SalesFilterChip(
           icon: Icons.person_outline_rounded,
-          label: _userFilter == 'All' ? 'All Users' : _userFilter,
-          active: _userFilter != 'All',
-          onTap: () => _showListMenu(
-            title: 'User',
-            allLabel: 'All Users',
-            options: _userList,
-            current: _userFilter,
-            onSelected: (v) {
-              setState(() => _userFilter = v);
-              _applySortAndFilter();
-            },
-          ),
+          label: SalesFilterData.labelFor(_userOptions, _userFilter, 'All Users'),
+          active: _userFilter != kFilterAll,
+          onTap: () async {
+            final v = await showSalesOptionSheet(
+              context,
+              title: 'Party',
+              allLabel: 'All Users',
+              options: _userOptions,
+              current: _userFilter,
+              emptyText: 'No parties yet',
+            );
+            if (v == null) return;
+            setState(() => _userFilter = v);
+            _applySortAndFilter();
+          },
         ),
         const SizedBox(width: 8),
-        _FilterChip(
+        SalesFilterChip(
           icon: Icons.filter_list_rounded,
-          label: _statusFilter == 'All' ? 'All Status' : _statusFilter,
-          active: _statusFilter != 'All',
+          label: _statusFilter == kFilterAll ? 'All Status' : _statusFilter,
+          active: _statusFilter != kFilterAll,
           onTap: _showStatusMenu,
         ),
         if (_isFilterActive) ...[
@@ -704,129 +688,49 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
     );
   }
 
-  void _showPeriodMenu() async {
-    final selected = await showMenu<String>(
-      context: context,
-      position: const RelativeRect.fromLTRB(24, 260, 24, 0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      items: _periodOptions
-          .map((opt) => PopupMenuItem(
-        value: opt,
-        child: Row(children: [
-          Icon(_periodFilter == opt ? Icons.radio_button_checked : Icons.radio_button_off,
-              size: 17, color: _periodFilter == opt ? kBlue : Colors.grey),
-          const SizedBox(width: 10),
-          Text(opt),
-        ]),
-      ))
-          .toList(),
+  Future<void> _showPeriodMenu() async {
+    final v = await showSalesOptionSheet(
+      context,
+      title: 'Select period',
+      options: SalesPeriod.options.map((o) => FilterOption(o, o)).toList(),
+      current: _periodFilter,
     );
-    if (selected == null) return;
+    if (v == null) return;
+    if (v == SalesPeriod.custom) {
+      await _pickDateRange();
+      return;
+    }
     setState(() {
-      _periodFilter = selected;
-      final now = DateTime.now();
-      switch (selected) {
-        case 'Today':
-          _dateRangeFilter = DateTimeRange(start: DateTime(now.year, now.month, now.day), end: now);
-          break;
-        case 'This Week':
-          final start = now.subtract(Duration(days: now.weekday - 1));
-          _dateRangeFilter = DateTimeRange(start: DateTime(start.year, start.month, start.day), end: now);
-          break;
-        case 'This Month':
-          _dateRangeFilter = _rangeForThisMonth();
-          break;
-        case 'This Quarter':
-          final qStartMonth = ((now.month - 1) ~/ 3) * 3 + 1;
-          _dateRangeFilter = DateTimeRange(start: DateTime(now.year, qStartMonth, 1), end: now);
-          break;
-        case 'This Year':
-          _dateRangeFilter = DateTimeRange(start: DateTime(now.year, 1, 1), end: now);
-          break;
-        case 'Custom':
-          _pickDateRange();
-          break;
-      }
+      _periodFilter = v;
+      _dateRangeFilter = SalesPeriod.rangeFor(v); // null for "All Time"
     });
     _applySortAndFilter();
   }
 
-  void _showStatusMenu() async {
-    final options = ['All', ...Estimate.statusOptions];
-    final selected = await showMenu<String>(
-      context: context,
-      position: const RelativeRect.fromLTRB(1000, 260, 24, 0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      items: options
-          .map((opt) => PopupMenuItem(
-        value: opt,
-        child: Row(children: [
-          Icon(_statusFilter == opt ? Icons.radio_button_checked : Icons.radio_button_off,
-              size: 17, color: _statusFilter == opt ? kBlue : Colors.grey),
-          const SizedBox(width: 10),
-          Text(opt),
-        ]),
-      ))
-          .toList(),
+  Future<void> _showStatusMenu() async {
+    final v = await showSalesOptionSheet(
+      context,
+      title: 'Estimate status',
+      allLabel: 'All Status',
+      options: Estimate.statusOptions.map((o) => FilterOption(o, o)).toList(),
+      current: _statusFilter,
     );
-    if (selected != null) {
-      setState(() => _statusFilter = selected);
-      _applySortAndFilter();
-    }
-  }
-
-  void _showListMenu({
-    required String title,
-    required String allLabel,
-    required List<String> options,
-    required String current,
-    required void Function(String) onSelected,
-  }) async {
-    final all = ['All', ...options];
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kTextDark)),
-              ),
-            ),
-            if (all.length == 1)
-              const Padding(padding: EdgeInsets.all(20), child: Text('No data yet', style: TextStyle(color: kTextMute))),
-            ...all.map((v) => ListTile(
-              title: Text(v == 'All' ? allLabel : v),
-              trailing: current == v ? const Icon(Icons.check_rounded, color: kBlue) : null,
-              onTap: () => Navigator.pop(ctx, v),
-            )),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (selected != null) onSelected(selected);
+    if (v == null) return;
+    setState(() => _statusFilter = v);
+    _applySortAndFilter();
   }
 
   Future<void> _pickDateRange() async {
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      initialDateRange: _dateRangeFilter,
+    final picked = await showSalesDateRangePicker(
+      context,
+      initial: _dateRangeFilter,
     );
-    if (picked != null) {
-      setState(() {
-        _dateRangeFilter = picked;
-        _periodFilter = 'Custom';
-      });
-      _applySortAndFilter();
-    }
+    if (picked == null) return;
+    setState(() {
+      _dateRangeFilter = picked;
+      _periodFilter = SalesPeriod.custom;
+    });
+    _applySortAndFilter();
   }
 
   // ── Total Quotations summary card ───────────────────────────────────
@@ -1010,46 +914,6 @@ class _EstimateListScreenState extends State<EstimateListScreen> {
             ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// FILTER CHIP
-// ═══════════════════════════════════════════════════════════════════════════
-class _FilterChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _FilterChip({required this.icon, required this.label, required this.onTap, this.active = false});
-
-  @override
-  Widget build(BuildContext context) {
-    const blue = _EstimateListScreenState.kBlue;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: active ? blue.withOpacity(0.08) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? blue.withOpacity(0.5) : _EstimateListScreenState.kBorder),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 14, color: active ? blue : _EstimateListScreenState.kTextSub),
-          const SizedBox(width: 6),
-          Text(label,
-              style: TextStyle(
-                fontSize: 12.5,
-                color: active ? blue : _EstimateListScreenState.kTextDark,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              )),
-          const SizedBox(width: 4),
-          Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: active ? blue : _EstimateListScreenState.kTextMute),
-        ]),
       ),
     );
   }
