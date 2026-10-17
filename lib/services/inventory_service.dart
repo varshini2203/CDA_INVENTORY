@@ -54,6 +54,7 @@ class InventoryService {
     String description = '',
     int branch = 0,
     String? addedBy,
+    List<String> serialNumbers = const [],
     bool skipDownstreamSync = false,
   }) async {
     final item = InventoryItem(
@@ -65,6 +66,7 @@ class InventoryService {
       description: description.trim(),
       branch: branch,
       addedBy: addedBy,
+      serialNumbers: serialNumbers,
     );
 
     final docRef = await _col.add(item.toCreateMap());
@@ -78,6 +80,7 @@ class InventoryService {
       description: item.description,
       branch: item.branch,
       addedBy: item.addedBy,
+      serialNumbers: item.serialNumbers,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -108,6 +111,9 @@ class InventoryService {
     String description = '',
     int branch = 0,
     String? addedBy,
+    // null = leave the stored serial numbers untouched (bulk ops etc. never
+    // pass this), a list (even empty) = replace them.
+    List<String>? serialNumbers,
   }) async {
     final item = InventoryItem(
       id: id,
@@ -120,8 +126,31 @@ class InventoryService {
       addedBy: addedBy,
     );
 
-    await _col.doc(id).update(item.toMap());
+    final map = item.toMap();
+    if (serialNumbers != null) map['serialNumbers'] = serialNumbers;
+    await _col.doc(id).update(map);
     clearCache();
+  }
+
+  /// Serial numbers that already belong to another inventory item.
+  /// Returns {serial (lower-case) : name of the item that has it}. Pass
+  /// [excludeId] when editing so an item doesn't clash with itself.
+  Future<Map<String, String>> findSerialConflicts(
+      List<String> serials, {
+        String? excludeId,
+      }) async {
+    if (serials.isEmpty) return {};
+    final wanted = serials.map((s) => s.trim().toLowerCase()).toSet();
+    final all = await getInventory();
+    final clashes = <String, String>{};
+    for (final item in all) {
+      if (item.id == excludeId) continue;
+      for (final s in item.serialNumbers) {
+        final key = s.trim().toLowerCase();
+        if (wanted.contains(key)) clashes[key] = item.name;
+      }
+    }
+    return clashes;
   }
 
   // ── DELETE ─────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../services/inventory_service.dart';
 import '../../services/current_user_service.dart';
 import '../../widgets/common/auto_user_field.dart';
+import 'widgets/serial_numbers_field.dart';
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -20,6 +21,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController locationController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController addedByController = TextEditingController(); // 🆕
+  final TextEditingController serialController = TextEditingController();
 
   String selectedCategory = "ONFIELD";
   int selectedBranch = 1; // 1 = CDA Admin, 2 = CDA Ops
@@ -73,6 +75,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
     setState(() => isLoading = true);
 
     try {
+      final serials = parseSerials(serialController.text);
+      final clashes = await InventoryService().findSerialConflicts(serials);
+      if (clashes.isNotEmpty) {
+        final e = clashes.entries.first;
+        throw Exception('Serial "${e.key.toUpperCase()}" already belongs to "${e.value}"');
+      }
+
       // Logged-in user's name — never typed manually.
       final currentUser = await CurrentUserService.getName();
 
@@ -85,6 +94,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         description: descriptionController.text.trim(),
         branch: selectedBranch,             // 🆕 which branch this item belongs to
         addedBy: currentUser,   // auto-fetched from login
+        serialNumbers: serials,
       );
 
       if (!mounted) return;
@@ -123,6 +133,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     locationController.dispose();
     descriptionController.dispose();
     addedByController.dispose();   // 🆕
+    serialController.dispose();
     super.dispose();
   }
 
@@ -180,6 +191,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     if (int.tryParse(v) == null) return "Must be a number";
                     return null;
                   },
+                ),
+                const SizedBox(height: 14),
+                SerialNumbersField(
+                  controller: serialController,
+                  quantityController: quantityController,
                 ),
               ]),
 

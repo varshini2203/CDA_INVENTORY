@@ -582,7 +582,8 @@ class _InventoryDashboardState extends State<InventoryDashboard>
       result = result.where((item) {
         return item.name.toLowerCase().contains(q) ||
             item.location.toLowerCase().contains(q) ||
-            item.category.toLowerCase().contains(q);
+            item.category.toLowerCase().contains(q) ||
+            item.serialNumbers.any((s) => s.toLowerCase().contains(q));
       }).toList();
     }
 

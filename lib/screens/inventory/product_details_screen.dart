@@ -334,6 +334,52 @@ class ProductDetailsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
+                // ── Serial numbers ────────────────────────────────────────
+                const Text(
+                  'SERIAL NUMBER(S)',
+                  style: TextStyle(
+                    color: kTeal,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F9FC),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: item.serialNumbers.isEmpty
+                      ? Text('No serial number added.',
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 14))
+                      : Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final s in item.serialNumbers)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: SelectableText(
+                            s,
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
                 // ── Description ───────────────────────────────────────────
                 const Text(
                   'DESCRIPTION',

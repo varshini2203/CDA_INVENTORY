@@ -11,6 +11,7 @@ class InventoryItem {
   final String description;
   final int branch;          // 1 = Branch 1 (Adambakkam), 2 = Branch 2, 0 = unassigned/legacy item
   final String? addedBy;     // 🆕 name of whoever added/edited this item
+  final List<String> serialNumbers; // optional serial no(s) — one per unit
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -23,6 +24,7 @@ class InventoryItem {
     this.description = '',
     this.branch = 0,
     this.addedBy,
+    this.serialNumbers = const [],
     this.createdAt,
     this.updatedAt,
   });
@@ -39,6 +41,10 @@ class InventoryItem {
       description: data['description'] as String? ?? '',
       branch: (data['branch'] as num?)?.toInt() ?? 0,
       addedBy: data['addedBy'] as String?,   // 🆕 null-safe for older docs
+      serialNumbers: ((data['serialNumbers'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .where((e) => e.trim().isNotEmpty)
+          .toList(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );
@@ -62,6 +68,7 @@ class InventoryItem {
   Map<String, dynamic> toCreateMap() {
     return {
       ...toMap(),
+      'serialNumbers': serialNumbers,
       'createdAt': FieldValue.serverTimestamp(),
     };
   }
@@ -77,6 +84,7 @@ class InventoryItem {
       'description': description,
       'branch': branch,
       'addedBy': addedBy,   // 🆕
+      'serialNumbers': serialNumbers,
     };
   }
 
@@ -102,6 +110,7 @@ class InventoryItem {
     String? description,
     int? branch,
     String? addedBy,        // 🆕
+    List<String>? serialNumbers,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -114,10 +123,13 @@ class InventoryItem {
       description: description ?? this.description,
       branch: branch ?? this.branch,
       addedBy: addedBy ?? this.addedBy,   // 🆕
+      serialNumbers: serialNumbers ?? this.serialNumbers,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  bool get hasSerials => serialNumbers.isNotEmpty;
 
   // ── Stock status helpers ───────────────────────────────────────────────────
   bool get isOutOfStock => quantity == 0;

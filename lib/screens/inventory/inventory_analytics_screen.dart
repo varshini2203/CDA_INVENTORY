@@ -9,29 +9,32 @@
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cda_inventory/models/inventory_model.dart';
 import 'package:cda_inventory/services/inventory_service.dart';
 
-// ── Theme tokens (matches lib/screens/dashboard/dashboard_screen.dart) ──────
+// ── Theme tokens — LIGHT theme for this page ─────────────────────────────────
 // Top-level so every widget in this file can use them directly in const
 // expressions — a static field accessed through a Type variable doesn't
 // work in Dart, which is what caused the earlier build errors.
-const Color _bg          = Color(0xFF050A14);
-const Color _surface     = Color(0xFF0A1428);
-const Color _surfaceHigh = Color(0xFF0F1C35);
-const Color _border      = Color(0xFF1A2E50);
+const Color _bg          = Color(0xFFF4F7FB); // page background
+const Color _surface     = Color(0xFFFFFFFF); // cards
+const Color _surfaceHigh = Color(0xFFEAF0F8); // raised / refresh bg
+const Color _border      = Color(0xFFDCE5F0);
+const Color _track       = Color(0xFFE3EAF4); // gauge / donut / progress tracks
 const Color _blue        = Color(0xFF1E5FC8);
-const Color _blueLight   = Color(0xFF3A7AE8);
-const Color _green       = Color(0xFF00D68F);
-const Color _red         = Color(0xFFE8374A);
-const Color _gold        = Color(0xFFF2B705);
-const Color _textPrimary = Color(0xFFF0F6FF);
-const Color _textSub     = Color(0xFFA0B8D0);
-const Color _textMuted   = Color(0xFF4A6080);
+const Color _blueLight   = Color(0xFF2F6FE0);
+const Color _green       = Color(0xFF0FA968);
+const Color _red         = Color(0xFFE02F44);
+const Color _gold        = Color(0xFFE09A00);
+const Color _purple      = Color(0xFF8250F0);
+const Color _textPrimary = Color(0xFF0F1B33);
+const Color _textSub     = Color(0xFF475B78);
+const Color _textMuted   = Color(0xFF7A8CA5);
 
 const List<Color> _categoryPalette = [
-  _blueLight, _green, _gold, Color(0xFF9C6BFF), _red,
+  _blueLight, _green, _gold, _purple, _red,
   Color(0xFF00B8D9), Color(0xFFFF8A3D), Color(0xFF6C8CFF),
 ];
 
@@ -156,7 +159,11 @@ class _InventoryAnalyticsScreenState extends State<InventoryAnalyticsScreen> {
       appBar: AppBar(
         backgroundColor: _bg,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         foregroundColor: _textPrimary,
+        iconTheme: const IconThemeData(color: _textPrimary),
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
         title: const Text('Inventory Analytics',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: _textPrimary)),
         actions: [
@@ -365,7 +372,7 @@ class _AnalyticsBody extends StatelessWidget {
         Row(children: [
           _KpiCard(label: 'Products', value: '${a.totalProducts}', icon: Icons.category_rounded, color: _green),
           const SizedBox(width: 8),
-          _KpiCard(label: 'Quantity', value: '${a.totalQuantity}', icon: Icons.layers_rounded, color: const Color(0xFF9C6BFF)),
+          _KpiCard(label: 'Quantity', value: '${a.totalQuantity}', icon: Icons.layers_rounded, color: _purple),
           const SizedBox(width: 8),
           _KpiCard(label: 'Categories', value: '${a.categoryCount}', icon: Icons.grid_view_rounded, color: _gold),
           const SizedBox(width: 8),
@@ -596,6 +603,9 @@ class _SectionCard extends StatelessWidget {
         color: _surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _border),
+        boxShadow: const [
+          BoxShadow(color: Color(0x0F0F1B33), blurRadius: 10, offset: Offset(0, 3)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -676,7 +686,7 @@ class _GaugePainter extends CustomPainter {
     const sweepTotal = math.pi;
 
     final track = Paint()
-      ..color = const Color(0xFF1A2E50)
+      ..color = _track
       ..style = PaintingStyle.stroke
       ..strokeWidth = 12
       ..strokeCap = StrokeCap.round;
@@ -1008,7 +1018,7 @@ class _DonutPainter extends CustomPainter {
     const strokeWidth = 18.0;
 
     final track = Paint()
-      ..color = const Color(0xFF15233F)
+      ..color = _track
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth;
     canvas.drawCircle(center, radius - strokeWidth / 2, track);
@@ -1125,7 +1135,7 @@ class _CategoryBarRow extends StatelessWidget {
             child: LinearProgressIndicator(
               value: ratio.clamp(0.02, 1.0),
               minHeight: 7,
-              backgroundColor: const Color(0xFF15233F),
+              backgroundColor: _track,
               valueColor: AlwaysStoppedAnimation(color),
             ),
           ),

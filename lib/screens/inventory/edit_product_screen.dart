@@ -7,6 +7,7 @@ import '../../services/inventory_service.dart';
 import '../../services/current_user_service.dart';
 import '../../widgets/common/auto_user_field.dart';
 import 'product_details_screen.dart';
+import 'widgets/serial_numbers_field.dart';
 
 class EditProductScreen extends StatefulWidget {
   // ── Now accepts an InventoryItem instead of a raw Map ──────────────────────
@@ -26,6 +27,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
   late TextEditingController locationController;
   late TextEditingController descriptionController;
   late TextEditingController addedByController;   // 🆕
+  late TextEditingController serialController;
   late String selectedCategory;
   late int selectedBranch;
 
@@ -85,6 +87,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
         TextEditingController(text: widget.product.description);
     addedByController =
         TextEditingController(text: widget.product.addedBy ?? '');   // 🆕
+    serialController =
+        TextEditingController(text: widget.product.serialNumbers.join('\n'));
 
     // Fallback if stored category isn't in the list
     final saved = widget.product.category;
@@ -102,6 +106,14 @@ class _EditProductScreenState extends State<EditProductScreen> {
     setState(() => isLoading = true);
 
     try {
+      final serials = parseSerials(serialController.text);
+      final clashes = await InventoryService()
+          .findSerialConflicts(serials, excludeId: widget.product.id);
+      if (clashes.isNotEmpty) {
+        final e = clashes.entries.first;
+        throw Exception('Serial "${e.key.toUpperCase()}" already belongs to "${e.value}"');
+      }
+
       // Logged-in user's name — never typed manually.
       final currentUser = await CurrentUserService.getName();
 
@@ -115,6 +127,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         description: descriptionController.text.trim(),
         branch: selectedBranch,          // 🆕 which branch this item belongs to
         addedBy: currentUser,   // auto-fetched from login
+        serialNumbers: serials,
       );
 
       if (!mounted) return;
@@ -152,6 +165,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     quantityController.dispose();
     locationController.dispose();
     descriptionController.dispose();
+    serialController.dispose();
     addedByController.dispose();   // 🆕
     super.dispose();
   }
@@ -217,6 +231,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
                     if (int.tryParse(v) == null) return "Must be a number";
                     return null;
                   },
+                ),
+                const SizedBox(height: 14),
+                SerialNumbersField(
+                  controller: serialController,
+                  quantityController: quantityController,
                 ),
               ]),
 

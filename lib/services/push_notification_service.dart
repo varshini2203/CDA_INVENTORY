@@ -19,9 +19,9 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -123,6 +123,13 @@ class PushNotificationService {
 
     _initialized = true;
 
+    // Web: dart:io Platform is unsupported and flutter_local_notifications
+    // has no web implementation. Skip push setup on web.
+    if (kIsWeb) {
+      debugPrint('Web detected: push notification setup skipped.');
+      return;
+    }
+
     // ----------------------------------------------------------
     // 1. LOCAL NOTIFICATION INITIALIZATION
     // ----------------------------------------------------------
@@ -169,7 +176,7 @@ class PushNotificationService {
     // 2. ANDROID NOTIFICATION CHANNEL
     // ----------------------------------------------------------
 
-    if (!Platform.isWindows) {
+    if (defaultTargetPlatform != TargetPlatform.windows) {
       const AndroidNotificationChannel androidChannel =
       AndroidNotificationChannel(
         _channelId,
@@ -191,7 +198,7 @@ class PushNotificationService {
     // 3. WINDOWS
     // ----------------------------------------------------------
 
-    if (Platform.isWindows) {
+    if (defaultTargetPlatform == TargetPlatform.windows) {
       debugPrint(
         'Windows platform detected.',
       );

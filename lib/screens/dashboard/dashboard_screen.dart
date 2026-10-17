@@ -12,6 +12,8 @@ import 'package:cda_inventory/screens/drone_tracking/drone_in_out_screen.dart';
 import 'package:cda_inventory/screens/drone_service/drone_service_dashboard_screen.dart';
 import 'package:cda_inventory/screens/stock_management/stock_dashboard_screen.dart';
 import 'package:cda_inventory/screens/inventory_movement/movement_dashboard_screen.dart';
+import 'package:cda_inventory/screens/inventory_movement/request_item_screen.dart';
+import 'package:cda_inventory/services/inventory_movement_service.dart';
 import 'package:cda_inventory/screens/purchases/purchases_menu_screen.dart';
 import 'package:cda_inventory/screens/invoices/invoice_list_screen.dart';
 import 'package:cda_inventory/screens/estimates/estimate_list_screen.dart';
@@ -630,23 +632,7 @@ class _CDAAppBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
             const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-              decoration: BoxDecoration(
-                color: _green.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _green.withOpacity(0.4), width: 1),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _PulseDot(color: _green),
-                  SizedBox(width: 4),
-                  Text('LIVE', style: TextStyle(color: _green, fontSize: 9,
-                      fontWeight: FontWeight.w800, letterSpacing: 1.2)),
-                ],
-              ),
-            ),
+            const Flexible(child: _RequestItemButton()),
             const SizedBox(width: 8),
             const _StreakBadge(),
             const SizedBox(width: 8),
@@ -658,6 +644,152 @@ class _CDAAppBar extends StatelessWidget implements PreferredSizeWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REQUEST ITEM BUTTON — replaces the old LIVE pill. Opens the Request Item
+// screen, which lists every Adambakkam <-> Gojan movement. Badge = movements
+// in those two directions that are checked out but not yet checked in.
+// Behaves like the notification bell: stays red/pulsing until the user opens
+// it, and comes back the moment a new pending movement raises the count.
+// ═══════════════════════════════════════════════════════════════════════════════
+class _RequestItemButton extends StatefulWidget {
+  const _RequestItemButton();
+  @override
+  State<_RequestItemButton> createState() => _RequestItemButtonState();
+}
+
+class _RequestItemButtonState extends State<_RequestItemButton>
+    with SingleTickerProviderStateMixin {
+  // Cached once so the Firestore listener isn't recreated on every rebuild.
+  late final Stream<int> _pendingStream = InventoryMovementService.streamAll()
+      .map((all) => pendingRequestMovements(all).length);
+  late final AnimationController _ctrl;
+  // Highest pending count the user has already "seen" (opened Request Item
+  // for it). The bell rings until that happens, and starts again as soon as
+  // a new pending request pushes the count higher.
+  int _seenCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  // "Ring-ring… pause": quick decaying shakes at the start of each cycle,
+  // then a rest — same pattern as the admin notification bell.
+  double _ringAngle(double t) {
+    const ringWindow = 0.35;
+    if (t > ringWindow) return 0;
+    final localT = t / ringWindow;
+    return math.sin(localT * math.pi * 6) * 0.35 * (1 - localT);
+  }
+
+  double _ringScale(double t) {
+    const ringWindow = 0.35;
+    if (t > ringWindow) return 1.0;
+    return 1.0 + math.sin((t / ringWindow) * math.pi) * 0.15;
+  }
+
+  void _open(int count) {
+    setState(() => _seenCount = count);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'Request Item'),
+        builder: (_) => const RequestItemScreen(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<int>(
+      stream: _pendingStream,
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+        final unseen = count > 0 && count > _seenCount;
+        final color = unseen ? _red : _blueLight;
+        return GestureDetector(
+          onTap: () => _open(count),
+          child: Tooltip(
+            message: 'Request Item ($count)',
+            child: AnimatedBuilder(
+              animation: _ctrl,
+              builder: (context, _) {
+                final t = _ctrl.value;
+                final angle = unseen ? _ringAngle(t) : 0.0;
+                final scale = unseen ? _ringScale(t) : 1.0;
+                final glow = unseen
+                    ? (0.20 + 0.30 * ((math.sin(t * 2 * math.pi) + 1) / 2))
+                    : 0.0;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: color.withOpacity(0.5), width: 1),
+                    boxShadow: unseen
+                        ? [BoxShadow(color: _red.withOpacity(glow), blurRadius: 12, spreadRadius: 1)]
+                        : null,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Bell — swings (rings) while there is an unseen request.
+                      Transform.rotate(
+                        angle: angle,
+                        alignment: Alignment.topCenter,
+                        child: Transform.scale(
+                          scale: scale,
+                          child: Icon(Icons.notifications_rounded, size: 15, color: color),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text('Request Item',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+                      ),
+                      if (count > 0) ...[
+                        const SizedBox(width: 5),
+                        Transform.scale(
+                          scale: unseen ? scale : 1.0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            decoration: BoxDecoration(
+                                color: _red, borderRadius: BorderRadius.circular(10)),
+                            child: Text(count > 9 ? '9+' : '$count',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 }
