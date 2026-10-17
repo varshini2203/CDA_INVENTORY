@@ -6,6 +6,7 @@ import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/models/customer_details.dart';
 import 'invoice_service.dart';
 import 'activity_log_service.dart';
+import 'current_user_service.dart';
 
 class EstimateService {
   static final CollectionReference<Map<String, dynamic>> _col =
@@ -159,8 +160,11 @@ class EstimateService {
       shipping: estimate.shipping,
       roundOffEnabled: estimate.roundOffEnabled,
       branch: estimate.branch,
+      addedBy: CurrentUserService.nameSync,
+      addedAt: DateTime.now(),
       termsTitle: 'Sale Invoice',
       termsNotes: estimate.termsNotes,
+      bankDetails: estimate.bankDetails,
       vendorName: estimate.partyName,
     );
 

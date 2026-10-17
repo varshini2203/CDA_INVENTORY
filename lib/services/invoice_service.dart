@@ -9,6 +9,7 @@ import 'package:cda_inventory/models/recurring_config.dart';
 import 'package:cda_inventory/models/customer_details.dart';
 import '../constants/gamification_constants.dart';
 import 'activity_log_service.dart';
+import 'customer_service.dart';
 import 'gamification_service.dart';
 import 'staff_reward_service.dart';
 import 'report_service.dart';
@@ -77,6 +78,8 @@ class InvoiceService {
 
     final docRef = await _col.add(data);
     clearCache();
+    // Auto-save / refresh the customer master from this invoice.
+    CustomerService.upsertFromTransaction(invoice.customer);
     ActivityLogService.logAdd(
       module: 'Invoices',
       itemName: invoice.invoiceNo,
@@ -112,6 +115,7 @@ class InvoiceService {
     final before = existingDoc.data() ?? {};
     await _col.doc(invoice.id).update(invoice.toFirestore());
     clearCache();
+    CustomerService.upsertFromTransaction(invoice.customer);
     ActivityLogService.logEdit(
       module: 'Invoices',
       itemName: invoice.invoiceNo,
@@ -216,8 +220,9 @@ class InvoiceService {
       final key = '${c.name.trim().toLowerCase()}|${c.phone ?? ''}';
       if (seen.add(key)) customers.add(c);
     }
-    customers.sort((a, b) => a.name.compareTo(b.name));
-    return customers;
+    // Saved customers (customers collection) first, then any found only in
+    // older invoices.
+    return CustomerService().fetchSuggestions(customers);
   }
 
   // ── Random invoice number generator ───────────────────────────────────────

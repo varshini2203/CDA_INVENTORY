@@ -53,6 +53,7 @@ class Invoice {
   final bool roundOffEnabled;
   final String termsTitle;       // e.g. 'Sale Invoice'
   final String? termsNotes;      // e.g. 'Thanks for doing business with us!'
+  final String? bankDetails;     // manually entered bank details shown on the PDF
 
   static const List<String> statusOptions = ['Pending', 'Paid'];
   static const List<String> paymentMethods = kPaymentModes;
@@ -86,6 +87,7 @@ class Invoice {
     this.roundOffEnabled = false,
     this.termsTitle = 'Sale Invoice',
     this.termsNotes,
+    this.bankDetails,
   }) : recurring = recurring ?? RecurringConfig();
 
   // ── Derived: line-item totals (fallback to legacy single amount/qty) ──
@@ -187,6 +189,7 @@ class Invoice {
       roundOffEnabled: data['round_off_enabled'] ?? false,
       termsTitle: data['terms_title']?.toString() ?? 'Sale Invoice',
       termsNotes: data['terms_notes']?.toString(),
+      bankDetails: data['bank_details']?.toString(),
     );
   }
 
@@ -218,6 +221,7 @@ class Invoice {
       'round_off_enabled': roundOffEnabled,
       'terms_title': termsTitle,
       'terms_notes': termsNotes,
+      'bank_details': bankDetails,
       'updated_at': FieldValue.serverTimestamp(),
     };
   }
@@ -251,6 +255,7 @@ class Invoice {
     bool? roundOffEnabled,
     String? termsTitle,
     String? termsNotes,
+    String? bankDetails,
   }) {
     return Invoice(
       id: clearId ? null : (id ?? this.id),
@@ -280,6 +285,7 @@ class Invoice {
       roundOffEnabled: roundOffEnabled ?? this.roundOffEnabled,
       termsTitle: termsTitle ?? this.termsTitle,
       termsNotes: termsNotes ?? this.termsNotes,
+      bankDetails: bankDetails ?? this.bankDetails,
     );
   }
 

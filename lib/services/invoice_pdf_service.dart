@@ -16,7 +16,19 @@ class InvoicePdfService {
 
   // ── SkyLynk brand + company details (from the reference invoice) ─────────
   static const _brandBlue = PdfColor.fromInt(0xFF1F6FB2);
-  static const _rowTint   = PdfColor.fromInt(0xFFF5F8FB);
+  static const _rowTint   = PdfColor.fromInt(0xFFEFF7FE);
+  static const _navyMid   = PdfColor.fromInt(0xFF16345C);
+  static const _ink       = PdfColor.fromInt(0xFF1F2937);
+  static const _muted     = PdfColor.fromInt(0xFF475569);
+  static const _hairline  = PdfColor.fromInt(0xFFBBD8F2);
+  static const _onNavy    = PdfColor.fromInt(0xFFC9D6E8);
+  // ── Light-blue invoice theme ─────────────────────────────────────────────
+  static const _skyBg     = PdfColor.fromInt(0xFFEAF4FD);
+  static const _blueDark  = PdfColor.fromInt(0xFF1760AA);
+  static const _skyMid    = PdfColor.fromInt(0xFFD2E7F9);
+  static const _skyAccent = PdfColor.fromInt(0xFF4FB3F6);
+  static const _skyDeep   = PdfColor.fromInt(0xFF0F4C81);
+  static const _skyText   = PdfColor.fromInt(0xFF4A6B8A);
 
   static const _companyName        = 'SKYLYNK';
   static const _companyAddressLine = 'No 63 West Karikalan Street, Adambakkam , Chennai';
@@ -174,249 +186,374 @@ class InvoicePdfService {
   static Future<Uint8List> generate(Invoice inv) async {
     final skylynkLogo = await _loadSkylynkLogo();
     final doc = pw.Document();
+    final party = inv.customer?.name ?? inv.vendorName;
+    final status = inv.effectiveStatus;
+    final hasBank = (inv.bankDetails ?? '').trim().isNotEmpty;
+
+    pw.Widget cap(String t) => pw.Text(t,
+        style: pw.TextStyle(
+            fontSize: 8.5,
+            fontWeight: pw.FontWeight.bold,
+            color: _brandBlue,
+            letterSpacing: 1.3));
+
+    pw.Widget body(String t, {bool bold = false, double size = 10, PdfColor color = _ink}) =>
+        pw.Text(t,
+            style: pw.TextStyle(
+                fontSize: size,
+                color: color,
+                fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal));
+
+    pw.Widget head(String t, {bool right = false}) => pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+      child: pw.Text(t,
+          textAlign: right ? pw.TextAlign.right : pw.TextAlign.left,
+          style: pw.TextStyle(
+              color: PdfColors.white,
+              fontSize: 8.5,
+              fontWeight: pw.FontWeight.bold,
+              letterSpacing: 1)),
+    );
+
+    pw.Widget detailRow(String k, pw.Widget v) => pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 3),
+      child: pw.Row(children: [
+        pw.SizedBox(width: 56, child: body(k, color: _muted)),
+        v,
+      ]),
+    );
 
     doc.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        margin: pw.EdgeInsets.zero,
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            // ── Company letterhead ──────────────────────────────────────
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Column(
+            // ── Blue header ────────────────────────────────────────────
+            pw.Container(
+              width: double.infinity,
+              color: _skyDeep,
+              padding: const pw.EdgeInsets.fromLTRB(40, 30, 40, 26),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Container(
+                    width: 62,
+                    height: 62,
+                    padding: const pw.EdgeInsets.all(5),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.white,
+                      borderRadius: pw.BorderRadius.circular(10),
+                    ),
+                    child: pw.Image(pw.MemoryImage(skylynkLogo), fit: pw.BoxFit.contain),
+                  ),
+                  pw.SizedBox(width: 14),
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(_companyName,
+                            style: pw.TextStyle(
+                                color: PdfColors.white,
+                                fontSize: 22,
+                                fontWeight: pw.FontWeight.bold,
+                                letterSpacing: 2)),
+                        pw.SizedBox(height: 4),
+                        body(_companyAddressLine, size: 9, color: _onNavy),
+                        body('Phone: $_companyPhone  |  $_companyEmail', size: 9, color: _onNavy),
+                        body('GSTIN: $_companyGstin', size: 9, color: _onNavy),
+                      ],
+                    ),
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text('INVOICE',
+                          style: pw.TextStyle(
+                              color: PdfColors.white,
+                              fontSize: 24,
+                              fontWeight: pw.FontWeight.bold,
+                              letterSpacing: 3)),
+                      pw.SizedBox(height: 8),
+                      body('No. ${inv.invoiceNo}', bold: true, size: 10.5, color: PdfColors.white),
+                      pw.SizedBox(height: 2),
+                      body(inv.purchaseDate, size: 10, color: _onNavy),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            pw.Container(height: 5, width: double.infinity, color: _skyAccent),
+
+            // ── Body ───────────────────────────────────────────────────
+            pw.Expanded(
+              child: pw.Padding(
+                padding: const pw.EdgeInsets.fromLTRB(40, 26, 40, 0),
+                child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text(_companyName,
-                        style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-                    pw.SizedBox(height: 4),
-                    pw.Text(_companyAddressLine, style: const pw.TextStyle(fontSize: 9)),
-                    pw.Text('Phone no. : $_companyPhone', style: const pw.TextStyle(fontSize: 9)),
-                    pw.Text('Email : $_companyEmail', style: const pw.TextStyle(fontSize: 9)),
-                    pw.Text('GSTIN : $_companyGstin', style: const pw.TextStyle(fontSize: 9)),
-                    pw.Text('State: $_companyState', style: const pw.TextStyle(fontSize: 9)),
-                  ],
-                ),
-                pw.SizedBox(
-                  width: 90,
-                  height: 90,
-                  child: pw.Image(pw.MemoryImage(skylynkLogo), fit: pw.BoxFit.contain),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 10),
-            pw.Divider(color: PdfColors.grey400, thickness: 1),
-            pw.SizedBox(height: 6),
-            pw.Center(
-              child: pw.Text('Tax Invoice',
-                  style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: _brandBlue)),
-            ),
-            pw.SizedBox(height: 6),
-            pw.Divider(color: PdfColors.grey400, thickness: 1),
-            pw.SizedBox(height: 14),
-
-            // ── Bill To / Invoice details ───────────────────────────────
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Expanded(
-                  flex: 3,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Bill To', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                      pw.SizedBox(height: 3),
-                      pw.Text(inv.customer?.name ?? inv.vendorName,
-                          style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                      if ((inv.customer?.billingAddress ?? '').isNotEmpty)
-                        pw.Text(inv.customer!.billingAddress!, style: const pw.TextStyle(fontSize: 9)),
-                      if ((inv.customer?.phone ?? '').isNotEmpty)
-                        pw.Text('Contact No. : ${inv.customer!.phone}', style: const pw.TextStyle(fontSize: 9)),
-                    ],
-                  ),
-                ),
-                pw.Expanded(
-                  flex: 2,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text('Invoice Details', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                      pw.SizedBox(height: 3),
-                      pw.Text('Invoice No. : ${inv.invoiceNo}', style: const pw.TextStyle(fontSize: 9)),
-                      pw.Text('Date : ${inv.purchaseDate}', style: const pw.TextStyle(fontSize: 9)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 16),
-
-            // ── Items table ──────────────────────────────────────────────
-            pw.Table(
-              border: pw.TableBorder(horizontalInside: pw.BorderSide(color: PdfColors.grey300, width: 0.5)),
-              columnWidths: {
-                0: const pw.FlexColumnWidth(0.4),
-                1: const pw.FlexColumnWidth(3),
-                2: const pw.FlexColumnWidth(1.1),
-                3: const pw.FlexColumnWidth(1),
-                4: const pw.FlexColumnWidth(1.3),
-                5: const pw.FlexColumnWidth(1.3),
-              },
-              children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: _brandBlue),
-                  children: ['#', 'Item name', 'HSN/ SAC', 'Quantity', 'Price/ Unit', 'Amount']
-                      .map((h) => pw.Padding(
-                    padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-                    child: pw.Text(h,
-                        style: pw.TextStyle(color: PdfColors.white, fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                  ))
-                      .toList(),
-                ),
-                if (inv.usesLineItems)
-                  for (int i = 0; i < inv.lineItems.length; i++)
-                    _skylynkLineItemRow(i + 1, inv.lineItems[i], i.isEven)
-                else
-                  _skylynkLineItemRowLegacy(inv),
-                pw.TableRow(
-                  children: [
-                    pw.SizedBox(),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-                      child: pw.Text('Total', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                    ),
-                    pw.SizedBox(),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-                      child: pw.Text(
-                        '${inv.usesLineItems ? inv.lineItems.fold<int>(0, (s, li) => s + li.quantity) : inv.quantity}',
-                        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                    // Billed to + details in one soft blue panel
+                    pw.Container(
+                      width: double.infinity,
+                      padding: const pw.EdgeInsets.all(16),
+                      decoration: pw.BoxDecoration(
+                        color: _skyBg,
+                        borderRadius: pw.BorderRadius.circular(8),
+                      ),
+                      child: pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Expanded(
+                            flex: 3,
+                            child: pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                cap('BILLED TO'),
+                                pw.SizedBox(height: 7),
+                                body(party, bold: true, size: 13),
+                                pw.SizedBox(height: 3),
+                                if ((inv.customer?.billingAddress ?? '').isNotEmpty)
+                                  body(inv.customer!.billingAddress!, color: _muted),
+                                if ((inv.customer?.shippingAddress ?? '').isNotEmpty &&
+                                    inv.customer!.shippingAddress != inv.customer!.billingAddress)
+                                  body('Ship to: ${inv.customer!.shippingAddress}', color: _muted),
+                                if ((inv.customer?.phone ?? '').isNotEmpty)
+                                  body(inv.customer!.phone!, color: _muted),
+                                if ((inv.customer?.email ?? '').isNotEmpty)
+                                  body(inv.customer!.email!, color: _muted),
+                                if ((inv.customer?.gstin ?? '').isNotEmpty)
+                                  body('GSTIN: ${inv.customer!.gstin}', color: _muted),
+                              ],
+                            ),
+                          ),
+                          pw.Container(width: 1, height: 60, color: _skyMid),
+                          pw.SizedBox(width: 18),
+                          pw.Expanded(
+                            flex: 2,
+                            child: pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                cap('DETAILS'),
+                                pw.SizedBox(height: 7),
+                                detailRow(
+                                  'Status',
+                                  pw.Container(
+                                    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: pw.BoxDecoration(
+                                      color: _statusColor(status),
+                                      borderRadius: pw.BorderRadius.circular(8),
+                                    ),
+                                    child: pw.Text(status.toUpperCase(),
+                                        style: pw.TextStyle(
+                                            fontSize: 8,
+                                            color: PdfColors.white,
+                                            fontWeight: pw.FontWeight.bold,
+                                            letterSpacing: 0.6)),
+                                  ),
+                                ),
+                                detailRow('Payment', body(inv.paymentMode, bold: true)),
+                                if (inv.customer != null)
+                                  detailRow('Supply', body(inv.customer!.placeOfSupply, bold: true)),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    pw.SizedBox(),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-                      child: pw.Text('Rs. ${inv.subtotal.toStringAsFixed(2)}',
-                          textAlign: pw.TextAlign.right,
-                          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 16),
+                    pw.SizedBox(height: 22),
 
-            // ── Amount in words / totals ────────────────────────────────
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Expanded(
-                  flex: 3,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Invoice Amount In Words',
-                          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                      pw.SizedBox(height: 3),
-                      pw.Text(_amountInWords(inv.grandTotal), style: const pw.TextStyle(fontSize: 9)),
-                      if (inv.notes != null && inv.notes!.trim().isNotEmpty) ...[
-                        pw.SizedBox(height: 14),
-                        pw.Text('Description',
-                            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        pw.SizedBox(height: 3),
-                        pw.Text(inv.notes!.trim(), style: const pw.TextStyle(fontSize: 9)),
-                      ],
-                      pw.SizedBox(height: 14),
-                      pw.Text('Terms and Conditions',
-                          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                      pw.SizedBox(height: 3),
-                      pw.Text(inv.termsNotes ?? 'Thanks for doing business with us!',
-                          style: const pw.TextStyle(fontSize: 9)),
-                    ],
-                  ),
-                ),
-                pw.SizedBox(width: 20),
-                pw.Expanded(
-                  flex: 2,
-                  child: pw.Column(
-                    children: [
-                      _skylynkTotalRow('Sub Total', 'Rs. ${inv.subtotal.toStringAsFixed(2)}'),
-                      if (inv.gstEnabled && inv.isInterState)
-                        _skylynkTotalRow('IGST (${_trimPercent(inv.igstPercent)}%)',
-                            'Rs. ${inv.igstAmount.toStringAsFixed(2)}'),
-                      if (inv.gstEnabled && !inv.isInterState) ...[
-                        _skylynkTotalRow('CGST (${_trimPercent(inv.cgstPercent)}%)',
-                            'Rs. ${inv.cgstAmount.toStringAsFixed(2)}'),
-                        _skylynkTotalRow('SGST (${_trimPercent(inv.sgstPercent)}%)',
-                            'Rs. ${inv.sgstAmount.toStringAsFixed(2)}'),
-                      ],
-                      if (inv.usesLineItems && inv.lineTaxTotal > 0 && !inv.gstEnabled)
-                        _skylynkTotalRow('Tax', 'Rs. ${inv.lineTaxTotal.toStringAsFixed(2)}'),
-                      if (inv.shipping > 0)
-                        _skylynkTotalRow('Shipping', 'Rs. ${inv.shipping.toStringAsFixed(2)}'),
-                      if (inv.roundOffEnabled && inv.roundOffAmount != 0)
-                        _skylynkTotalRow('Round Off',
-                            '${inv.roundOffAmount >= 0 ? '+' : '-'}Rs. ${inv.roundOffAmount.abs().toStringAsFixed(2)}'),
-                      pw.Container(
-                        margin: const pw.EdgeInsets.symmetric(vertical: 4),
-                        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        color: _brandBlue,
-                        child: pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    // Items
+                    pw.Table(
+                      border: const pw.TableBorder(
+                        bottom: pw.BorderSide(color: _skyMid, width: 0.8),
+                        horizontalInside: pw.BorderSide(color: _skyMid, width: 0.8),
+                      ),
+                      columnWidths: {
+                        0: const pw.FlexColumnWidth(0.4),
+                        1: const pw.FlexColumnWidth(3.2),
+                        2: const pw.FlexColumnWidth(1.1),
+                        3: const pw.FlexColumnWidth(0.7),
+                        4: const pw.FlexColumnWidth(1.3),
+                        5: const pw.FlexColumnWidth(1.4),
+                      },
+                      children: [
+                        pw.TableRow(
+                          decoration: pw.BoxDecoration(
+                            color: _blueDark,
+                            borderRadius: const pw.BorderRadius.only(
+                              topLeft: pw.Radius.circular(6),
+                              topRight: pw.Radius.circular(6),
+                            ),
+                          ),
                           children: [
-                            pw.Text('Total',
-                                style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
-                            pw.Text('Rs. ${inv.grandTotal.toStringAsFixed(2)}',
-                                style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
+                            head('#'),
+                            head('ITEM'),
+                            head('HSN/SAC'),
+                            head('QTY'),
+                            head('PRICE', right: true),
+                            head('AMOUNT', right: true),
                           ],
                         ),
-                      ),
-                      _skylynkTotalRow('Received', 'Rs. ${inv.amountPaid.toStringAsFixed(2)}'),
-                      _skylynkTotalRow('Balance', 'Rs. ${inv.balanceDue.toStringAsFixed(2)}'),
-                      _skylynkTotalRow('Payment mode', inv.paymentMode),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 26),
+                        if (inv.usesLineItems)
+                          for (int i = 0; i < inv.lineItems.length; i++)
+                            _skylynkLineItemRow(i + 1, inv.lineItems[i], true)
+                        else
+                          _skylynkLineItemRowLegacy(inv),
+                      ],
+                    ),
+                    pw.SizedBox(height: 20),
 
-            // ── Bank details / signatory ────────────────────────────────
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Expanded(
-                  flex: 3,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Pay To:', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                      pw.SizedBox(height: 4),
-                      pw.Text('Bank Name : $_bankName', style: const pw.TextStyle(fontSize: 9)),
-                      pw.Text('Bank Account No. : $_bankAccountNo', style: const pw.TextStyle(fontSize: 9)),
-                      pw.Text('Bank IFSC code : $_bankIfsc', style: const pw.TextStyle(fontSize: 9)),
-                      pw.Text("Account holder's name : $_bankAccountHolder", style: const pw.TextStyle(fontSize: 9)),
-                    ],
-                  ),
+                    // Words / notes  |  totals
+                    pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Expanded(
+                          flex: 5,
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              cap('AMOUNT IN WORDS'),
+                              pw.SizedBox(height: 4),
+                              body(_amountInWords(inv.grandTotal), bold: true),
+                              if (inv.notes != null && inv.notes!.trim().isNotEmpty) ...[
+                                pw.SizedBox(height: 14),
+                                cap('NOTES'),
+                                pw.SizedBox(height: 4),
+                                body(inv.notes!.trim(), color: _muted),
+                              ],
+                              pw.SizedBox(height: 14),
+                              cap('TERMS & CONDITIONS'),
+                              pw.SizedBox(height: 4),
+                              body(inv.termsNotes ?? 'Thanks for doing business with us!',
+                                  color: _muted),
+                            ],
+                          ),
+                        ),
+                        pw.SizedBox(width: 30),
+                        pw.Expanded(
+                          flex: 4,
+                          child: pw.Column(
+                            children: [
+                              _skylynkTotalRow('Sub Total', 'Rs. ${inv.subtotal.toStringAsFixed(2)}'),
+                              if (inv.gstEnabled && inv.isInterState)
+                                _skylynkTotalRow('IGST (${_trimPercent(inv.igstPercent)}%)',
+                                    'Rs. ${inv.igstAmount.toStringAsFixed(2)}'),
+                              if (inv.gstEnabled && !inv.isInterState) ...[
+                                _skylynkTotalRow('CGST (${_trimPercent(inv.cgstPercent)}%)',
+                                    'Rs. ${inv.cgstAmount.toStringAsFixed(2)}'),
+                                _skylynkTotalRow('SGST (${_trimPercent(inv.sgstPercent)}%)',
+                                    'Rs. ${inv.sgstAmount.toStringAsFixed(2)}'),
+                              ],
+                              if (inv.usesLineItems && inv.lineTaxTotal > 0 && !inv.gstEnabled)
+                                _skylynkTotalRow('Tax', 'Rs. ${inv.lineTaxTotal.toStringAsFixed(2)}'),
+                              if (inv.shipping > 0)
+                                _skylynkTotalRow('Shipping', 'Rs. ${inv.shipping.toStringAsFixed(2)}'),
+                              if (inv.roundOffEnabled && inv.roundOffAmount != 0)
+                                _skylynkTotalRow('Round Off',
+                                    '${inv.roundOffAmount >= 0 ? '+' : '-'}Rs. ${inv.roundOffAmount.abs().toStringAsFixed(2)}'),
+                              pw.SizedBox(height: 6),
+                              pw.Container(
+                                padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: pw.BoxDecoration(
+                                  color: _skyDeep,
+                                  borderRadius: pw.BorderRadius.circular(6),
+                                ),
+                                child: pw.Row(
+                                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    pw.Text('TOTAL',
+                                        style: pw.TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: pw.FontWeight.bold,
+                                            color: PdfColors.white,
+                                            letterSpacing: 1)),
+                                    pw.Text('Rs. ${inv.grandTotal.toStringAsFixed(2)}',
+                                        style: pw.TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: pw.FontWeight.bold,
+                                            color: PdfColors.white)),
+                                  ],
+                                ),
+                              ),
+                              pw.SizedBox(height: 6),
+                              _skylynkTotalRow('Received', 'Rs. ${inv.amountPaid.toStringAsFixed(2)}'),
+                              _skylynkTotalRow('Balance', 'Rs. ${inv.balanceDue.toStringAsFixed(2)}'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    pw.Spacer(),
+
+                    // Bank details  |  signatory
+                    pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Expanded(
+                          flex: 5,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.fromLTRB(12, 10, 12, 10),
+                            decoration: const pw.BoxDecoration(
+                              color: _skyBg,
+                              border: pw.Border(
+                                left: pw.BorderSide(color: _brandBlue, width: 3),
+                              ),
+                            ),
+                            child: pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                cap('BANK DETAILS'),
+                                pw.SizedBox(height: 5),
+                                if (hasBank)
+                                  body(inv.bankDetails!.trim())
+                                else ...[
+                                  body('Bank Name : $_bankName'),
+                                  body('Account No. : $_bankAccountNo'),
+                                  body('IFSC code : $_bankIfsc'),
+                                  body("Account holder's name : $_bankAccountHolder"),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        pw.SizedBox(width: 30),
+                        pw.Expanded(
+                          flex: 4,
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.end,
+                            children: [
+                              body('For $_companyName', bold: true),
+                              pw.SizedBox(height: 36),
+                              pw.Container(width: 150, height: 0.8, color: _muted),
+                              pw.SizedBox(height: 4),
+                              body('Authorized Signatory', size: 9, color: _muted),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 24),
+                  ],
                 ),
-                pw.Expanded(
-                  flex: 2,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text('For :$_companyName', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                      pw.SizedBox(height: 34),
-                      pw.Text('Authorized Signatory', style: const pw.TextStyle(fontSize: 9)),
-                    ],
-                  ),
-                ),
-              ],
+              ),
+            ),
+
+            // ── Footer ─────────────────────────────────────────────────
+            pw.Container(
+              width: double.infinity,
+              color: _skyDeep,
+              padding: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Thank you for your business!',
+                      style: pw.TextStyle(
+                          color: PdfColors.white, fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                  body(_companyEmail, size: 9.5, color: _onNavy),
+                ],
+              ),
             ),
           ],
         ),
@@ -425,6 +562,35 @@ class InvoicePdfService {
 
     return doc.save();
   }
+
+  // Tinted rounded card with a small blue caption (Bill To / Payment / Pay To).
+  static pw.Widget _infoCard(String title, List<pw.Widget> children) => pw.Container(
+    width: double.infinity,
+    constraints: const pw.BoxConstraints(minHeight: 88),
+    padding: const pw.EdgeInsets.all(12),
+    decoration: pw.BoxDecoration(
+      color: _rowTint,
+      borderRadius: pw.BorderRadius.circular(8),
+      border: pw.Border.all(color: _hairline, width: 0.8),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(title,
+            style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: _brandBlue,
+                letterSpacing: 1.0)),
+        pw.SizedBox(height: 6),
+        ...children,
+      ],
+    ),
+  );
+
+  static pw.Widget _smallHeading(String text) => pw.Text(text,
+      style: pw.TextStyle(
+          fontSize: 9, fontWeight: pw.FontWeight.bold, color: _brandBlue, letterSpacing: 0.8));
 
   // ═══════════════════════════════════════════════════════════════════════
   // REPORT — multi-invoice summary (used by the Invoices list "Export as PDF")
@@ -568,41 +734,41 @@ class InvoicePdfService {
   // ── SkyLynk tax-invoice item row: #, item name (+ serial no.), HSN/SAC,
   // qty, price/unit, amount — matches the reference invoice's columns ──────
   static pw.TableRow _skylynkLineItemRow(int index, InvoiceLineItem li, bool even) => pw.TableRow(
-    decoration: pw.BoxDecoration(color: even ? PdfColors.white : _rowTint),
+    decoration: const pw.BoxDecoration(color: PdfColors.white),
     children: [
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        child: pw.Text('$index', style: const pw.TextStyle(fontSize: 9)),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+        child: pw.Text('$index', style: const pw.TextStyle(fontSize: 10.5)),
       ),
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text(li.description, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+            pw.Text(li.description, style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold)),
             if ((li.hsnCode ?? '').isNotEmpty)
               pw.Text('Serial No.: ${li.hsnCode}', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
           ],
         ),
       ),
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        child: pw.Text('', style: const pw.TextStyle(fontSize: 9)),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+        child: pw.Text('', style: const pw.TextStyle(fontSize: 10.5)),
       ),
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        child: pw.Text('${li.quantity}', style: const pw.TextStyle(fontSize: 9)),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+        child: pw.Text('${li.quantity}', style: const pw.TextStyle(fontSize: 10.5)),
       ),
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
         child: pw.Text('Rs. ${li.unitPrice.toStringAsFixed(2)}',
-            textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 9)),
+            textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 10.5)),
       ),
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
         child: pw.Text('Rs. ${li.taxableAmount.toStringAsFixed(2)}',
             textAlign: pw.TextAlign.right,
-            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+            style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold)),
       ),
     ],
   );
@@ -610,31 +776,31 @@ class InvoicePdfService {
   static pw.TableRow _skylynkLineItemRowLegacy(Invoice inv) => pw.TableRow(
     children: [
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        child: pw.Text('1', style: const pw.TextStyle(fontSize: 9)),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+        child: pw.Text('1', style: const pw.TextStyle(fontSize: 10.5)),
       ),
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        child: pw.Text(inv.productName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+        child: pw.Text(inv.productName, style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold)),
       ),
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        child: pw.Text('', style: const pw.TextStyle(fontSize: 9)),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+        child: pw.Text('', style: const pw.TextStyle(fontSize: 10.5)),
       ),
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        child: pw.Text('${inv.quantity}', style: const pw.TextStyle(fontSize: 9)),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+        child: pw.Text('${inv.quantity}', style: const pw.TextStyle(fontSize: 10.5)),
       ),
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
         child: pw.Text('Rs. ${inv.amount.toStringAsFixed(2)}',
-            textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 9)),
+            textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 10.5)),
       ),
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        padding: const pw.EdgeInsets.symmetric(vertical: 11, horizontal: 8),
         child: pw.Text('Rs. ${(inv.amount * inv.quantity).toStringAsFixed(2)}',
             textAlign: pw.TextAlign.right,
-            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+            style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold)),
       ),
     ],
   );
@@ -644,8 +810,8 @@ class InvoicePdfService {
     child: pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
-        pw.Text(label, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-        pw.Text(value, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+        pw.Text(label, style: const pw.TextStyle(fontSize: 10.5, color: _muted)),
+        pw.Text(value, style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold, color: _ink)),
       ],
     ),
   );

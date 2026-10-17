@@ -1,153 +1,189 @@
-// lib/services/email_service.dart
-//
-// Sends transactional emails via Brevo's REST API (free plan — no
-// Cloud Functions / Blaze needed). Only admin users receive these;
-// employees are never emailed.
-//
-// Run the app with:
-//   flutter run --dart-define=BREVO_API_KEY=xkeysib-your-key-here
-//
-// For release builds:
-//   flutter build apk --dart-define=BREVO_API_KEY=xkeysib-your-key-here
+// lib/services/estimate_service.dart
 
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cda_inventory/models/estimate.dart';
+import 'package:cda_inventory/models/invoice.dart';
+import 'package:cda_inventory/models/customer_details.dart';
+import 'invoice_service.dart';
+import 'activity_log_service.dart';
+import 'customer_service.dart';
+import 'current_user_service.dart';
 
-class EmailService {
-  static const String _apiKey = String.fromEnvironment('BREVO_API_KEY');
-  static const String _endpoint = 'https://api.brevo.com/v3/smtp/email';
+class EstimateService {
+  static final CollectionReference<Map<String, dynamic>> _col =
+  FirebaseFirestore.instance.collection('estimates');
 
-  // Must match the sender you verified in Brevo.
-  static const String _senderEmail = 'info@chennaidroneacademy.com';
-  static const String _senderName = 'CDA Inventory';
+  static List<Estimate>? _estimatesCache;
 
-  /// Fetches every admin's email from Firestore (users collection,
-  /// role == 'admin'). Adjust field names to match your schema.
-  static Future<List<String>> _getAdminEmails() async {
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .where('role', isEqualTo: 'admin')
-        .get();
-    return snap.docs
-        .map((d) => (d.data()['email'] as String?) ?? '')
-        .where((e) => e.isNotEmpty)
+  static void clearCache() {
+    _estimatesCache = null;
+  }
+
+  Future<List<Estimate>> fetchEstimates({bool forceRefresh = false}) async {
+    if (!forceRefresh && _estimatesCache != null) return _estimatesCache!;
+
+    final snapshot = await _col.orderBy('updated_at', descending: true).get();
+
+    final list = snapshot.docs
+        .map((doc) =>
+        Estimate.fromFirestore(doc as DocumentSnapshot<Map<String, dynamic>>))
         .toList();
+
+    _estimatesCache = list;
+    return list;
   }
 
-  /// Core sender — one Brevo API call per recipient (free-plan safe,
-  /// avoids exposing every admin's address to every other admin).
-  static Future<bool> _send({
-    required String subject,
-    required String htmlContent,
-  }) async {
-    if (_apiKey.isEmpty) {
-      print('EmailService: BREVO_API_KEY not set — skipping email.');
-      return false;
+  Future<Estimate> fetchEstimateById(String id) async {
+    final doc = await _col.doc(id).get();
+    if (!doc.exists || doc.data() == null) {
+      throw Exception('Estimate not found');
     }
+    return Estimate.fromFirestore(doc as DocumentSnapshot<Map<String, dynamic>>);
+  }
 
-    final admins = await _getAdminEmails();
-    if (admins.isEmpty) {
-      print('EmailService: no admin emails found — skipping.');
-      return false;
+  Future<Estimate> createEstimate(Estimate estimate) async {
+    final data = estimate.toFirestore()..['created_at'] = FieldValue.serverTimestamp();
+    final docRef = await _col.add(data);
+    clearCache();
+    CustomerService.upsertFromTransaction(estimate.customer);
+    ActivityLogService.logAdd(
+      module: 'Estimates',
+      itemName: estimate.referenceNo,
+      data: {
+        'party': estimate.partyName,
+        'amount': estimate.grandTotal,
+        'status': estimate.status,
+      },
+    );
+    return estimate.copyWith(id: docRef.id);
+  }
+
+  Future<Estimate> updateEstimate(Estimate estimate) async {
+    if (estimate.id == null) {
+      throw Exception('Cannot update an estimate without an id');
     }
+    final existingDoc = await _col.doc(estimate.id).get();
+    final before = existingDoc.data() ?? {};
+    await _col.doc(estimate.id).update(estimate.toFirestore());
+    clearCache();
+    CustomerService.upsertFromTransaction(estimate.customer);
+    ActivityLogService.logEdit(
+      module: 'Estimates',
+      itemName: estimate.referenceNo,
+      before: {'party': before['party_name'], 'status': before['status']},
+      after: {'party': estimate.partyName, 'status': estimate.status},
+    );
+    return estimate;
+  }
 
-    bool allOk = true;
-    for (final email in admins) {
-      final response = await http.post(
-        Uri.parse(_endpoint),
-        headers: {
-          'accept': 'application/json',
-          'api-key': _apiKey,
-          'content-type': 'application/json',
-        },
-        body: jsonEncode({
-          'sender': {'name': _senderName, 'email': _senderEmail},
-          'to': [
-            {'email': email}
-          ],
-          'subject': subject,
-          'htmlContent': htmlContent,
-        }),
-      );
-      if (response.statusCode != 201) {
-        print('EmailService: failed for $email → ${response.body}');
-        allOk = false;
-      }
+  Future<void> deleteEstimate(String id) async {
+    final existingDoc = await _col.doc(id).get();
+    final before = existingDoc.data() ?? {};
+    await _col.doc(id).delete();
+    clearCache();
+    ActivityLogService.logDelete(
+      module: 'Estimates',
+      itemName: (before['reference_no'] as String?) ?? id,
+      data: {'party': before['party_name']},
+    );
+  }
+
+  Future<void> deleteEstimatesBulk(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final id in ids) {
+      batch.delete(_col.doc(id));
     }
-    return allOk;
-  }
-
-  // ── Public trigger methods — call these from your existing services ──
-
-  static Future<void> sendLowStock({
-    required String itemName,
-    required int currentQty,
-    required int threshold,
-    required String branch,
-  }) {
-    return _send(
-      subject: '⚠️ Low Stock Alert — $itemName',
-      htmlContent: '''
-        <h3>Low Stock Alert</h3>
-        <p><b>Item:</b> $itemName</p>
-        <p><b>Branch:</b> $branch</p>
-        <p><b>Current Quantity:</b> $currentQty (threshold: $threshold)</p>
-        <p>Please restock soon.</p>
-      ''',
+    await batch.commit();
+    clearCache();
+    ActivityLogService.logAction(
+      'Bulk deleted ${ids.length} estimate(s)',
+      module: 'Estimates',
     );
   }
 
-  static Future<void> sendNewInventory({
-    required String itemName,
-    required int quantity,
-    required String branch,
-    required String addedBy,
-  }) {
-    return _send(
-      subject: '📦 New Inventory Added — $itemName',
-      htmlContent: '''
-        <h3>New Inventory Added</h3>
-        <p><b>Item:</b> $itemName</p>
-        <p><b>Quantity:</b> $quantity</p>
-        <p><b>Branch:</b> $branch</p>
-        <p><b>Added by:</b> $addedBy</p>
-      ''',
-    );
+  Future<bool> referenceNoExists(String referenceNo, {String? excludeId}) async {
+    final snapshot = await _col.where('reference_no', isEqualTo: referenceNo).get();
+    if (snapshot.docs.isEmpty) return false;
+    if (excludeId == null) return true;
+    return snapshot.docs.any((doc) => doc.id != excludeId);
   }
 
-  static Future<void> sendProductSold({
-    required String itemName,
-    required int quantitySold,
-    required String branch,
-    required String soldBy,
-  }) {
-    return _send(
-      subject: '💰 Product Sold — $itemName',
-      htmlContent: '''
-        <h3>Product Sold</h3>
-        <p><b>Item:</b> $itemName</p>
-        <p><b>Quantity Sold:</b> $quantitySold</p>
-        <p><b>Branch:</b> $branch</p>
-        <p><b>Sold by:</b> $soldBy</p>
-      ''',
-    );
+  Future<String> suggestNextReferenceNumber({bool forceRefresh = false}) async {
+    final list = await fetchEstimates(forceRefresh: forceRefresh);
+    // Sequential with an EST- prefix: EST-001, EST-002, EST-003 …
+    // Existing plain numbers (1, 2, 3) are still counted, so the sequence
+    // continues from the highest one instead of restarting.
+    int maxNum = 0;
+    for (final e in list) {
+      final n = int.tryParse(e.referenceNo.replaceAll(RegExp(r'[^0-9]'), ''));
+      if (n != null && n > maxNum) maxNum = n;
+    }
+    String fmt(int n) => 'EST-${n.toString().padLeft(3, '0')}';
+    int next = maxNum + 1;
+    while (await referenceNoExists(fmt(next))) {
+      next++;
+    }
+    return fmt(next);
   }
 
-  static Future<void> sendDailyReport({
-    required String branch,
-    required int totalItems,
-    required int lowStockCount,
-    required int transactionsToday,
-  }) {
-    return _send(
-      subject: '📊 Daily Inventory Report — $branch',
-      htmlContent: '''
-        <h3>Daily Report — $branch</h3>
-        <p><b>Total Items:</b> $totalItems</p>
-        <p><b>Low Stock Items:</b> $lowStockCount</p>
-        <p><b>Transactions Today:</b> $transactionsToday</p>
-      ''',
+  Future<List<CustomerDetails>> fetchCustomerSuggestions({bool forceRefresh = false}) async {
+    final list = await fetchEstimates(forceRefresh: forceRefresh);
+    final seen = <String>{};
+    final customers = <CustomerDetails>[];
+    for (final e in list) {
+      final c = e.customer;
+      if (c == null || c.name.trim().isEmpty) continue;
+      final key = '${c.name.trim().toLowerCase()}|${c.phone ?? ''}';
+      if (seen.add(key)) customers.add(c);
+    }
+    // Saved customers first, then any found only in older documents.
+    return CustomerService().fetchSuggestions(customers);
+  }
+
+  /// Converts an Open estimate into a Sale Invoice — mirrors Vyapar's
+  /// "Convert" action in the Estimate/Quotation transactions table.
+  Future<Invoice> convertToInvoice(Estimate estimate, {required String newInvoiceNo}) async {
+    final invoiceService = InvoiceService();
+    final today = DateTime.now();
+    final dateStr =
+        '${today.day.toString().padLeft(2, '0')}-${today.month.toString().padLeft(2, '0')}-${today.year}';
+
+    final invoice = Invoice(
+      invoiceNo: newInvoiceNo,
+      purchaseDate: dateStr,
+      status: 'Pending',
+      lineItems: estimate.lineItems,
+      customer: estimate.customer,
+      gstEnabled: estimate.gstEnabled,
+      cgstPercent: estimate.cgstPercent,
+      sgstPercent: estimate.sgstPercent,
+      igstPercent: estimate.igstPercent,
+      isInterState: estimate.isInterState,
+      shipping: estimate.shipping,
+      roundOffEnabled: estimate.roundOffEnabled,
+      branch: estimate.branch,
+      addedBy: CurrentUserService.nameSync,
+      addedAt: DateTime.now(),
+      termsTitle: 'Sale Invoice',
+      termsNotes: estimate.termsNotes,
+      bankDetails: estimate.bankDetails,
+      vendorName: estimate.partyName,
     );
+
+    final created = await invoiceService.createInvoice(invoice);
+
+    await updateEstimate(estimate.copyWith(
+      status: 'Converted',
+      convertedInvoiceId: created.id,
+      convertedInvoiceNo: created.invoiceNo,
+    ));
+
+    ActivityLogService.logAction(
+      'Converted estimate ${estimate.referenceNo} to invoice ${created.invoiceNo}',
+      module: 'Estimates',
+    );
+
+    return created;
   }
 }

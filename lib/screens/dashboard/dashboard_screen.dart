@@ -18,6 +18,7 @@ import 'package:cda_inventory/screens/purchases/purchases_menu_screen.dart';
 import 'package:cda_inventory/screens/invoices/invoice_list_screen.dart';
 import 'package:cda_inventory/screens/estimates/estimate_list_screen.dart';
 import 'package:cda_inventory/screens/proforma/proforma_list_screen.dart';
+import 'package:cda_inventory/screens/customers/customer_list_screen.dart';
 import 'package:cda_inventory/screens/search/search_screen.dart';
 import 'package:cda_inventory/screens/stock_management/stock_out_screen.dart';
 import 'package:cda_inventory/screens/stock_management/stock_history_screen.dart';
@@ -285,6 +286,7 @@ const _drawerItems = [
     'label': 'Sales',
     'key': 'Sales',
     'children': [
+      {'label': 'Customers',               'key': 'Customers'},
       {'label': 'Sale Invoices',           'key': 'Sale Invoices'},
       {'label': 'Estimate/ Quotation',     'key': 'Estimate/ Quotation'},
       {'label': 'Proforma Invoice',        'key': 'Proforma Invoice'},
@@ -396,6 +398,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'Stock Management': screen = const StockDashboardScreen();   break;
       case 'Branch Inventory': screen = const BranchListScreen();       break;
       case 'Purchases':        screen = const PurchasesMenuScreen();    break;
+      case 'Customers':        screen = const CustomerListScreen();     break;
       case 'Sale Invoices':    screen = const InvoiceListScreen();      break;
       case 'Invoice List':     screen = const InvoiceListScreen();      break;
       case 'Estimate/ Quotation': screen = const EstimateListScreen();  break;

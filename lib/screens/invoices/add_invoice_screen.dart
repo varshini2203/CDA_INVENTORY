@@ -13,6 +13,7 @@ import 'package:cda_inventory/models/invoice_line_item.dart';
 import 'package:cda_inventory/models/customer_details.dart';
 import 'package:cda_inventory/models/payment_record.dart';
 import 'package:cda_inventory/services/invoice_service.dart';
+import 'package:cda_inventory/services/current_user_service.dart';
 import 'package:cda_inventory/services/invoice_pdf_service.dart';
 import 'package:cda_inventory/services/new_product_sale_service.dart';
 import 'package:cda_inventory/services/new_product_service.dart';
@@ -86,10 +87,15 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
 
   final _invoiceNoController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _gstinController = TextEditingController();
+  final _billingAddressController = TextEditingController();
+  final _shippingAddressController = TextEditingController();
   final _shippingController = TextEditingController(text: '0');
   final _termsNotesController =
   TextEditingController(text: 'Thanks for doing business with us!');
   final _descriptionController = TextEditingController();
+  final _bankDetailsController = TextEditingController();
   DateTime _invoiceDate = DateTime.now();
 
   String _customerName = '';
@@ -159,6 +165,11 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
 
   Color get _accent => _isEditMode ? kAmber : kTeal;
 
+  bool get _isKnownCustomer {
+    final n = _customerName.trim().toLowerCase();
+    return n.isNotEmpty && _customerSuggestions.any((c) => c.name.trim().toLowerCase() == n);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -167,6 +178,10 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       _invoiceNoController.text = inv.invoiceNo;
       _customerName = inv.customer?.name ?? inv.vendorName;
       _phoneController.text = inv.customer?.phone ?? '';
+      _emailController.text = inv.customer?.email ?? '';
+      _gstinController.text = inv.customer?.gstin ?? '';
+      _billingAddressController.text = inv.customer?.billingAddress ?? '';
+      _shippingAddressController.text = inv.customer?.shippingAddress ?? '';
       _stateOfSupply = inv.customer?.placeOfSupply ?? 'Tamil Nadu';
       _paymentMode = resolvePaymentMode(inv.paymentMode);
       _isPaid = inv.amountPaid > 0;
@@ -176,6 +191,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       _termsTitle = inv.termsTitle;
       _termsNotesController.text = inv.termsNotes ?? _termsNotesController.text;
       _descriptionController.text = inv.notes ?? '';
+      _bankDetailsController.text = inv.bankDetails ?? '';
       _showDescriptionField = (inv.notes ?? '').isNotEmpty;
       _shippingController.text = inv.shipping.toStringAsFixed(2);
       _roundOffEnabled = inv.roundOffEnabled;
@@ -268,10 +284,15 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   void dispose() {
     _invoiceNoController.dispose();
     _phoneController.dispose();
+    _emailController.dispose();
+    _gstinController.dispose();
+    _billingAddressController.dispose();
+    _shippingAddressController.dispose();
     _shippingController.dispose();
     _receivedController.dispose();
     _termsNotesController.dispose();
     _descriptionController.dispose();
+    _bankDetailsController.dispose();
     for (final r in _rows) {
       r.dispose();
     }
@@ -351,11 +372,17 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       customer: CustomerDetails(
         name: _customerName.trim(),
         phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+        email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+        gstin: _gstinController.text.trim().isEmpty ? null : _gstinController.text.trim().toUpperCase(),
+        billingAddress: _billingAddressController.text.trim().isEmpty ? null : _billingAddressController.text.trim(),
+        shippingAddress: _shippingAddressController.text.trim().isEmpty ? null : _shippingAddressController.text.trim(),
         placeOfSupply: _stateOfSupply,
       ),
       gstEnabled: false,
       payments: payments,
-      addedBy: widget.invoiceToEdit?.addedBy,
+      // Stamp the signed-in user on NEW invoices (was left null, which is why
+      // the "All Users" filter had nobody to list).
+      addedBy: widget.invoiceToEdit?.addedBy ?? CurrentUserService.nameSync,
       addedAt: _isEditMode ? widget.invoiceToEdit!.addedAt : DateTime.now(),
       branch: _selectedBranch,
       paymentMode: _paymentMode,
@@ -365,6 +392,9 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       termsNotes: _termsNotesController.text.trim().isEmpty
           ? null
           : _termsNotesController.text.trim(),
+      bankDetails: _bankDetailsController.text.trim().isEmpty
+          ? null
+          : _bankDetailsController.text.trim(),
     );
   }
 
@@ -582,6 +612,20 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
             const SizedBox(height: 10),
             _card(children: [
               _customerAutocomplete(accentColor),
+              if (_customerName.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 4),
+                  child: Text(
+                    _isKnownCustomer
+                        ? 'Saved customer — details auto-filled'
+                        : 'New customer — will be saved automatically',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: _isKnownCustomer ? const Color(0xFF00896F) : Colors.grey.shade500,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 14),
               _field(
                 controller: _phoneController,
@@ -589,6 +633,44 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
                 hint: 'e.g. 98765 43210',
                 icon: Icons.call_outlined,
                 keyboardType: TextInputType.phone,
+                accentColor: accentColor,
+              ),
+              const SizedBox(height: 14),
+              _field(
+                controller: _emailController,
+                label: 'Email',
+                hint: 'e.g. customer@email.com',
+                icon: Icons.email_outlined,
+                keyboardType: TextInputType.emailAddress,
+                accentColor: accentColor,
+              ),
+              const SizedBox(height: 14),
+              _field(
+                controller: _gstinController,
+                label: 'GSTIN',
+                hint: '15-character GST number',
+                icon: Icons.badge_outlined,
+                capitalization: TextCapitalization.characters,
+                accentColor: accentColor,
+              ),
+              const SizedBox(height: 14),
+              _field(
+                controller: _billingAddressController,
+                label: 'Billing Address',
+                hint: 'Street, city, pincode',
+                icon: Icons.home_outlined,
+                capitalization: TextCapitalization.sentences,
+                maxLines: 2,
+                accentColor: accentColor,
+              ),
+              const SizedBox(height: 14),
+              _field(
+                controller: _shippingAddressController,
+                label: 'Shipping Address',
+                hint: 'Street, city, pincode',
+                icon: Icons.local_shipping_outlined,
+                capitalization: TextCapitalization.sentences,
+                maxLines: 2,
                 accentColor: accentColor,
               ),
             ]),
@@ -715,6 +797,21 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
                   accentColor: accentColor,
                 ),
               ],
+            ]),
+
+            const SizedBox(height: 20),
+            _sectionLabel('BANK DETAILS'),
+            const SizedBox(height: 10),
+            _card(children: [
+              _field(
+                controller: _bankDetailsController,
+                label: 'Bank Details',
+                hint: 'Bank name, A/C no., IFSC, account holder',
+                icon: Icons.account_balance_outlined,
+                capitalization: TextCapitalization.characters,
+                maxLines: 4,
+                accentColor: accentColor,
+              ),
             ]),
 
             const SizedBox(height: 20),
@@ -977,10 +1074,12 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
     void Function(String)? onChanged,
     bool readOnly = false,
     Widget? suffixIcon,
+    int maxLines = 1,
   }) {
     return TextFormField(
       controller: controller,
-      keyboardType: keyboardType,
+      maxLines: maxLines,
+      keyboardType: maxLines > 1 ? TextInputType.multiline : keyboardType,
       textCapitalization: capitalization,
       readOnly: readOnly,
       onChanged: (v) {
@@ -1027,6 +1126,10 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
         setState(() {
           _customerName = selection.name;
           _phoneController.text = selection.phone ?? '';
+          _emailController.text = selection.email ?? '';
+          _gstinController.text = selection.gstin ?? '';
+          _billingAddressController.text = selection.billingAddress ?? '';
+          _shippingAddressController.text = selection.shippingAddress ?? '';
           _stateOfSupply = selection.placeOfSupply;
         });
       },
@@ -1048,7 +1151,15 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
                     dense: true,
                     leading: const Icon(Icons.person_outline_rounded, size: 18),
                     title: Text(option.name, style: const TextStyle(fontSize: 14)),
-                    subtitle: option.phone == null ? null : Text(option.phone!, style: const TextStyle(fontSize: 11)),
+                    subtitle: (option.phone == null && option.gstin == null)
+                        ? null
+                        : Text(
+                      [
+                        if (option.phone != null) option.phone!,
+                        if (option.gstin != null) option.gstin!,
+                      ].join('  •  '),
+                      style: const TextStyle(fontSize: 11),
+                    ),
                     onTap: () => onSelected(option),
                   );
                 },
@@ -1062,7 +1173,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
           controller: controller,
           focusNode: focusNode,
           textCapitalization: TextCapitalization.words,
-          onChanged: (v) => _customerName = v,
+          onChanged: (v) => setState(() => _customerName = v),
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: kNavy),
           decoration: InputDecoration(
             labelText: 'Search by Name/Phone *',
