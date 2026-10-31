@@ -29,6 +29,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart' show ZipDecoder;
 import 'package:excel/excel.dart' as xls;
 import 'package:flutter/foundation.dart' show debugPrint;
 
@@ -428,13 +429,22 @@ class DynamicImportParser {
     try {
       book = xls.Excel.decodeBytes(bytes);
     } catch (e) {
-      return ImportParseResult(
-        headers: const [],
-        recognizedHeaders: const {},
-        unrecognizedHeaders: const [],
-        rows: const [],
-        fileWarnings: ['Could not read this Excel file: $e'],
-      );
+      // The `excel` package throws "Unexpected null value" on some perfectly
+      // valid .xlsx files (files saved by openpyxl / LibreOffice / Google
+      // Sheets / some Tally & Vyapar exports). Fall back to our own small
+      // reader so ANY valid .xlsx follows the same header-matching rules.
+      try {
+        final table = _readXlsxFirstSheet(bytes);
+        return _parseFromTable(table, config);
+      } catch (e2) {
+        return ImportParseResult(
+          headers: const [],
+          recognizedHeaders: const {},
+          unrecognizedHeaders: const [],
+          rows: const [],
+          fileWarnings: ['Could not read this Excel file: $e2'],
+        );
+      }
     }
 
     _debugLog(
@@ -525,6 +535,199 @@ class DynamicImportParser {
       unrecognizedHeaders: unrecognized,
       rows: rows,
     );
+  }
+
+
+  // ── Shared tail for table-shaped input (used by the .xlsx fallback) ─────
+  static ImportParseResult _parseFromTable(
+      List<List<String>> table,
+      ModuleImportConfig config,
+      ) {
+    final allRows = table
+        .map((r) => r.map((c) => c.trim()).toList())
+        .where((r) => r.isNotEmpty)
+        .toList();
+    if (allRows.isEmpty || allRows.every(_isBlankRow)) {
+      return const ImportParseResult(
+        headers: [],
+        recognizedHeaders: {},
+        unrecognizedHeaders: [],
+        rows: [],
+        fileWarnings: ['The first sheet is empty.'],
+      );
+    }
+
+    final headerRowIndex = _findHeaderRowIndex(allRows, config);
+    if (headerRowIndex == -1) {
+      final scanned =
+      allRows.length < _headerScanLimit ? allRows.length : _headerScanLimit;
+      return ImportParseResult(
+        headers: const [],
+        recognizedHeaders: const {},
+        unrecognizedHeaders: const [],
+        rows: const [],
+        fileWarnings: [
+          'No header row could be found in the first $scanned row(s).',
+        ],
+      );
+    }
+
+    final headerRow = _trimTrailingEmpty(allRows[headerRowIndex]);
+    final headerFieldMap = _mapHeaders(headerRow, config);
+    final unrecognized =
+    headerRow.where((h) => !headerFieldMap.containsKey(h)).toList();
+
+    final rows = <ParsedImportRow>[];
+    for (var r = headerRowIndex + 1; r < allRows.length; r++) {
+      final cells = allRows[r];
+      if (_isBlankRow(cells)) continue;
+      rows.add(_buildRow(
+        sourceRowNumber: r + 1,
+        headers: headerRow,
+        cells: cells,
+        headerFieldMap: headerFieldMap,
+        config: config,
+      ));
+    }
+
+    return ImportParseResult(
+      headers: headerRow,
+      recognizedHeaders: headerFieldMap,
+      unrecognizedHeaders: unrecognized,
+      rows: rows,
+    );
+  }
+
+  // ── Minimal .xlsx reader (first worksheet only) ─────────────────────────
+  // An .xlsx is a zip of XML files. We only need: which file is the first
+  // sheet, the shared-strings table, and each cell's value — so this stays
+  // tiny and has no dependency on the `excel` package's style handling.
+  static String _xmlUnescape(String v) => v
+      .replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'),
+          (m) => String.fromCharCode(int.parse(m[1]!, radix: 16)))
+      .replaceAllMapped(RegExp(r'&#(\d+);'),
+          (m) => String.fromCharCode(int.parse(m[1]!)))
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&apos;', "'")
+      .replaceAll('&amp;', '&');
+
+  static String? _xmlAttr(String tag, String name) {
+    final m = RegExp('(?:^|[\\s<])$name\\s*=\\s*"([^"]*)"').firstMatch(tag);
+    return m == null ? null : _xmlUnescape(m.group(1)!);
+  }
+
+  static String _textOf(String xml) => RegExp(r'<t\b[^>]*>(.*?)</t>', dotAll: true)
+      .allMatches(xml)
+      .map((m) => _xmlUnescape(m.group(1)!))
+      .join();
+
+  static int _colIndex(String cellRef) {
+    var n = 0;
+    for (final ch in cellRef.codeUnits) {
+      if (ch >= 65 && ch <= 90) {
+        n = n * 26 + (ch - 64);
+      } else if (ch >= 97 && ch <= 122) {
+        n = n * 26 + (ch - 96);
+      } else {
+        break;
+      }
+    }
+    return n - 1;
+  }
+
+  static List<List<String>> _readXlsxFirstSheet(Uint8List bytes) {
+    final zip = ZipDecoder().decodeBytes(bytes);
+    String? read(String path) {
+      for (final f in zip.files) {
+        if (f.isFile && f.name.toLowerCase() == path.toLowerCase()) {
+          return utf8.decode(f.content as List<int>, allowMalformed: true);
+        }
+      }
+      return null;
+    }
+
+    // 1. first sheet's file path
+    final wb = read('xl/workbook.xml');
+    if (wb == null) throw const FormatException('xl/workbook.xml missing');
+    final sheetTag =
+    RegExp(r'<sheet\b[^>]*>').firstMatch(wb)?.group(0);
+    if (sheetTag == null) throw const FormatException('no sheets');
+    final rid = _xmlAttr(sheetTag, 'r:id');
+    var target = 'worksheets/sheet1.xml';
+    final rels = read('xl/_rels/workbook.xml.rels');
+    if (rid != null && rels != null) {
+      for (final m in RegExp(r'<Relationship\b[^>]*>').allMatches(rels)) {
+        final tag = m.group(0)!;
+        if (_xmlAttr(tag, 'Id') == rid) {
+          target = _xmlAttr(tag, 'Target') ?? target;
+          break;
+        }
+      }
+    }
+    target = target.startsWith('/') ? target.substring(1) : 'xl/$target';
+    final sheetXml = read(target) ?? read('xl/worksheets/sheet1.xml');
+    if (sheetXml == null) throw FormatException('sheet "$target" missing');
+
+    // 2. shared strings
+    final shared = <String>[];
+    final ssXml = read('xl/sharedStrings.xml');
+    if (ssXml != null) {
+      for (final m
+      in RegExp(r'<si\b[^>]*>(.*?)</si>', dotAll: true).allMatches(ssXml)) {
+        shared.add(_textOf(m.group(1)!));
+      }
+    }
+
+    // 3. cells
+    final table = <List<String>>[];
+    final rowRe = RegExp(r'<row\b([^>]*?)(?:/>|>(.*?)</row>)', dotAll: true);
+    final cellRe = RegExp(r'<c\b([^>]*?)(?:/>|>(.*?)</c>)', dotAll: true);
+    var lastRow = 0;
+    for (final rm in rowRe.allMatches(sheetXml)) {
+      final rowNum = int.tryParse(_xmlAttr(rm.group(1)!, 'r') ?? '') ?? (lastRow + 1);
+      while (table.length < rowNum - 1) {
+        table.add(<String>[]);
+      }
+      lastRow = rowNum;
+      final cells = <String>[];
+      var nextCol = 0;
+      for (final cm in cellRe.allMatches(rm.group(2) ?? '')) {
+        final attrs = cm.group(1)!;
+        final inner = cm.group(2) ?? '';
+        final ref = _xmlAttr(attrs, 'r');
+        final col = ref != null ? _colIndex(ref) : nextCol;
+        nextCol = col + 1;
+        final type = _xmlAttr(attrs, 't');
+        String val;
+        if (type == 'inlineStr') {
+          val = _textOf(inner);
+        } else {
+          final v = RegExp(r'<v>(.*?)</v>', dotAll: true).firstMatch(inner)?.group(1);
+          if (v == null) {
+            val = '';
+          } else if (type == 's') {
+            final i = int.tryParse(v) ?? -1;
+            val = (i >= 0 && i < shared.length) ? shared[i] : '';
+          } else if (type == 'b') {
+            val = v.trim() == '1' ? 'TRUE' : 'FALSE';
+          } else {
+            val = _xmlUnescape(v);
+          }
+        }
+        while (cells.length < col) {
+          cells.add('');
+        }
+        if (cells.length == col) {
+          cells.add(val);
+        } else {
+          cells[col] = val;
+        }
+      }
+      table.add(cells);
+    }
+    return table;
   }
 
   // ── CSV ────────────────────────────────────────────────────────────────

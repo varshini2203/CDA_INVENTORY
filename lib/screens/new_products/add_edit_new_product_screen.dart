@@ -11,6 +11,7 @@ import 'package:cda_inventory/constants/new_product_categories.dart';
 import 'package:cda_inventory/services/new_product_service.dart';
 import 'package:cda_inventory/services/current_user_service.dart';
 import 'package:cda_inventory/widgets/common/auto_user_field.dart';
+import 'package:cda_inventory/screens/new_products/add_item_dialog.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  ADD / EDIT NEW PRODUCT SCREEN
@@ -37,6 +38,17 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
   late final TextEditingController _modelNumber;
   late final TextEditingController _description;
   String _category = 'Other';
+  // Vyapar "Add Item" extras (all optional)
+  late final TextEditingController _itemHsn;
+  late final TextEditingController _saleDiscount;
+  late final TextEditingController _wholesalePrice;
+  late final TextEditingController _minWholesaleQty;
+  String _discountType = 'Percentage';
+
+  // Every product name already in New Products — shown as suggestions
+  // under the Product Name field.
+  final FocusNode _nameFocus = FocusNode();
+  List<String> _allNames = const [];
 
   // Which group the product belongs to. null until the user chooses
   // (required when adding a new product).
@@ -107,6 +119,18 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
     // the current list instead of being silently reset.
     _category = NewProductCategories.normalize(e?.category);
     _listedOnWebsite = e?.listedOnWebsite;
+    _itemHsn = TextEditingController(text: e?.itemHsn ?? '');
+    _saleDiscount = TextEditingController(
+        text: e == null || e.saleDiscount == 0 ? '' : '${e.saleDiscount}');
+    _discountType =
+    (e == null || e.saleDiscountIsPercent) ? 'Percentage' : 'Amount';
+    _wholesalePrice = TextEditingController(
+        text: e == null || e.wholesalePrice == 0
+            ? ''
+            : e.wholesalePrice.toStringAsFixed(2));
+    _minWholesaleQty = TextEditingController(
+        text: e == null || e.minWholesaleQty == 0 ? '' : '${e.minWholesaleQty}');
+    _loadProductNames();
 
     _vendorName = TextEditingController(text: e?.vendorName ?? '');
     _vendorContact = TextEditingController(text: e?.vendorContact ?? '');
@@ -173,8 +197,29 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
     _customGst.addListener(_refreshStockPreview);
   }
 
+  Future<void> _loadProductNames() async {
+    try {
+      final all = await NewProductService.getNewProducts();
+      final seen = <String>{};
+      final names = <String>[];
+      for (final p in all) {
+        final n = p.productName.trim();
+        if (n.isNotEmpty && seen.add(n.toLowerCase())) names.add(n);
+      }
+      names.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (mounted) setState(() => _allNames = names);
+    } catch (_) {
+      // Suggestions are a convenience only — typing still works without.
+    }
+  }
+
   @override
   void dispose() {
+    _nameFocus.dispose();
+    _itemHsn.dispose();
+    _saleDiscount.dispose();
+    _wholesalePrice.dispose();
+    _minWholesaleQty.dispose();
     _productName.dispose();
     _productCode.dispose();
     _brand.dispose();
@@ -304,12 +349,14 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
           const SizedBox(height: 14),
           ListTile(
             leading: const Icon(Icons.photo_camera_rounded, color: _accent),
-            title: const Text('Take Photo'),
+            title: const Text('Take Photo',
+                style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w600)),
             onTap: () => Navigator.pop(context, ImageSource.camera),
           ),
           ListTile(
             leading: const Icon(Icons.photo_library_rounded, color: _accent),
-            title: const Text('Choose from Gallery'),
+            title: const Text('Choose from Gallery',
+                style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w600)),
             onTap: () => Navigator.pop(context, ImageSource.gallery),
           ),
         ],
@@ -378,6 +425,11 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
         brand: _brand.text.trim(),
         modelNumber: _modelNumber.text.trim(),
         description: _description.text.trim(),
+        itemHsn: _itemHsn.text.trim(),
+        saleDiscount: double.tryParse(_saleDiscount.text.trim()) ?? 0,
+        saleDiscountIsPercent: _discountType == 'Percentage',
+        wholesalePrice: double.tryParse(_wholesalePrice.text.trim()) ?? 0,
+        minWholesaleQty: int.tryParse(_minWholesaleQty.text.trim()) ?? 0,
         vendorName: _vendorName.text.trim(),
         vendorContact: _vendorContact.text.trim(),
         vendorEmail: _vendorEmail.text.trim(),
@@ -435,6 +487,13 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
     }
   }
 
+  // Opens the Vyapar-style "Add Item" dialog. When an item was saved there,
+  // this page closes too (returning true) so the list refreshes.
+  Future<void> _openAddItem() async {
+    final saved = await AddItemDialog.show(context);
+    if (saved == true && mounted) Navigator.pop(context, true);
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -448,6 +507,19 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
         backgroundColor: _navy,
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
+        actions: [
+          if (!_isEdit)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: _saving ? null : _openAddItem,
+                icon: const Icon(Icons.add_box_outlined, color: Colors.white),
+                label: const Text('Add Item',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ),
+        ],
       ),
       body: AbsorbPointer(
         absorbing: _saving,
@@ -458,48 +530,61 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionLabel('Basic Information'),
+                _sectionLabel('Stock Information'),
                 _buildCard([
-                  _field(
-                    controller: _productName,
-                    label: 'Product Name *',
-                    icon: Icons.inventory_2_rounded,
-                    validator: (v) => v == null || v.trim().isEmpty
-                        ? 'Product name is required'
-                        : null,
-                  ),
+                  _productNameField(),
                   const SizedBox(height: 14),
                   _field(
                     controller: _productCode,
-                    label: 'Product Code (auto-generated if empty)',
+                    label: 'Product Code (Optional — auto-generated if empty)',
                     icon: Icons.qr_code_rounded,
                   ),
                   const SizedBox(height: 14),
+                  _field(
+                    controller: _itemHsn,
+                    label: 'Item HSN (Optional)',
+                    icon: Icons.numbers_rounded,
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 14),
                   _dropdown(
-                    label: 'Category',
+                    label: 'Category (Optional)',
                     icon: Icons.category_rounded,
                     value: _category,
                     items: NewProductOptions.categories,
                     onChanged: (v) => setState(() => _category = v!),
                   ),
                   const SizedBox(height: 14),
+                  _field(
+                    controller: _quantity,
+                    label: 'Quantity *',
+                    icon: Icons.layers_rounded,
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Required';
+                      final n = int.tryParse(v.trim());
+                      if (n == null || n < 0) return 'Invalid';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
                   _groupPicker(),
                   const SizedBox(height: 14),
                   _field(
                     controller: _brand,
-                    label: 'Brand',
+                    label: 'Brand (Optional)',
                     icon: Icons.branding_watermark_rounded,
                   ),
                   const SizedBox(height: 14),
                   _field(
                     controller: _modelNumber,
-                    label: 'Model Number',
+                    label: 'Model Number (Optional)',
                     icon: Icons.tag_rounded,
                   ),
                   const SizedBox(height: 14),
                   _field(
                     controller: _description,
-                    label: 'Description',
+                    label: 'Description (Optional)',
                     icon: Icons.description_outlined,
                     maxLines: 3,
                   ),
@@ -523,32 +608,21 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
                     keyboardType: TextInputType.phone,
                   ),
                   const SizedBox(height: 14),
-                  _field(
-                    controller: _vendorEmail,
-                    label: 'Vendor Email',
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return null;
-                      final ok = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                          .hasMatch(v.trim());
-                      return ok ? null : 'Enter a valid email';
-                    },
-                  ),
-                  const SizedBox(height: 14),
                   InkWell(
                     onTap: _pickPurchaseDate,
                     borderRadius: BorderRadius.circular(10),
-                    child: _dateBox(
-                        label: 'Purchase Date *', date: _purchaseDate),
+                    child: _dateBox(label: 'Billing Date *', date: _purchaseDate),
                   ),
-                  const SizedBox(height: 14),
+                ]),
+                const SizedBox(height: 16),
+                _sectionLabel('Stock & Pricing'),
+                _buildCard([
                   Row(
                     children: [
                       Expanded(
                         child: _field(
                           controller: _purchaseCost,
-                          label: 'Purchase Cost',
+                          label: 'Purchase Price (Optional)',
                           icon: Icons.currency_rupee_rounded,
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
@@ -563,13 +637,14 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _field(
-                          controller: _quantity,
-                          label: 'Quantity *',
-                          icon: Icons.layers_rounded,
-                          keyboardType: TextInputType.number,
+                          controller: _wholesalePrice,
+                          label: 'Wholesale Price (Optional)',
+                          icon: Icons.local_offer_rounded,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                           validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Required';
-                            final n = int.tryParse(v.trim());
+                            if (v == null || v.trim().isEmpty) return null;
+                            final n = double.tryParse(v.trim());
                             if (n == null || n < 0) return 'Invalid';
                             return null;
                           },
@@ -578,17 +653,52 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  _dropdown(
-                    label: 'Unit',
-                    icon: Icons.straighten_rounded,
-                    value: _unit,
-                    items: NewProductOptions.units,
-                    onChanged: (v) => setState(() => _unit = v!),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _field(
+                          controller: _minWholesaleQty,
+                          label: 'Minimum Wholesale Qty (Optional)',
+                          icon: Icons.production_quantity_limits_rounded,
+                          keyboardType: TextInputType.number,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            final n = int.tryParse(v.trim());
+                            if (n == null || n < 0) return 'Invalid';
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _field(
+                          controller: _saleDiscount,
+                          label: 'Disc. on Sale Price (Optional)',
+                          icon: Icons.discount_rounded,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            final n = double.tryParse(v.trim());
+                            if (n == null || n < 0) return 'Invalid';
+                            if (_discountType == 'Percentage' && n > 100) {
+                              return 'Max 100%';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ]),
-                const SizedBox(height: 16),
-                _sectionLabel('Stock & Pricing'),
-                _buildCard([
+                  const SizedBox(height: 14),
+                  _dropdown(
+                    label: 'Discount Type',
+                    icon: Icons.percent_rounded,
+                    value: _discountType,
+                    items: const ['Percentage', 'Amount'],
+                    onChanged: (v) => setState(() => _discountType = v!),
+                  ),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
@@ -662,7 +772,7 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
                   ),
                 ]),
                 const SizedBox(height: 16),
-                _sectionLabel('Stock Information'),
+                _sectionLabel('Branch & Stock Levels'),
                 _buildCard([
                   _dropdown(
                     label: 'Branch *',
@@ -1109,6 +1219,68 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
     return '$day $month ${date.year}';
   }
 
+  // Product Name with suggestions: focus the box and every existing New
+  // Product name is listed; type "A" and the list narrows to names that
+  // start with / contain "A".
+  Widget _productNameField() {
+    return LayoutBuilder(builder: (context, constraints) {
+      return RawAutocomplete<String>(
+        textEditingController: _productName,
+        focusNode: _nameFocus,
+        optionsBuilder: (TextEditingValue v) {
+          final q = v.text.trim().toLowerCase();
+          if (q.isEmpty) return _allNames;
+          final starts =
+          _allNames.where((n) => n.toLowerCase().startsWith(q));
+          final contains = _allNames.where((n) =>
+          !n.toLowerCase().startsWith(q) && n.toLowerCase().contains(q));
+          return [...starts, ...contains];
+        },
+        displayStringForOption: (s) => s,
+        fieldViewBuilder: (ctx, controller, focusNode, onSubmitted) => _field(
+          controller: controller,
+          focusNode: focusNode,
+          label: 'Product Name *',
+          icon: Icons.inventory_2_rounded,
+          validator: (v) => v == null || v.trim().isEmpty
+              ? 'Product name is required'
+              : null,
+        ),
+        optionsViewBuilder: (ctx, onSelected, options) {
+          final list = options.toList();
+          return Align(
+            alignment: Alignment.topLeft,
+            child: Material(
+              elevation: 6,
+              color: Colors.white,
+              surfaceTintColor: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxHeight: 280, maxWidth: constraints.maxWidth),
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  shrinkWrap: true,
+                  itemCount: list.length,
+                  itemBuilder: (_, i) => InkWell(
+                    onTap: () => onSelected(list[i]),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 11),
+                      child: Text(list[i],
+                          style: const TextStyle(
+                              color: Color(0xFF1A1A2E), fontSize: 14.5)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    });
+  }
+
   Widget _field({
     required TextEditingController controller,
     required String label,
@@ -1116,9 +1288,11 @@ class _AddEditNewProductScreenState extends State<AddEditNewProductScreen> {
     TextInputType keyboardType = TextInputType.text,
     int maxLines = 1,
     String? Function(String?)? validator,
+    FocusNode? focusNode,
   }) {
     return TextFormField(
       controller: controller,
+      focusNode: focusNode,
       keyboardType: keyboardType,
       maxLines: maxLines,
       textCapitalization: TextCapitalization.words,

@@ -5,10 +5,12 @@
 // with an explicit "This is not a Tax Invoice" disclaimer and a validity
 // date instead of a payment/balance block (a proforma isn't paid yet).
 
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:cda_inventory/constants/signature_data.dart';
 import 'package:cda_inventory/models/proforma_invoice.dart';
 import 'package:cda_inventory/models/invoice_line_item.dart';
 
@@ -335,7 +337,14 @@ class ProformaPdfService {
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
                     pw.Text('For :$_companyName', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                    pw.SizedBox(height: 34),
+                    pw.Container(
+                      width: 130,
+                      height: 34,
+                      alignment: pw.Alignment.center,
+                      child: pw.Image(
+                          pw.MemoryImage(base64Decode(kSignatureBase64)),
+                          fit: pw.BoxFit.contain),
+                    ),
                     pw.Text('Authorized Signatory', style: const pw.TextStyle(fontSize: 9)),
                   ],
                 ),

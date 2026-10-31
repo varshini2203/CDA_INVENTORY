@@ -159,6 +159,11 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
       await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          titleTextStyle: const TextStyle(color: Color(0xFF0A1628), fontSize: 20, fontWeight: FontWeight.w700),
+          contentTextStyle: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 14.5),
+
           title: const Text('Nothing to import'),
           content: Text(
             parsed.fileWarnings.isNotEmpty
@@ -319,6 +324,11 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        titleTextStyle: const TextStyle(color: Color(0xFF0A1628), fontSize: 20, fontWeight: FontWeight.w700),
+        contentTextStyle: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 14.5),
+
         title: Text(success > 0 ? 'Import complete' : 'Nothing imported'),
         content: SingleChildScrollView(
           child: Column(

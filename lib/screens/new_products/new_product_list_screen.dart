@@ -69,6 +69,14 @@ class _NewProductListScreenState extends State<NewProductListScreen>
   // 'availability' = Product Availability Branches only.
   String? _groupFilter;
   bool _exporting = false;
+
+  // ── Bulk-delete selection mode ──────────────────────────────────────
+  // Separate from the website "Checkbox" tick on each card, which only
+  // controls "List of Products in Website".
+  bool _selectMode = false;
+  bool _bulkDeleting = false;
+  final Set<String> _selectedIds = <String>{};
+
   static const String _grpWeb = 'website';
   static const String _grpAvail = 'availability';
   static const Color _blue = Color(0xFF1976D2);
@@ -189,6 +197,118 @@ class _NewProductListScreenState extends State<NewProductListScreen>
     }
   }
 
+  // ── BULK DELETE ───────────────────────────────────────────────────────
+  List<NewProduct> _visibleProducts() =>
+      _sortList(_filterList(_products ?? const <NewProduct>[]));
+
+  void _enterSelectMode() => setState(() {
+    _selectMode = true;
+    _selectedIds.clear();
+  });
+
+  void _exitSelectMode() => setState(() {
+    _selectMode = false;
+    _selectedIds.clear();
+  });
+
+  void _toggleSelected(NewProduct p) => setState(() {
+    if (!_selectedIds.remove(p.productId)) _selectedIds.add(p.productId);
+  });
+
+  void _selectAllShown() {
+    final shown = _visibleProducts();
+    final allSelected =
+        shown.isNotEmpty && shown.every((p) => _selectedIds.contains(p.productId));
+    setState(() {
+      if (allSelected) {
+        _selectedIds.removeAll(shown.map((p) => p.productId));
+      } else {
+        _selectedIds.addAll(shown.map((p) => p.productId));
+      }
+    });
+  }
+
+  Future<void> _bulkDelete() async {
+    final toDelete = (_products ?? const <NewProduct>[])
+        .where((p) => _selectedIds.contains(p.productId))
+        .toList();
+    if (toDelete.isEmpty || _bulkDeleting) return;
+
+    final confirmed = await _confirm(
+      title: 'Delete ${toDelete.length} product${toDelete.length == 1 ? '' : 's'}',
+      message:
+      'Delete ${toDelete.length} selected product${toDelete.length == 1 ? '' : 's'} from New Products? '
+          'They will also be removed from Inventory, Search Products, Branch and Stock. '
+          'This cannot be undone.',
+      confirmLabel: 'Delete ${toDelete.length}',
+      isDestructive: true,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _bulkDeleting = true);
+    final progress = ValueNotifier<int>(0);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          titleTextStyle: const TextStyle(color: Color(0xFF0A1628), fontSize: 20, fontWeight: FontWeight.w700),
+          contentTextStyle: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 14.5),
+
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Deleting products…',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          content: ValueListenableBuilder<int>(
+            valueListenable: progress,
+            builder: (_, done, __) => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LinearProgressIndicator(
+                  value: toDelete.isEmpty ? null : done / toDelete.length,
+                  color: _accent,
+                  backgroundColor: Colors.black12,
+                ),
+                const SizedBox(height: 12),
+                Text('$done / ${toDelete.length}'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    String? error;
+    try {
+      await NewProductService.deleteNewProducts(
+        toDelete,
+        onProgress: (done, total) => progress.value = done,
+      );
+    } catch (e) {
+      error = e.toString();
+    }
+
+    if (mounted) Navigator.of(context, rootNavigator: true).pop(); // progress dialog
+    progress.dispose();
+
+    if (!mounted) return;
+    setState(() {
+      _bulkDeleting = false;
+      _selectMode = false;
+      _selectedIds.clear();
+    });
+    if (error == null) {
+      _snack('${toDelete.length} product${toDelete.length == 1 ? '' : 's'} deleted',
+          isError: false);
+    } else {
+      _snack('Bulk delete failed: $error', isError: true);
+    }
+    _loadProducts();
+  }
+
   // ── UI helpers ────────────────────────────────────────────────────────
   void _snack(String msg, {required bool isError}) {
     if (!mounted) return;
@@ -209,6 +329,11 @@ class _NewProductListScreenState extends State<NewProductListScreen>
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        titleTextStyle: const TextStyle(color: Color(0xFF0A1628), fontSize: 20, fontWeight: FontWeight.w700),
+        contentTextStyle: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 14.5),
+
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text(message),
@@ -417,88 +542,145 @@ class _NewProductListScreenState extends State<NewProductListScreen>
   // ── BUILD ─────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _surface,
-      appBar: AppBar(
-        backgroundColor: _navy,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('New Products',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.upload_file_rounded),
-            tooltip: 'Bulk Import',
-            onPressed: () async {
-              final imported = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  settings: const RouteSettings(name: 'Bulk Import New Products'),
-                  builder: (_) => const BulkImportScreen(
-                    target: BulkImportTarget.newProducts,
-                  ),
-                ),
-              );
-              if (imported == true) _loadProducts();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh',
-            onPressed: _loadProducts,
-          ),
-        ],
-      ),
-      body: Builder(
-        builder: (context) {
-          if (_loadError != null) return _buildError(_loadError!);
-          if (_products == null) {
-            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-          }
+    final shownNow = _selectMode ? _visibleProducts() : const <NewProduct>[];
+    final allShownSelected = shownNow.isNotEmpty &&
+        shownNow.every((p) => _selectedIds.contains(p.productId));
 
-          final filtered = _filterList(_products!);
-          final sorted = _sortList(filtered);
-          final stats = NewProductService.computeStats(_products!);
-
-          return RefreshIndicator(
-            onRefresh: _loadProducts,
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics()),
-              slivers: [
-                SliverToBoxAdapter(child: _buildHeader(stats)),
-                SliverToBoxAdapter(child: _buildFilters(sorted.length)),
-                SliverToBoxAdapter(child: _buildGroupBar()),
-                if (sorted.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: _buildEmpty(_products!.isEmpty),
-                  )
-                else
-                  _buildListSliver(sorted),
-              ],
-            ),
-          );
-        },
-      ),
-      floatingActionButton: ScaleTransition(
-        scale: CurvedAnimation(parent: _fabAnim, curve: Curves.elasticOut),
-        child: FloatingActionButton.extended(
-          backgroundColor: _navy,
+    return WillPopScope(
+      onWillPop: () async {
+        if (_bulkDeleting) return false;
+        if (_selectMode) {
+          _exitSelectMode();
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: _surface,
+        appBar: AppBar(
+          backgroundColor: _selectMode ? const Color(0xFF7F1D1D) : _navy,
           foregroundColor: Colors.white,
-          icon: const Icon(Icons.add),
-          label: const Text('Add Product',
-              style: TextStyle(fontWeight: FontWeight.w600)),
-          onPressed: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                settings: const RouteSettings(name: 'Add New Product'),
-                builder: (_) => const AddEditNewProductScreen(),
+          elevation: 0,
+          leading: _selectMode
+              ? IconButton(
+            icon: const Icon(Icons.close_rounded),
+            tooltip: 'Cancel selection',
+            onPressed: _bulkDeleting ? null : _exitSelectMode,
+          )
+              : null,
+          title: Text(
+              _selectMode ? '${_selectedIds.length} selected' : 'New Products',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
+          actions: _selectMode
+              ? [
+            IconButton(
+              icon: Icon(allShownSelected
+                  ? Icons.deselect_rounded
+                  : Icons.select_all_rounded),
+              tooltip: allShownSelected ? 'Unselect all shown' : 'Select all shown',
+              onPressed: _bulkDeleting ? null : _selectAllShown,
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_forever_rounded),
+              tooltip: 'Delete selected',
+              onPressed: (_selectedIds.isEmpty || _bulkDeleting)
+                  ? null
+                  : _bulkDelete,
+            ),
+          ]
+              : [
+            IconButton(
+              icon: const Icon(Icons.checklist_rounded),
+              tooltip: 'Select to delete',
+              onPressed: (_products == null || _products!.isEmpty)
+                  ? null
+                  : _enterSelectMode,
+            ),
+            IconButton(
+              icon: const Icon(Icons.upload_file_rounded),
+              tooltip: 'Bulk Import',
+              onPressed: () async {
+                final imported = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    settings: const RouteSettings(name: 'Bulk Import New Products'),
+                    builder: (_) => const BulkImportScreen(
+                      target: BulkImportTarget.newProducts,
+                    ),
+                  ),
+                );
+                if (imported == true) _loadProducts();
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: 'Refresh',
+              onPressed: _loadProducts,
+            ),
+          ],
+        ),
+        body: Builder(
+          builder: (context) {
+            if (_loadError != null) return _buildError(_loadError!);
+            if (_products == null) {
+              return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+            }
+
+            final filtered = _filterList(_products!);
+            final sorted = _sortList(filtered);
+            final stats = NewProductService.computeStats(_products!);
+
+            return RefreshIndicator(
+              onRefresh: _loadProducts,
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics()),
+                slivers: [
+                  SliverToBoxAdapter(child: _buildHeader(stats)),
+                  SliverToBoxAdapter(child: _buildFilters(sorted.length)),
+                  SliverToBoxAdapter(child: _buildGroupBar()),
+                  if (sorted.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _buildEmpty(_products!.isEmpty),
+                    )
+                  else
+                    _buildListSliver(sorted),
+                ],
               ),
             );
-            _loadProducts();
           },
+        ),
+        floatingActionButton: _selectMode
+            ? FloatingActionButton.extended(
+          backgroundColor: Colors.red.shade700,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.delete_forever_rounded),
+          label: Text('Delete (${_selectedIds.length})',
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          onPressed: (_selectedIds.isEmpty || _bulkDeleting)
+              ? null
+              : _bulkDelete,
+        )
+            : ScaleTransition(
+          scale: CurvedAnimation(parent: _fabAnim, curve: Curves.elasticOut),
+          child: FloatingActionButton.extended(
+            backgroundColor: _navy,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add),
+            label: const Text('Add Product',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  settings: const RouteSettings(name: 'Add New Product'),
+                  builder: (_) => const AddEditNewProductScreen(),
+                ),
+              );
+              _loadProducts();
+            },
+          ),
         ),
       ),
     );
@@ -1003,6 +1185,9 @@ class _NewProductListScreenState extends State<NewProductListScreen>
               statusColor: _stockColor(NewProductService.stockStatus(p)),
               checked: p.listedOnWebsite,
               onChecked: (v) => _toggleWebsite(p, v == true),
+              selectMode: _selectMode,
+              selected: _selectedIds.contains(p.productId),
+              onSelect: () => _toggleSelected(p),
               onView: () async {
                 await Navigator.push(
                   context,
@@ -1103,6 +1288,8 @@ class _NewProductListScreenState extends State<NewProductListScreen>
     required List<NewProduct> rows,
   }) {
     final selected = _groupFilter == groupKey;
+    // Darker shade of the accent so text stays readable on the light tint.
+    final fg = HSLColor.fromColor(color).withLightness(0.28).toColor();
     return InkWell(
       onTap: () =>
           setState(() => _groupFilter = selected ? null : groupKey),
@@ -1129,7 +1316,7 @@ class _NewProductListScreenState extends State<NewProductListScreen>
                       style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 12.5,
-                          color: selected ? color : Colors.black87)),
+                          color: selected ? fg : Colors.black87)),
                 ),
               ],
             ),
@@ -1144,7 +1331,8 @@ class _NewProductListScreenState extends State<NewProductListScreen>
                 const Spacer(),
                 TextButton.icon(
                   style: TextButton.styleFrom(
-                    foregroundColor: color,
+                    foregroundColor: fg,
+                    disabledForegroundColor: fg.withOpacity(0.45),
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
@@ -1154,7 +1342,8 @@ class _NewProductListScreenState extends State<NewProductListScreen>
                       website: groupKey == _grpWeb),
                   icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
                   label: const Text('PDF',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 13)),
                 ),
               ],
             ),
@@ -1308,6 +1497,9 @@ class _NewProductCard extends StatelessWidget {
     required this.stockStatus,
     required this.checked,
     required this.onChecked,
+    this.selectMode = false,
+    this.selected = false,
+    this.onSelect,
     required this.onView,
     required this.onEdit,
     required this.onDelete,
@@ -1318,6 +1510,9 @@ class _NewProductCard extends StatelessWidget {
   final String stockStatus;
   final bool checked;
   final ValueChanged<bool?> onChecked;
+  final bool selectMode;
+  final bool selected;
+  final VoidCallback? onSelect;
   final VoidCallback onView;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -1350,6 +1545,9 @@ class _NewProductCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
+        border: selectMode && selected
+            ? Border.all(color: Colors.red.shade400, width: 2)
+            : null,
         boxShadow: [
           BoxShadow(
               color: Colors.black.withOpacity(0.06),
@@ -1360,7 +1558,7 @@ class _NewProductCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
-          onTap: onView,
+          onTap: selectMode ? onSelect : onView,
           child: IntrinsicHeight(
             child: Row(
               children: [
@@ -1371,10 +1569,23 @@ class _NewProductCard extends StatelessWidget {
                     alignment: Alignment.topCenter,
                     child: Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: Checkbox(
+                      child: selectMode
+                          ? Checkbox(
+                        value: selected,
+                        onChanged: (_) => onSelect?.call(),
+                        activeColor: Colors.red.shade600,
+                        side: const BorderSide(
+                            color: Color(0xFF64748B), width: 1.8),
+                        checkColor: Colors.white,
+                        visualDensity: VisualDensity.compact,
+                      )
+                          : Checkbox(
                         value: checked,
                         onChanged: onChecked,
-                        activeColor: const Color(0xFF00D4AA),
+                        activeColor: const Color(0xFF00A884),
+                        side: const BorderSide(
+                            color: Color(0xFF64748B), width: 1.8),
+                        checkColor: Colors.white,
                         visualDensity: VisualDensity.compact,
                       ),
                     ),
@@ -1442,32 +1653,34 @@ class _NewProductCard extends StatelessWidget {
                                 text: _formatDate(product.purchaseDate)),
                           ],
                         ),
-                        const Divider(height: 18),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            _ActionButton(
-                              label: 'View',
-                              icon: Icons.visibility_outlined,
-                              color: Colors.grey.shade700,
-                              onTap: onView,
-                            ),
-                            const SizedBox(width: 8),
-                            _ActionButton(
-                              label: 'Edit',
-                              icon: Icons.edit_rounded,
-                              color: _navy,
-                              onTap: onEdit,
-                            ),
-                            const SizedBox(width: 8),
-                            _ActionButton(
-                              label: 'Delete',
-                              icon: Icons.delete_outline_rounded,
-                              color: Colors.red.shade600,
-                              onTap: onDelete,
-                            ),
-                          ],
-                        ),
+                        if (!selectMode) ...[
+                          const Divider(height: 18),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              _ActionButton(
+                                label: 'View',
+                                icon: Icons.visibility_outlined,
+                                color: Colors.grey.shade700,
+                                onTap: onView,
+                              ),
+                              const SizedBox(width: 8),
+                              _ActionButton(
+                                label: 'Edit',
+                                icon: Icons.edit_rounded,
+                                color: _navy,
+                                onTap: onEdit,
+                              ),
+                              const SizedBox(width: 8),
+                              _ActionButton(
+                                label: 'Delete',
+                                icon: Icons.delete_outline_rounded,
+                                color: Colors.red.shade600,
+                                onTap: onDelete,
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

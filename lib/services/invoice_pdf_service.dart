@@ -1,10 +1,12 @@
 // lib/services/invoice_pdf_service.dart
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/models/invoice_line_item.dart';
+import 'package:cda_inventory/constants/signature_data.dart';
 
 class InvoicePdfService {
   static const _navy  = PdfColor.fromInt(0xFF0A1628);
@@ -185,6 +187,7 @@ class InvoicePdfService {
   // ═══════════════════════════════════════════════════════════════════════
   static Future<Uint8List> generate(Invoice inv) async {
     final skylynkLogo = await _loadSkylynkLogo();
+    final signature = base64Decode(kSignatureBase64);
     final doc = pw.Document();
     final party = inv.customer?.name ?? inv.vendorName;
     final status = inv.effectiveStatus;
@@ -448,7 +451,10 @@ class InvoicePdfService {
                               if (inv.usesLineItems && inv.lineTaxTotal > 0 && !inv.gstEnabled)
                                 _skylynkTotalRow('Tax', 'Rs. ${inv.lineTaxTotal.toStringAsFixed(2)}'),
                               if (inv.shipping > 0)
-                                _skylynkTotalRow('Shipping', 'Rs. ${inv.shipping.toStringAsFixed(2)}'),
+                                _skylynkTotalRow('Shipping Charge', 'Rs. ${inv.shipping.toStringAsFixed(2)}'),
+                              if (inv.shippingTaxAmount > 0)
+                                _skylynkTotalRow('Shipping Tax (${_trimPercent(inv.shippingTaxRate)}%)',
+                                    'Rs. ${inv.shippingTaxAmount.toStringAsFixed(2)}'),
                               if (inv.roundOffEnabled && inv.roundOffAmount != 0)
                                 _skylynkTotalRow('Round Off',
                                     '${inv.roundOffAmount >= 0 ? '+' : '-'}Rs. ${inv.roundOffAmount.abs().toStringAsFixed(2)}'),
@@ -525,7 +531,13 @@ class InvoicePdfService {
                             crossAxisAlignment: pw.CrossAxisAlignment.end,
                             children: [
                               body('For $_companyName', bold: true),
-                              pw.SizedBox(height: 36),
+                              pw.Container(
+                                width: 150,
+                                height: 44,
+                                alignment: pw.Alignment.center,
+                                child: pw.Image(pw.MemoryImage(signature),
+                                    fit: pw.BoxFit.contain),
+                              ),
                               pw.Container(width: 150, height: 0.8, color: _muted),
                               pw.SizedBox(height: 4),
                               body('Authorized Signatory', size: 9, color: _muted),

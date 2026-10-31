@@ -47,6 +47,7 @@ import 'package:cda_inventory/screens/sales/sale_order_list_screen.dart';
 import 'package:cda_inventory/screens/delivery_challan/delivery_challan_list_screen.dart';
 import 'package:cda_inventory/screens/sales/sale_return_list_screen.dart';
 import 'package:cda_inventory/screens/sales/payment_in_list_screen.dart';
+import 'package:cda_inventory/screens/transactions/all_transactions_screen.dart';
 // ...
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -311,6 +312,7 @@ const _drawerItems = [
       {'label': 'Sale Return/ Credit Note','key': 'Sale Return/ Credit Note'},
     ],
   },
+  {'icon': Icons.sync_alt_rounded,                'label': 'All Transactions', 'key': 'All Transactions'},
   {'icon': Icons.document_scanner_rounded,        'label': 'Bills',            'key': 'Bills'},
   {'icon': Icons.compare_arrows_rounded,          'label': 'Inventory Movement', 'key': 'Inventory Movement'},
   {'icon': Icons.precision_manufacturing_rounded, 'label': 'Fixed Assets',     'key': 'Fixed Assets'},
@@ -355,6 +357,11 @@ List<Map<String, dynamic>> _filterDrawerItems(CurrentAccess access) {
       children.where((c) => _canSeeModule(access, c['key']!)).toList();
       if (allowed.isEmpty) continue;
       out.add({...item, 'children': allowed});
+    } else if (item['key'] == 'All Transactions') {
+      if (access.canAccessModule(RestrictedModules.invoices) ||
+          access.canAccessModule(RestrictedModules.purchases)) {
+        out.add(item);
+      }
     } else if (_canSeeModule(access, item['key'] as String)) {
       out.add(item);
     }
@@ -432,6 +439,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'Delivery Challan': screen = const DeliveryChallanListScreen(); break;
       case 'Sale Return/ Credit Note': screen = const SaleReturnListScreen(); break;
       case 'Payment-In': screen = const PaymentInListScreen(); break;
+      case 'All Transactions': screen = const AllTransactionsScreen(); break;
       case 'Inventory':
         Navigator.pushNamed(context, '/inventory');
         return;

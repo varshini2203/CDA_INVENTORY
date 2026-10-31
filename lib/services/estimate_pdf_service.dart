@@ -4,10 +4,12 @@
 // company details as before, in a modern layout: blue letterhead card,
 // soft info cards, zebra item table, highlighted grand total, multi-page
 // safe (long estimates continue on extra pages with a slim header).
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:cda_inventory/constants/signature_data.dart';
 import 'package:cda_inventory/models/estimate.dart';
 import 'package:cda_inventory/models/invoice_line_item.dart';
 
@@ -575,7 +577,14 @@ class EstimatePdfService {
           pw.Text('For $_companyName',
               style: pw.TextStyle(
                   fontSize: 10.5, fontWeight: pw.FontWeight.bold, color: _ink)),
-          pw.SizedBox(height: 36),
+          pw.Container(
+            width: 130,
+            height: 36,
+            alignment: pw.Alignment.center,
+            child: pw.Image(
+                pw.MemoryImage(base64Decode(kSignatureBase64)),
+                fit: pw.BoxFit.contain),
+          ),
           pw.Container(width: 140, height: 0.8, color: _mute),
           pw.SizedBox(height: 4),
           pw.Text('Authorized Signatory',

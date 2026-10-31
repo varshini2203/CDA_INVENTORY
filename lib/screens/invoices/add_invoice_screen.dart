@@ -92,6 +92,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   final _billingAddressController = TextEditingController();
   final _shippingAddressController = TextEditingController();
   final _shippingController = TextEditingController(text: '0');
+  double _shippingTaxRate = 0; // optional GST % on the shipping charge
   final _termsNotesController =
   TextEditingController(text: 'Thanks for doing business with us!');
   final _descriptionController = TextEditingController();
@@ -194,6 +195,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       _bankDetailsController.text = inv.bankDetails ?? '';
       _showDescriptionField = (inv.notes ?? '').isNotEmpty;
       _shippingController.text = inv.shipping.toStringAsFixed(2);
+      _shippingTaxRate = inv.shippingTaxRate;
       _roundOffEnabled = inv.roundOffEnabled;
       _invoiceDate = inv.purchaseDateTime ?? DateTime.now();
 
@@ -305,7 +307,8 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
   double get _subtotal => _validRows.fold(0.0, (s, r) => s + r.taxable);
   double get _taxTotal => _validRows.fold(0.0, (s, r) => s + r.taxAmount);
   double get _shipping => double.tryParse(_shippingController.text.trim()) ?? 0;
-  double get _preRoundTotal => _subtotal + _taxTotal + _shipping;
+  double get _shippingTaxAmount => _shipping * _shippingTaxRate / 100;
+  double get _preRoundTotal => _subtotal + _taxTotal + _shipping + _shippingTaxAmount;
   double get _roundOffAmount =>
       _roundOffEnabled ? (_preRoundTotal.roundToDouble() - _preRoundTotal) : 0.0;
   double get _grandTotal => _preRoundTotal + _roundOffAmount;
@@ -387,6 +390,7 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
       branch: _selectedBranch,
       paymentMode: _paymentMode,
       shipping: _shipping,
+      shippingTaxRate: _shippingTaxRate,
       roundOffEnabled: _roundOffEnabled,
       termsTitle: _termsTitle,
       termsNotes: _termsNotesController.text.trim().isEmpty
@@ -820,12 +824,48 @@ class _AddInvoiceScreenState extends State<AddInvoiceScreen> {
             _card(children: [
               _field(
                 controller: _shippingController,
-                label: 'Shipping',
+                label: 'Shipping Charge',
                 hint: '0.00',
                 icon: Icons.local_shipping_outlined,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 accentColor: accentColor,
               ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<double>(
+                value: _taxRates.contains(_shippingTaxRate) ? _shippingTaxRate : 0,
+                isExpanded: true,
+                dropdownColor: Colors.white,
+                icon: Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: Colors.grey.shade400),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: kNavy),
+                decoration: InputDecoration(
+                  labelText: 'Shipping Tax (optional)',
+                  labelStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                  prefixIcon: Icon(Icons.percent_rounded, size: 20, color: Colors.grey.shade400),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: accentColor, width: 1.5)),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                ),
+                items: _taxRates
+                    .map((t) => DropdownMenuItem(
+                  value: t,
+                  child: Text(t == 0 ? 'None' : 'GST ${t.toStringAsFixed(0)}%',
+                      style: const TextStyle(fontSize: 14, color: kNavy)),
+                ))
+                    .toList(),
+                onChanged: (v) => setState(() => _shippingTaxRate = v ?? 0),
+              ),
+              if (_shippingTaxRate > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, left: 4),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text('Shipping tax  +${_shippingTaxAmount.toStringAsFixed(2)}',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                  ),
+                ),
               const SizedBox(height: 14),
               Row(children: [
                 Checkbox(

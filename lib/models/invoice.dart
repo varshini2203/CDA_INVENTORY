@@ -50,6 +50,8 @@ class Invoice {
   // ── New: Sale-invoice style fields ──
   final String paymentMode;      // one of kPaymentModes (see constants/payment_modes.dart)
   final double shipping;
+  // Optional GST % charged on the shipping amount (0 = no shipping tax).
+  final double shippingTaxRate;
   final bool roundOffEnabled;
   final String termsTitle;       // e.g. 'Sale Invoice'
   final String? termsNotes;      // e.g. 'Thanks for doing business with us!'
@@ -84,6 +86,7 @@ class Invoice {
     this.branch,
     this.paymentMode = kDefaultPaymentMode,
     this.shipping = 0.0,
+    this.shippingTaxRate = 0.0,
     this.roundOffEnabled = false,
     this.termsTitle = 'Sale Invoice',
     this.termsNotes,
@@ -110,7 +113,8 @@ class Invoice {
   double get totalTax =>
       usesLineItems ? lineTaxTotal : (cgstAmount + sgstAmount + igstAmount);
 
-  double get _preRoundTotal => subtotal + totalTax + shipping;
+  double get shippingTaxAmount => shipping * shippingTaxRate / 100;
+  double get _preRoundTotal => subtotal + totalTax + shipping + shippingTaxAmount;
   double get roundOffAmount =>
       roundOffEnabled ? (_preRoundTotal.roundToDouble() - _preRoundTotal) : 0.0;
   double get grandTotal => _preRoundTotal + roundOffAmount;
@@ -186,6 +190,7 @@ class Invoice {
       branch: data['branch']?.toString(),
       paymentMode: resolvePaymentMode(data['payment_mode']?.toString()),
       shipping: (data['shipping'] as num?)?.toDouble() ?? 0.0,
+      shippingTaxRate: (data['shipping_tax_rate'] as num?)?.toDouble() ?? 0.0,
       roundOffEnabled: data['round_off_enabled'] ?? false,
       termsTitle: data['terms_title']?.toString() ?? 'Sale Invoice',
       termsNotes: data['terms_notes']?.toString(),
@@ -218,6 +223,7 @@ class Invoice {
       'branch': branch,
       'payment_mode': paymentMode,
       'shipping': shipping,
+      'shipping_tax_rate': shippingTaxRate,
       'round_off_enabled': roundOffEnabled,
       'terms_title': termsTitle,
       'terms_notes': termsNotes,
@@ -252,6 +258,7 @@ class Invoice {
     String? branch,
     String? paymentMode,
     double? shipping,
+    double? shippingTaxRate,
     bool? roundOffEnabled,
     String? termsTitle,
     String? termsNotes,
@@ -282,6 +289,7 @@ class Invoice {
       branch: branch ?? this.branch,
       paymentMode: paymentMode ?? this.paymentMode,
       shipping: shipping ?? this.shipping,
+      shippingTaxRate: shippingTaxRate ?? this.shippingTaxRate,
       roundOffEnabled: roundOffEnabled ?? this.roundOffEnabled,
       termsTitle: termsTitle ?? this.termsTitle,
       termsNotes: termsNotes ?? this.termsNotes,

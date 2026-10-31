@@ -23,6 +23,13 @@ class NewProduct {
   final String brand;
   final String modelNumber;
   final String description;
+  // Vyapar "Add Item" extras (all optional)
+  final String itemHsn; // Item HSN code
+  final String itemType; // 'Product' or 'Service'
+  final double saleDiscount; // "Disc. On Sale Price"
+  final bool saleDiscountIsPercent; // true = Percentage, false = Amount
+  final double wholesalePrice;
+  final int minWholesaleQty;
 
   // ── Purchase Information ──────────────────────────────────────────────
   final String vendorName;
@@ -109,6 +116,12 @@ class NewProduct {
     this.brand = '',
     this.modelNumber = '',
     this.description = '',
+    this.itemHsn = '',
+    this.itemType = 'Product',
+    this.saleDiscount = 0,
+    this.saleDiscountIsPercent = true,
+    this.wholesalePrice = 0,
+    this.minWholesaleQty = 0,
     required this.vendorName,
     this.vendorContact = '',
     this.vendorEmail = '',
@@ -174,6 +187,12 @@ class NewProduct {
       brand: _asString(data['brand']),
       modelNumber: _asString(data['modelNumber']),
       description: _asString(data['description']),
+      itemHsn: _asString(data['itemHsn']),
+      itemType: _asString(data['itemType'], 'Product'),
+      saleDiscount: _asDouble(data['saleDiscount'], 0),
+      saleDiscountIsPercent: data['saleDiscountIsPercent'] != false,
+      wholesalePrice: _asDouble(data['wholesalePrice'], 0),
+      minWholesaleQty: _asInt(data['minWholesaleQty'], 0),
       vendorName: _asString(data['vendorName']),
       vendorContact: _asString(data['vendorContact']),
       vendorEmail: _asString(data['vendorEmail']),
@@ -221,6 +240,12 @@ class NewProduct {
     'brand': brand,
     'modelNumber': modelNumber,
     'description': description,
+    'itemHsn': itemHsn,
+    'itemType': itemType,
+    'saleDiscount': saleDiscount,
+    'saleDiscountIsPercent': saleDiscountIsPercent,
+    'wholesalePrice': wholesalePrice,
+    'minWholesaleQty': minWholesaleQty,
     'vendorName': vendorName,
     'vendorContact': vendorContact,
     'vendorEmail': vendorEmail,
@@ -262,6 +287,11 @@ class NewProduct {
     'Category': category,
     'Brand': brand,
     'Model Number': modelNumber,
+    'Item HSN': itemHsn,
+    'Discount on Sale Price':
+    '$saleDiscount${saleDiscountIsPercent ? ' %' : ' (amount)'}',
+    'Wholesale Price': wholesalePrice,
+    'Minimum Wholesale Qty': minWholesaleQty,
     'Vendor Name': vendorName,
     'Vendor Contact': vendorContact,
     'Vendor Email': vendorEmail,
@@ -296,6 +326,12 @@ class NewProduct {
     String? brand,
     String? modelNumber,
     String? description,
+    String? itemHsn,
+    String? itemType,
+    double? saleDiscount,
+    bool? saleDiscountIsPercent,
+    double? wholesalePrice,
+    int? minWholesaleQty,
     String? vendorName,
     String? vendorContact,
     String? vendorEmail,
@@ -334,6 +370,13 @@ class NewProduct {
       brand: brand ?? this.brand,
       modelNumber: modelNumber ?? this.modelNumber,
       description: description ?? this.description,
+      itemHsn: itemHsn ?? this.itemHsn,
+      itemType: itemType ?? this.itemType,
+      saleDiscount: saleDiscount ?? this.saleDiscount,
+      saleDiscountIsPercent:
+      saleDiscountIsPercent ?? this.saleDiscountIsPercent,
+      wholesalePrice: wholesalePrice ?? this.wholesalePrice,
+      minWholesaleQty: minWholesaleQty ?? this.minWholesaleQty,
       vendorName: vendorName ?? this.vendorName,
       vendorContact: vendorContact ?? this.vendorContact,
       vendorEmail: vendorEmail ?? this.vendorEmail,

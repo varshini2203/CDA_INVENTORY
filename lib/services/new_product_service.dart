@@ -346,6 +346,59 @@ class NewProductService {
     }
   }
 
+  // ── BULK DELETE ───────────────────────────────────────────────────────
+  // Deletes many New Products at once. The primary `new_products` docs go
+  // in Firestore batches of 400 (fast, atomic per batch); the cross-module
+  // clean-up (Inventory / Search Products / Branch / Stock / Fixed Assets /
+  // Consumables) then runs a few products at a time, exactly like the
+  // single [deleteNewProduct] does. One summary entry is written to the
+  // activity log instead of hundreds of separate rows.
+  static Future<int> deleteNewProducts(
+      List<NewProduct> products, {
+        void Function(int done, int total)? onProgress,
+      }) async {
+    if (products.isEmpty) return 0;
+    final total = products.length;
+
+    for (var i = 0; i < total; i += 400) {
+      final batch = FirebaseFirestore.instance.batch();
+      for (final p in products.skip(i).take(400)) {
+        batch.delete(_col.doc(p.productId));
+      }
+      await batch.commit();
+    }
+    clearCache();
+
+    final names = products
+        .map((p) => p.productName.isEmpty ? p.productId : p.productName)
+        .toList();
+    ActivityLogService.logDelete(
+      module: 'New Products',
+      itemName: '$total products (bulk delete)',
+      data: {
+        'Count': total,
+        'Products': names.take(50).join(', ') +
+            (names.length > 50 ? ' …and ${names.length - 50} more' : ''),
+      },
+    );
+
+    var done = 0;
+    onProgress?.call(0, total);
+    const concurrency = 4;
+    for (var i = 0; i < total; i += concurrency) {
+      await Future.wait(products.skip(i).take(concurrency).map((p) async {
+        try {
+          await InventorySyncService.syncFromNewProductDelete(p);
+        } catch (_) {
+          // Never let one failed clean-up stop the rest of the batch.
+        }
+        done++;
+        onProgress?.call(done, total);
+      }));
+    }
+    return total;
+  }
+
   // ── NOTIFICATIONS ─────────────────────────────────────────────────────
   static Future<void> _createNotification({
     required String title,
