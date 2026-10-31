@@ -14,6 +14,7 @@ import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/models/stock.dart';
 import 'package:cda_inventory/models/purchase.dart';
 import 'package:cda_inventory/models/new_product.dart';
+import 'package:cda_inventory/services/new_product_service.dart';
 import 'package:cda_inventory/services/report_service.dart';
 
 import 'excel_export_io.dart'
@@ -327,7 +328,7 @@ class ExcelExportService {
     final sheet = excel['New Products'];
     _writeTitleRow(sheet, 'New Products Report', month);
     _writeHeaderRow(sheet, 2, [
-      'Product', 'Category', 'Brand', 'Vendor', 'Branch', 'Qty',
+      'S.No', 'Product', 'Category', 'Brand', 'Vendor', 'Branch', 'Qty',
       'Purchase Cost (Rs.)', 'Sale Price (Rs.)', 'GST', 'GST %', 'GST Amount (Rs.)',
       'Sale Price incl. GST (Rs.)', 'Stock Value (Rs.)', 'Status', 'Purchase Date',
     ]);
@@ -335,6 +336,7 @@ class ExcelExportService {
     var r = 3;
     for (final p in rows) {
       final cells = <CellValue?>[
+        IntCellValue(r - 2), // serial number
         TextCellValue(p.productName),
         TextCellValue(p.category),
         TextCellValue(p.brand),
@@ -349,8 +351,8 @@ class ExcelExportService {
         DoubleCellValue(p.gstRate),
         DoubleCellValue(p.gstAmount),
         DoubleCellValue(p.salePriceWithGst),
-        DoubleCellValue(p.stockValue),
-        TextCellValue(p.status),
+        DoubleCellValue(NewProductService.stockValueOf(p)),
+        TextCellValue(NewProductService.stockStatus(p)),
         TextCellValue(DateFormat('dd-MM-yyyy').format(p.purchaseDate)),
       ];
       for (var c = 0; c < cells.length; c++) {
@@ -361,16 +363,16 @@ class ExcelExportService {
       r++;
     }
 
-    final totalValue = rows.fold<double>(0, (s, p) => s + p.stockValue);
+    final totalValue = rows.fold<double>(0, (s, p) => s + NewProductService.stockValueOf(p));
     final totalRow = r + 1;
     sheet
-        .cell(CellIndex.indexByColumnRow(columnIndex: 11, rowIndex: totalRow))
+        .cell(CellIndex.indexByColumnRow(columnIndex: 12, rowIndex: totalRow))
         .value = TextCellValue('TOTAL STOCK VALUE');
     sheet
-        .cell(CellIndex.indexByColumnRow(columnIndex: 12, rowIndex: totalRow))
+        .cell(CellIndex.indexByColumnRow(columnIndex: 13, rowIndex: totalRow))
         .value = DoubleCellValue(totalValue);
 
-    for (var c = 0; c < 15; c++) {
+    for (var c = 0; c < 16; c++) {
       sheet.setColumnWidth(c, 20);
     }
   }

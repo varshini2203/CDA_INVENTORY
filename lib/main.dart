@@ -14,6 +14,7 @@ import 'screens/auth/register_screen.dart';
 import 'screens/auth/waiting_approval_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/bills/bills_screen.dart';
+import 'screens/kit_delivery/kit_dashboard_screen.dart';
 import 'screens/admin/admin_notifications_screen.dart';
 import 'screens/admin/employee_access_screen.dart';
 import 'screens/admin/activity_feed_screen.dart';
@@ -27,8 +28,8 @@ import 'core/access/access_route_observer.dart';
 
 import 'services/drone_reminder_service.dart';
 import 'services/drone_service_alert_service.dart';
+import 'services/kit_reminder_service.dart';
 import 'services/push_notification_service.dart';
-
 import 'widgets/in_app_notification_banner.dart';
 
 
@@ -120,6 +121,17 @@ Future<void> main() async {
   //
 
   await DroneServiceAlertService.instance.init();
+
+  // ----------------------------------------------------------
+  // KIT PENDING-PARTS REMINDERS
+  // ----------------------------------------------------------
+  //
+  // Daily reminder for customer kits that still have parts
+  // (drone / propellers / bag ...) left to deliver. The dashboard
+  // re-registers them from Firestore each time it opens.
+  //
+
+  await KitReminderService.instance.init();
 
   // ----------------------------------------------------------
   // START APPLICATION
@@ -330,6 +342,15 @@ class ChennaiDroneInventoryApp extends StatelessWidget {
                   context,
                   ) =>
               const BillsScreen(),
+
+              // ------------------------------------------------
+              // KIT DELIVERIES
+              // ------------------------------------------------
+
+              '/kits': (
+                  context,
+                  ) =>
+              const KitDashboardScreen(),
 
               // ------------------------------------------------
               // ADMIN - NOTIFICATIONS

@@ -375,6 +375,12 @@ class NewProductService {
   static const String stockLow = 'Low Stock';
   static const String stockIn = 'In Stock';
 
+  /// Live stock value: uses the stored value when present (bulk import),
+  /// otherwise quantity x purchase cost, so manually added products
+  /// don't show ₹0.00 in reports.
+  static double stockValueOf(NewProduct p) =>
+      p.stockValue > 0 ? p.stockValue : p.quantity * p.purchaseCost;
+
   static String stockStatus(NewProduct p) {
     if (p.quantity <= 0) return stockOutOfStock;
     if (p.quantity <= p.minimumStockLevel) return stockLow;

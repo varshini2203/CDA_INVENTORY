@@ -16,6 +16,7 @@ import 'package:cda_inventory/models/invoice.dart';
 import 'package:cda_inventory/models/stock.dart';
 import 'package:cda_inventory/models/purchase.dart';
 import 'package:cda_inventory/models/new_product.dart';
+import 'package:cda_inventory/services/new_product_service.dart';
 import 'package:cda_inventory/services/report_service.dart';
 
 class PdfExportService {
@@ -224,34 +225,32 @@ class PdfExportService {
 
   // ── NEW PRODUCTS REPORT ───────────────────────────────────────────────────
 
+  /// "Stock Summary" style layout: centred underlined title, a Godown
+  /// line, and a plain grey-header table with a stock Status column.
+  /// [godown] is the branch label ("All Branches", "CDA Admin", ...).
   static Future<Uint8List> buildNewProductsReport(
       List<NewProduct> rows, DateTime month,
-      {String title = 'New Products Report'}) async {
-    final logoBytes = await _loadLogo();
-    final totalValue = rows.fold<double>(0, (s, p) => s + p.stockValue);
-    final withGstCount = rows.where((p) => p.hasGst).length;
-    final withoutGstCount = rows.length - withGstCount;
+      {String title = 'New Products Report', String godown = 'All Branches'}) async {
     final doc = pw.Document();
     doc.addPage(pw.MultiPage(
-      // Landscape: the table now carries Sale Price / GST / Price + GST
-      // columns on top of the original ones.
-      pageTheme: _pageTheme(logoBytes)
-          .copyWith(pageFormat: PdfPageFormat.a4.landscape),
-      // Default maxPages is 20 — large datasets (e.g. 1000+ stock items)
-      // blow past that and the pdf package throws TooManyPagesException
-      // instead of just... adding more pages. Raise the cap generously.
+      pageTheme: pw.PageTheme(
+        pageFormat: PdfPageFormat.a4,
+        margin: pw.EdgeInsets.fromLTRB(28, 32, 28, 32),
+      ),
+      // Large datasets exceed the default 20-page cap.
       maxPages: 9999,
-      header: (ctx) => _header(title, month),
       footer: (ctx) => _footer(ctx),
       build: (ctx) => [
-        pw.Text(
-          // Plain "|" separators: the default PDF font has no "—" glyph
-          // (it printed as a box).
-            '${rows.length} products  |  With GST: $withGstCount  |  '
-                'Without GST: $withoutGstCount  |  '
-                'Stock Value: ${_currency.format(totalValue)}',
-            style: pw.TextStyle(color: _muted, fontSize: 10)),
-        pw.SizedBox(height: 10),
+        pw.Center(
+          child: pw.Text(title,
+              style: pw.TextStyle(
+                  fontSize: 20,
+                  fontWeight: pw.FontWeight.bold,
+                  decoration: pw.TextDecoration.underline)),
+        ),
+        pw.SizedBox(height: 14),
+        pw.Text('Godown : $godown', style: const pw.TextStyle(fontSize: 10)),
+        pw.SizedBox(height: 6),
         _newProductsTable(rows),
       ],
     ));
@@ -521,66 +520,96 @@ class PdfExportService {
 
   static pw.Widget _newProductsTable(List<NewProduct> rows) {
     if (rows.isEmpty) return _emptyNote('No new products in this period.');
-    return pw.TableHelper.fromTextArray(
-      // "GST" prints exactly "Without GST" or "With GST 18%" (whatever rate
-      // was picked / typed on the Add Product page or in the bulk file);
-      // "Price + GST" is the sale price including that GST.
-      headers: const [
-        'Product', 'Category', 'Vendor', 'Branch', 'Qty', 'Purchase Cost',
-        'Sale Price', 'GST', 'Price + GST', 'Stock Value', 'Status', 'Date'
-      ],
-      data: rows
-          .map((p) => [
-        p.productName,
-        p.category,
-        p.vendorName,
-        p.branch,
-        '${p.quantity}',
-        _currency.format(p.purchaseCost),
-        _currency.format(p.salePrice),
-        p.gstLabel,
-        _currency.format(p.salePriceWithGst),
-        _currency.format(p.stockValue),
-        p.status,
-        DateFormat('dd-MM-yyyy').format(p.purchaseDate),
-      ])
-          .toList(),
-      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColors.white),
-      headerDecoration: const pw.BoxDecoration(color: _navy),
-      cellStyle: const pw.TextStyle(fontSize: 8),
-      cellHeight: 20,
-      // Proportional widths so Product gets the room and narrow columns
-      // (Category, Status, Date, GST) no longer wrap letter by letter.
+
+    const grey = PdfColor.fromInt(0xFFD3D3D3);
+    const line = PdfColor.fromInt(0xFF9E9E9E);
+
+    pw.Widget cell(String text,
+        {pw.Alignment align = pw.Alignment.centerRight,
+          bool bold = false,
+          PdfColor? color,
+          double size = 8.5}) =>
+        pw.Container(
+          alignment: align,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: pw.Text(text,
+              style: pw.TextStyle(
+                  fontSize: size,
+                  fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+                  color: color)),
+        );
+
+    PdfColor statusColor(String s) {
+      switch (s) {
+        case NewProductService.stockOutOfStock:
+          return _red;
+        case NewProductService.stockLow:
+          return const PdfColor.fromInt(0xFFE69500);
+        default:
+          return _green;
+      }
+    }
+
+    const headers = [
+      'S.No', 'Item Name', 'Sale Price', 'Purchase Price', 'Stock Quantity',
+      'Available Quantity for Sale', 'Reserved Quantity', 'Stock Value', 'Status'
+    ];
+
+    final tableRows = <pw.TableRow>[
+      pw.TableRow(
+        repeat: true, // header repeats on every page
+        decoration: const pw.BoxDecoration(color: grey),
+        children: [
+          for (var i = 0; i < headers.length; i++)
+            cell(headers[i],
+                bold: true,
+                size: 8,
+                align: i == 0
+                    ? pw.Alignment.center
+                    : i == 1
+                    ? pw.Alignment.centerLeft
+                    : pw.Alignment.centerRight),
+        ],
+      ),
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+      final p = rows[i];
+      final status = NewProductService.stockStatus(p);
+      final available = (p.quantity - p.reservedQuantity).clamp(0, 1 << 30);
+      tableRows.add(pw.TableRow(children: [
+        cell('${i + 1}', align: pw.Alignment.center),
+        cell(p.productName, align: pw.Alignment.centerLeft),
+        cell(_currency.format(p.salePrice)),
+        cell(_currency.format(p.purchaseCost)),
+        cell('${p.quantity}'),
+        cell('$available'),
+        cell('${p.reservedQuantity}'),
+        cell(_currency.format(NewProductService.stockValueOf(p))),
+        cell(status,
+            bold: true, color: statusColor(status), align: pw.Alignment.center),
+      ]));
+    }
+
+    return pw.Table(
       columnWidths: const {
-        0: pw.FlexColumnWidth(3.4), // Product
-        1: pw.FlexColumnWidth(1.7), // Category
-        2: pw.FlexColumnWidth(1.7), // Vendor
-        3: pw.FlexColumnWidth(1.3), // Branch
-        4: pw.FlexColumnWidth(0.7), // Qty
-        5: pw.FlexColumnWidth(1.5), // Purchase Cost
-        6: pw.FlexColumnWidth(1.5), // Sale Price
-        7: pw.FlexColumnWidth(1.7), // GST
-        8: pw.FlexColumnWidth(1.6), // Price + GST
-        9: pw.FlexColumnWidth(1.6), // Stock Value
-        10: pw.FlexColumnWidth(1.2), // Status
-        11: pw.FlexColumnWidth(1.4), // Date
+        0: pw.FixedColumnWidth(32), // S.No
+        1: pw.FlexColumnWidth(3.4), // Item Name
+        2: pw.FlexColumnWidth(1.5), // Sale Price
+        3: pw.FlexColumnWidth(1.5), // Purchase Price
+        4: pw.FlexColumnWidth(1.1), // Stock Quantity
+        5: pw.FlexColumnWidth(1.5), // Available Qty
+        6: pw.FlexColumnWidth(1.2), // Reserved Qty
+        7: pw.FlexColumnWidth(1.6), // Stock Value
+        8: pw.FlexColumnWidth(1.4), // Status
       },
-      cellAlignments: const {
-        0: pw.Alignment.centerLeft,
-        1: pw.Alignment.centerLeft,
-        2: pw.Alignment.centerLeft,
-        3: pw.Alignment.centerLeft,
-        4: pw.Alignment.center,
-        5: pw.Alignment.centerRight,
-        6: pw.Alignment.centerRight,
-        7: pw.Alignment.center,
-        8: pw.Alignment.centerRight,
-        9: pw.Alignment.centerRight,
-        10: pw.Alignment.center,
-        11: pw.Alignment.centerRight,
-      },
-      border: pw.TableBorder.all(color: _border, width: 0.5),
-      oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF4F7FB)),
+      // Horizontal rules only, like the Stock Summary report.
+      border: const pw.TableBorder(
+        top: pw.BorderSide(color: line, width: 0.8),
+        bottom: pw.BorderSide(color: line, width: 0.8),
+        horizontalInside: pw.BorderSide(color: line, width: 0.6),
+      ),
+      children: tableRows,
     );
   }
 

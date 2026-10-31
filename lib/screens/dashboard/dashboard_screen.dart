@@ -10,6 +10,9 @@ import 'package:cda_inventory/screens/new_products/new_product_list_screen.dart'
 import 'package:cda_inventory/screens/consumables/consumable_list_screen.dart';
 import 'package:cda_inventory/screens/drone_tracking/drone_in_out_screen.dart';
 import 'package:cda_inventory/screens/drone_service/drone_service_dashboard_screen.dart';
+import 'package:cda_inventory/screens/kit_delivery/kit_dashboard_screen.dart';
+import 'package:cda_inventory/models/kit_delivery.dart';
+import 'package:cda_inventory/services/kit_delivery_service.dart';
 import 'package:cda_inventory/screens/stock_management/stock_dashboard_screen.dart';
 import 'package:cda_inventory/screens/inventory_movement/movement_dashboard_screen.dart';
 import 'package:cda_inventory/screens/inventory_movement/request_item_screen.dart';
@@ -139,7 +142,7 @@ const _modules = [
     'color': _blueLight,
     'gradFrom': Color(0xFFEAF1FF),
     'gradTo': Color(0xFFFFFFFF),
-    'image': 'assets/images/drone inout.png',
+    'image': 'assets/images/drone_inout.png',
   },
   {
     'title': 'Drone Services',
@@ -151,6 +154,18 @@ const _modules = [
     'gradFrom': Color(0xFFEAF1FF),
     'gradTo': Color(0xFFFFFFFF),
     'image': 'assets/images/drone_service.png',
+  },
+  {
+    'title': 'Kit Deliveries',
+    'icon': Icons.inventory_2_rounded,
+    'emoji': '🎒',
+    'desc': 'Pending kit parts',
+    'tag': 'OPS',
+    'color': _blueLight,
+    'gradFrom': Color(0xFFEAF1FF),
+    'gradTo': Color(0xFFFFFFFF),
+    // Needs assets/images/kit_delivery.png (+ listed in pubspec.yaml).
+    'image': 'assets/images/kit_delivery.png',
   },
   {
     'title': 'Stock Management',
@@ -250,7 +265,7 @@ const _modules = [
     'color': _blueLight,
     'gradFrom': Color(0xFFEAF1FF),
     'gradTo': Color(0xFFFFFFFF),
-    'image': 'assets/images/Report.png',
+    'image': 'assets/images/reports.png',
   },
   {
     'title': 'Inventory Analytics',
@@ -302,6 +317,7 @@ const _drawerItems = [
   {'icon': Icons.category_rounded,                'label': 'Consumables',      'key': 'Consumables'},
   {'icon': Icons.flight_takeoff_rounded,          'label': 'Drone In/Out',     'key': 'Drone In/Out'},
   {'icon': Icons.miscellaneous_services_rounded,  'label': 'Drone Services',   'key': 'Drone Services'},
+  {'icon': Icons.inventory_2_rounded,             'label': 'Kit Deliveries',   'key': 'Kit Deliveries'},
   {'icon': Icons.analytics_rounded,               'label': 'Stock Management', 'key': 'Stock Management'},
   {'icon': Icons.business_rounded,                'label': 'Branch Inventory', 'key': 'Branch Inventory'},
   {'icon': Icons.manage_search_rounded,           'label': 'Search Products',  'key': 'Search Products'},
@@ -395,6 +411,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'Consumables':      screen = const ConsumableListScreen();   break;
       case 'Drone In/Out':     screen = const DroneInOutScreen();       break;
       case 'Drone Services':   screen = const DroneServiceDashboardScreen(); break;
+      case 'Kit Deliveries':   screen = const KitDashboardScreen();     break;
       case 'Stock Management': screen = const StockDashboardScreen();   break;
       case 'Branch Inventory': screen = const BranchListScreen();       break;
       case 'Purchases':        screen = const PurchasesMenuScreen();    break;
@@ -640,6 +657,8 @@ class _CDAAppBar extends StatelessWidget implements PreferredSizeWidget {
             const _StreakBadge(),
             const SizedBox(width: 8),
             _DroneReminderBell(),
+            const SizedBox(width: 8),
+            const _KitReminderBell(),
             if (isAdmin) ...[
               const SizedBox(width: 8),
               _NotificationBell(),
@@ -950,6 +969,204 @@ class _DroneReminderBellState extends State<_DroneReminderBell>
                   ),
                 );
               },
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// KIT REMINDER BELL — visible to admin AND staff. Badge = customer kits that
+// still have PENDING parts (propellers, bag, drone ...) and whose promised
+// date is today or already passed. Tapping opens Kit Deliveries on the
+// "Due / Overdue" filter.
+//
+// This widget also keeps the device's daily reminders in sync: it listens to
+// KitDeliveryService.kitsStreamWithReminderSync(), so a kit created on
+// another phone/PC starts reminding this device as soon as the dashboard
+// is open.
+//
+// Device notifications are not available on Web / Windows, so once per app
+// session the due kits are ALSO shown as an in-app alert dialog.
+// ═══════════════════════════════════════════════════════════════════════════════
+class _KitReminderBell extends StatefulWidget {
+  const _KitReminderBell();
+
+  @override
+  State<_KitReminderBell> createState() => _KitReminderBellState();
+}
+
+class _KitReminderBellState extends State<_KitReminderBell> {
+  // Created once — see _DroneReminderBell for why (avoids re-opening the
+  // Firestore listener on every rebuild).
+  late final Stream<List<KitDelivery>> _stream =
+  KitDeliveryService().kitsStreamWithReminderSync();
+
+  // Shown once per app session so it does not nag on every rebuild.
+  static bool _alertShown = false;
+
+  Future<void> _showDueDialog(List<KitDelivery> due) async {
+    final shown = due.take(6).toList();
+    final more = due.length - shown.length;
+
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.notifications_active, color: kKitRed),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                due.length == 1
+                    ? '1 kit has pending parts'
+                    : '${due.length} kits have pending parts',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 380,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final k in shown)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          k.customerName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800, fontSize: 14),
+                        ),
+                        Text('Pending: ${k.pendingSummary}',
+                            style: const TextStyle(fontSize: 13)),
+                        Text(
+                          kitDueText(k),
+                          style: TextStyle(
+                            color: kitDueColor(k),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (more > 0) Text('+ $more more'),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('View kits'),
+          ),
+        ],
+      ),
+    );
+
+    if (go == true && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          settings: const RouteSettings(name: 'Kit Reminders'),
+          builder: (_) => const KitDashboardScreen(
+            initialFilter: KitFilter.due,
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<KitDelivery>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        final kits = snapshot.data ?? const <KitDelivery>[];
+        final count = kits.where((k) => k.isDueOrOverdue).length;
+        final hasOverdue = kits.any((k) => k.isOverdue);
+
+        // One-time in-app alert (Web / Windows have no device notification).
+        if (!_alertShown && snapshot.hasData && count > 0) {
+          _alertShown = true;
+          final due = kits.where((k) => k.isDueOrOverdue).toList()
+            ..sort((a, b) => (a.promisedDate ?? DateTime(2100))
+                .compareTo(b.promisedDate ?? DateTime(2100)));
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showDueDialog(due);
+          });
+        }
+
+        final color = hasOverdue ? _red : (count > 0 ? _gold : _blueLight);
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                settings: const RouteSettings(name: 'Kit Reminders'),
+                builder: (_) => const KitDashboardScreen(
+                  initialFilter: KitFilter.due,
+                ),
+              ),
+            );
+          },
+          child: Tooltip(
+            message: 'Kit pending parts ($count due)',
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.14),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: color.withOpacity(count > 0 ? 0.7 : 0.4)),
+                  ),
+                  child: Icon(Icons.inventory_2_rounded,
+                      color: color, size: 18),
+                ),
+                if (count > 0)
+                  Positioned(
+                    right: -3,
+                    top: -3,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: _red,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _bgDeep, width: 1.5),
+                      ),
+                      constraints:
+                      const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        count > 9 ? '9+' : '$count',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         );

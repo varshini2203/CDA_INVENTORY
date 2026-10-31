@@ -78,8 +78,13 @@ class _NewProductsReportScreenState extends State<NewProductsReportScreen> {
   }
 
   List<NewProduct> _filterByRange(List<NewProduct> source, DateTimeRange range) {
+    // Alphabetical (A-Z, case-insensitive) by product name; the PDF and
+    // Excel exports use the same list so they follow the same order.
     return source.where((p) => _dateInRange(p.purchaseDate, range)).toList()
-      ..sort((a, b) => b.purchaseDate.compareTo(a.purchaseDate));
+      ..sort((a, b) => a.productName
+          .trim()
+          .toLowerCase()
+          .compareTo(b.productName.trim().toLowerCase()));
   }
 
   Future<void> _pickRange() async {
@@ -108,7 +113,8 @@ class _NewProductsReportScreenState extends State<NewProductsReportScreen> {
       final label =
           '${DateFormat('ddMMMyyyy').format(_range.start)}_to_${DateFormat('ddMMMyyyy').format(_range.end)}$branchSuffix';
       if (pdf) {
-        final bytes = await PdfExportService.buildNewProductsReport(_rows, _range.start);
+        final bytes = await PdfExportService.buildNewProductsReport(_rows, _range.start,
+            godown: _selectedBranch == null ? 'All Branches' : branchDisplayName(_selectedBranch));
         await PdfExportService.download(bytes, 'New_Products_Report_$label.pdf');
       } else {
         final bytes = ExcelExportService.buildNewProductsReport(_rows, _range.start);
@@ -127,7 +133,8 @@ class _NewProductsReportScreenState extends State<NewProductsReportScreen> {
   Future<void> _previewPdf() async {
     setState(() => _busy = true);
     try {
-      final bytes = await PdfExportService.buildNewProductsReport(_rows, _range.start);
+      final bytes = await PdfExportService.buildNewProductsReport(_rows, _range.start,
+          godown: _selectedBranch == null ? 'All Branches' : branchDisplayName(_selectedBranch));
       await PdfExportService.preview(bytes, 'New_Products_Report');
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -157,7 +164,7 @@ class _NewProductsReportScreenState extends State<NewProductsReportScreen> {
       });
     }
 
-    final totalValue = _rows.fold<double>(0, (s, p) => s + p.stockValue);
+    final totalValue = _rows.fold<double>(0, (s, p) => s + NewProductService.stockValueOf(p));
     return Scaffold(
       backgroundColor: kSurface,
       appBar: AppBar(
@@ -182,7 +189,7 @@ class _NewProductsReportScreenState extends State<NewProductsReportScreen> {
               : ListView.builder(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 90),
             itemCount: _rows.length,
-            itemBuilder: (_, i) => _card(_rows[i]),
+            itemBuilder: (_, i) => _card(_rows[i], i + 1),
           ),
         ),
       ]),
@@ -250,8 +257,8 @@ class _NewProductsReportScreenState extends State<NewProductsReportScreen> {
     child: Text(label, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w700)),
   );
 
-  Widget _card(NewProduct p) {
-    final statusColor = _statusColor(p.status);
+  Widget _card(NewProduct p, int serial) {
+    final statusColor = _statusColor(NewProductService.stockStatus(p));
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -263,6 +270,17 @@ class _NewProductsReportScreenState extends State<NewProductsReportScreen> {
         ],
       ),
       child: Row(children: [
+        // Serial number
+        SizedBox(
+          width: 32,
+          child: Text('$serial',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12)),
+        ),
+        const SizedBox(width: 6),
         Container(
           width: 40,
           height: 40,
@@ -285,14 +303,14 @@ class _NewProductsReportScreenState extends State<NewProductsReportScreen> {
           ]),
         ),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(_currency.format(p.stockValue),
+          Text(_currency.format(NewProductService.stockValueOf(p)),
               style: const TextStyle(color: kGreen, fontWeight: FontWeight.w800, fontSize: 14)),
           const SizedBox(height: 3),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
                 color: statusColor.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
-            child: Text(p.status,
+            child: Text(NewProductService.stockStatus(p),
                 style: TextStyle(color: statusColor, fontSize: 9.5, fontWeight: FontWeight.w700)),
           ),
         ]),
