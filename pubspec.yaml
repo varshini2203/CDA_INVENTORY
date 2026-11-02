@@ -55,6 +55,10 @@ flutter_icons:
   remove_alpha_ios: true
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/icons/app_icon_1024.png"
+  windows:
+    generate: true
+    image_path: "assets/icons/app_icon_1024.png"
+    icon_size: 256
 
 flutter:
   uses-material-design: true
